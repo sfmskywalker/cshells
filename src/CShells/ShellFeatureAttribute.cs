@@ -23,6 +23,11 @@ public sealed class ShellFeatureAttribute : Attribute
     public string Name { get; }
 
     /// <summary>
+    /// Gets or sets the display name for this feature. If not set, the <see cref="Name"/> is used.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
     /// Gets or sets the feature names that this feature depends on.
     /// </summary>
     public string[] DependsOn { get; set; } = [];
