@@ -198,7 +198,7 @@ public class FeatureDependencyTests
         var dict = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, dependencies) in features)
         {
-            dict[name] = new ShellFeatureDescriptor(name) { Dependencies = dependencies };
+            dict[name] = new(name) { Dependencies = dependencies };
         }
         return dict;
     }

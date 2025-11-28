@@ -49,14 +49,9 @@ public class ShellHostTests : IDisposable
     /// <summary>
     /// Implementation of <see cref="IWeatherService"/> that uses <see cref="ITimeService"/>.
     /// </summary>
-    public class WeatherService : IWeatherService
+    public class WeatherService(ITimeService timeService) : IWeatherService
     {
-        public WeatherService(ITimeService timeService)
-        {
-            TimeService = timeService ?? throw new ArgumentNullException(nameof(timeService));
-        }
-
-        public ITimeService TimeService { get; }
+        public ITimeService TimeService { get; } = timeService ?? throw new ArgumentNullException(nameof(timeService));
 
         public string GetWeatherReport()
         {
@@ -157,7 +152,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
         var service = shell.ServiceProvider.GetService(serviceType);
 
         // Assert
@@ -171,7 +166,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
         var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
 
         // Assert: WeatherService should have ITimeService injected
@@ -188,7 +183,7 @@ public class ShellHostTests : IDisposable
         var beforeTime = DateTime.UtcNow.AddSeconds(-5);
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
         var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
         var currentTime = weatherService.TimeService.GetCurrentTime();
         var afterTime = DateTime.UtcNow.AddSeconds(5);
@@ -205,7 +200,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
         var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
         var report = weatherService.GetWeatherReport();
 
@@ -227,7 +222,7 @@ public class ShellHostTests : IDisposable
 
         // Act
         var defaultShell = host.DefaultShell;
-        var getShellResult = host.GetShell(new ShellId("Default"));
+        var getShellResult = host.GetShell(new("Default"));
 
         // Assert
         defaultShell.Should().BeSameAs(getShellResult);
@@ -240,8 +235,8 @@ public class ShellHostTests : IDisposable
         var assembly = typeof(ShellHostTests).Assembly;
         var shellSettings = new[]
         {
-            new ShellSettings(new ShellId("Default"), ["Weather"]),
-            new ShellSettings(new ShellId("Other"), ["Core"])
+            new ShellSettings(new("Default"), ["Weather"]),
+            new ShellSettings(new("Other"), ["Core"])
         };
         var host = new DefaultShellHost(shellSettings, [assembly]);
         _hostsToDispose.Add(host);
@@ -281,7 +276,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
 
         // Assert: Both Core (ITimeService) and Weather (IWeatherService) services should be available
         var timeService = shell.ServiceProvider.GetService<ITimeService>();
@@ -300,7 +295,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
         var resolvedService = shell.ServiceProvider.GetRequiredService(serviceType);
 
         // Assert
@@ -328,7 +323,7 @@ public class ShellHostTests : IDisposable
     private DefaultShellHost CreateDefaultHostWithWeatherFeature()
     {
         var assembly = typeof(ShellHostTests).Assembly;
-        var shellSettings = new ShellSettings(new ShellId("Default"), ["Weather"]);
+        var shellSettings = new ShellSettings(new("Default"), ["Weather"]);
         var host = new DefaultShellHost([shellSettings], [assembly]);
         _hostsToDispose.Add(host);
         return host;
@@ -346,7 +341,7 @@ public class ShellHostTests : IDisposable
         var host = CreateDefaultHostWithWeatherFeature();
 
         // Act
-        var shell = host.GetShell(new ShellId("Default"));
+        var shell = host.GetShell(new("Default"));
 
         // Assert: WeatherService requires ITimeService in its constructor
         // If Core wasn't configured first, this would fail
