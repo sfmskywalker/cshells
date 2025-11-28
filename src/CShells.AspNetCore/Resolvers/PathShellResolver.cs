@@ -26,26 +26,17 @@ public class PathShellResolver : IShellResolver
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        var path = httpContext.Request.Path.Value;
-        if (string.IsNullOrEmpty(path))
+        var path = httpContext.Request.Path;
+        if (path.HasValue && path.Value.Length > 1)
         {
-            return null;
+            foreach (var kvp in _pathMap)
+            {
+                if (path.StartsWithSegments($"/{kvp.Key}", StringComparison.OrdinalIgnoreCase, out var remaining))
+                {
+                    return kvp.Value;
+                }
+            }
         }
-
-        // Get the first path segment
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0)
-        {
-            return null;
-        }
-
-        var firstSegment = segments[0];
-
-        if (_pathMap.TryGetValue(firstSegment, out var shellId))
-        {
-            return shellId;
-        }
-
         return null;
     }
 }
