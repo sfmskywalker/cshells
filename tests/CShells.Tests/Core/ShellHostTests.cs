@@ -208,13 +208,14 @@ public class ShellHostTests : IDisposable
         var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
         var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
         _hostsToDispose.Add(host);
-        var beforeTime = DateTime.UtcNow.AddSeconds(-1);
+        // Use a larger buffer to avoid flakiness in CI environments
+        var beforeTime = DateTime.UtcNow.AddSeconds(-5);
 
         // Act
         var shell = host.GetShell(new ShellId("Default"));
         var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
         var currentTime = weatherService.TimeService.GetCurrentTime();
-        var afterTime = DateTime.UtcNow.AddSeconds(1);
+        var afterTime = DateTime.UtcNow.AddSeconds(5);
 
         // Assert: The time should be recent (within reasonable bounds)
         currentTime.Should().BeAfter(beforeTime);

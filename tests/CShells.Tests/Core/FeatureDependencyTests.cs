@@ -229,6 +229,11 @@ public class FeatureDependencyTests
 
     #region Helper Methods
 
+    /// <summary>
+    /// Creates a minimal feature dictionary for testing dependency resolution.
+    /// Only populates the Id and Dependencies properties since those are what
+    /// the FeatureDependencyResolver operates on.
+    /// </summary>
     private static Dictionary<string, ShellFeatureDescriptor> CreateFeatureDictionary(
         params (string Name, string[] Dependencies)[] features)
     {
