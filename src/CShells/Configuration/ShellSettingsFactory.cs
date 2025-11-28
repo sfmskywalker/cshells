@@ -16,7 +16,11 @@ public static class ShellSettingsFactory
         ArgumentNullException.ThrowIfNull(config);
 
         var shellId = new ShellId(config.Name);
-        var settings = new ShellSettings(shellId, config.Features);
+        var normalizedFeatures = config.Features
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => f.Trim())
+            .ToArray();
+        var settings = new ShellSettings(shellId, normalizedFeatures);
 
         foreach (var property in config.Properties)
         {
@@ -36,6 +40,15 @@ public static class ShellSettingsFactory
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        var duplicates = options.Shells
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key);
+
+        if (duplicates.Any())
+        {
+            throw new ArgumentException($"Duplicate shell names found: {string.Join(", ", duplicates)}", nameof(options));
+        }
         return options.Shells.Select(Create).ToList();
     }
 }
