@@ -77,7 +77,6 @@ app.MapGet("/tropical", (HttpContext context) =>
 // Admin endpoint - resolves to Admin shell with Admin feature
 app.MapGet("/admin", (HttpContext context) =>
 {
-    var timeService = context.RequestServices.GetRequiredService<ITimeService>();
     var adminService = context.RequestServices.GetRequiredService<IAdminService>();
 
     return Results.Ok(new
