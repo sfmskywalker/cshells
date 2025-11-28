@@ -27,8 +27,9 @@ namespace CShells.Tests.Configuration
               }
             }";
 
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
             var config = new ConfigurationBuilder()
-                .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+                .AddJsonStream(stream)
                 .Build();
 
             var options = new CShellsOptions();
@@ -41,7 +42,7 @@ namespace CShells.Tests.Configuration
             Assert.Contains(settings, s => s.Id.Name == "Admin");
 
             var def = settings.First(s => s.Id.Name == "Default");
-            Assert.Equal(new[] { "Core", "Weather" }, def.EnabledFeatures);
+            Assert.Equal(["Core", "Weather"], def.EnabledFeatures);
             Assert.Equal("Default Shell", def.Properties["Title"]);
         }
 
@@ -49,11 +50,12 @@ namespace CShells.Tests.Configuration
         public void AddCShells_Registers_IShellHost_And_ShellSettings()
         {
             var json = @"{ ""CShells"": { ""Shells"": [ { ""Name"": ""Default"", ""Features"": [] } ] } }";
-            var config = new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build();
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
 
             var services = new ServiceCollection();
             // Pass empty assemblies to avoid scanning test assembly with invalid test fixtures
-            services.AddCShells(config, assemblies: Array.Empty<System.Reflection.Assembly>());
+            services.AddCShells(config, assemblies: []);
 
             var sp = services.BuildServiceProvider();
 
@@ -66,7 +68,8 @@ namespace CShells.Tests.Configuration
         public void CreateFromOptions_Throws_On_DuplicateNames()
         {
             var json = @"{ ""CShells"": { ""Shells"": [ { ""Name"": ""X"" }, { ""Name"": ""x"" } ] } }";
-            var config = new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build();
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
             var options = new CShellsOptions();
             config.GetSection("CShells").Bind(options);
 
