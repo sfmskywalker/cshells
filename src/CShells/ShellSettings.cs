@@ -28,6 +28,7 @@ public class ShellSettings
     /// </summary>
     /// <param name="id">The shell identifier.</param>
     /// <param name="enabledFeatures">The list of enabled features.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="enabledFeatures"/> is null.</exception>
     public ShellSettings(ShellId id, IReadOnlyList<string> enabledFeatures)
     {
         ArgumentNullException.ThrowIfNull(enabledFeatures);
@@ -36,9 +37,9 @@ public class ShellSettings
     }
 
     /// <summary>
-    /// Gets or sets the shell identifier.
+    /// Gets or initializes the shell identifier.
     /// </summary>
-    public ShellId Id { get; set; }
+    public ShellId Id { get; init; }
 
     /// <summary>
     /// Gets or sets the list of enabled features for this shell.
