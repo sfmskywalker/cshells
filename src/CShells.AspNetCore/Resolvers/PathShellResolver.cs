@@ -12,8 +12,8 @@ public class PathShellResolver : IShellResolver
     /// <summary>
     /// Initializes a new instance of the <see cref="PathShellResolver"/> class.
     /// </summary>
-    /// <param name="pathMap">A dictionary mapping URL path prefixes to shell identifiers.
-    /// Keys should be path segment values (e.g., "tenant1", "admin").</param>
+    /// <param name="pathMap">A dictionary mapping path segment names to shell identifiers.
+    /// Keys should be the first path segment without leading slash (e.g., "tenant1", "admin").</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="pathMap"/> is null.</exception>
     public PathShellResolver(IReadOnlyDictionary<string, ShellId> pathMap)
     {
