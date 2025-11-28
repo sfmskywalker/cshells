@@ -41,7 +41,17 @@ public class ShellFeatureDescriptor
     /// <summary>
     /// Gets or sets the metadata associated with this feature.
     /// </summary>
-    public IDictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();
+    private IDictionary<string, object> _metadata = new Dictionary<string, object>();
+    public IDictionary<string, object> Metadata
+    {
+        get => _metadata;
+        set
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(Metadata), "Metadata cannot be set to null.");
+            _metadata = value;
+        }
+    }
 
     /// <summary>
     /// Gets or initializes the startup type that implements <c>IShellStartup</c> for this feature.
