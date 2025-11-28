@@ -28,8 +28,10 @@ public class ShellSettings
     /// </summary>
     /// <param name="id">The shell identifier.</param>
     /// <param name="enabledFeatures">The list of enabled features.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="enabledFeatures"/> is null.</exception>
     public ShellSettings(ShellId id, IReadOnlyList<string> enabledFeatures)
     {
+        ArgumentNullException.ThrowIfNull(enabledFeatures);
         Id = id;
         EnabledFeatures = enabledFeatures;
     }

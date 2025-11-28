@@ -3,12 +3,23 @@ namespace CShells;
 /// <summary>
 /// A value-type identifier for shells.
 /// </summary>
-public readonly record struct ShellId(string Name)
+public readonly record struct ShellId
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ShellId"/> struct.
+    /// </summary>
+    /// <param name="name">The name of the shell.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="name"/> is null.</exception>
+    public ShellId(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        Name = name;
+    }
+
     /// <summary>
     /// Gets the name of the shell.
     /// </summary>
-    public string Name { get; } = Name;
+    public string Name { get; }
 
     /// <summary>
     /// Returns the string representation of the <see cref="ShellId"/>.

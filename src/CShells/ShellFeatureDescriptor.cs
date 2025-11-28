@@ -16,8 +16,10 @@ public class ShellFeatureDescriptor
     /// Initializes a new instance of the <see cref="ShellFeatureDescriptor"/> class with the specified ID.
     /// </summary>
     /// <param name="id">The unique identifier for the feature.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
     public ShellFeatureDescriptor(string id)
     {
+        ArgumentNullException.ThrowIfNull(id);
         Id = id;
     }
 

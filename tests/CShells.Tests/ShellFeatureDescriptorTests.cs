@@ -4,21 +4,42 @@ public class ShellFeatureDescriptorTests
 {
     private const string TestFeatureId = "TestFeature";
 
-    [Theory]
-    [InlineData(null, "")]
-    [InlineData(TestFeatureId, TestFeatureId)]
-    public void Constructor_InitializesWithDefaultsAndSetsId(string? id, string expectedId)
+    [Fact]
+    public void DefaultConstructor_InitializesWithDefaults()
     {
         // Act
-        var descriptor = id == null ? new() : new ShellFeatureDescriptor(id);
+        var descriptor = new ShellFeatureDescriptor();
 
         // Assert
-        Assert.Equal(expectedId, descriptor.Id);
+        Assert.Equal(string.Empty, descriptor.Id);
         Assert.NotNull(descriptor.Dependencies);
         Assert.Empty(descriptor.Dependencies);
         Assert.NotNull(descriptor.Metadata);
         Assert.Empty(descriptor.Metadata);
         Assert.Null(descriptor.StartupType);
+    }
+
+    [Fact]
+    public void Constructor_WithId_SetsIdAndInitializesDefaults()
+    {
+        // Act
+        var descriptor = new ShellFeatureDescriptor(TestFeatureId);
+
+        // Assert
+        Assert.Equal(TestFeatureId, descriptor.Id);
+        Assert.NotNull(descriptor.Dependencies);
+        Assert.Empty(descriptor.Dependencies);
+        Assert.NotNull(descriptor.Metadata);
+        Assert.Empty(descriptor.Metadata);
+        Assert.Null(descriptor.StartupType);
+    }
+
+    [Fact]
+    public void Constructor_WithNullId_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellFeatureDescriptor(null!));
+        Assert.Equal("id", ex.ParamName);
     }
 
     [Fact]

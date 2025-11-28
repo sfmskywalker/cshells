@@ -4,15 +4,27 @@ public class ShellSettingsTests
 {
     private const string TestShellName = "TestShell";
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Constructor_InitializesWithEmptyCollections(bool withShellId)
+    [Fact]
+    public void DefaultConstructor_InitializesWithEmptyCollections()
     {
-        // Arrange & Act
-        var settings = withShellId ? new(CreateTestShellId()) : new ShellSettings();
+        // Act
+        var settings = new ShellSettings();
 
         // Assert
+        AssertHasEmptyCollections(settings);
+    }
+
+    [Fact]
+    public void Constructor_WithShellId_SetsId()
+    {
+        // Arrange
+        var shellId = CreateTestShellId();
+
+        // Act
+        var settings = new ShellSettings(shellId);
+
+        // Assert
+        Assert.Equal(shellId, settings.Id);
         AssertHasEmptyCollections(settings);
     }
 
@@ -31,6 +43,17 @@ public class ShellSettingsTests
         Assert.Equal(features, settings.EnabledFeatures);
         Assert.NotNull(settings.Properties);
         Assert.Empty(settings.Properties);
+    }
+
+    [Fact]
+    public void Constructor_WithNullFeatures_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var shellId = CreateTestShellId();
+
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellSettings(shellId, null!));
+        Assert.Equal("enabledFeatures", ex.ParamName);
     }
 
     [Theory]

@@ -14,6 +14,14 @@ public class ShellIdTests
         Assert.Equal(TestName, shellId.Name);
     }
 
+    [Fact]
+    public void Constructor_WithNullName_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellId(null!));
+        Assert.Equal("name", ex.ParamName);
+    }
+
     [Theory]
     [InlineData("TestShell", "TESTSHELL", true)]
     [InlineData("TestShell", "testshell", true)]

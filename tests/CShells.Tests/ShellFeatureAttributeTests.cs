@@ -14,6 +14,14 @@ public class ShellFeatureAttributeTests
         Assert.Equal(TestFeatureName, attribute.Name);
     }
 
+    [Fact]
+    public void Constructor_WithNullName_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellFeatureAttribute(null!));
+        Assert.Equal("name", ex.ParamName);
+    }
+
     [Theory]
     [InlineData(nameof(ShellFeatureAttribute.DependsOn))]
     [InlineData(nameof(ShellFeatureAttribute.Metadata))]
