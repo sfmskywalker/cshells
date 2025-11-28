@@ -24,9 +24,9 @@ public class ShellFeatureDescriptor
     }
 
     /// <summary>
-    /// Gets or sets the unique identifier for this feature.
+    /// Gets or initializes the unique identifier for this feature.
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string Id { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the collection of feature IDs that this feature depends on.
@@ -39,7 +39,7 @@ public class ShellFeatureDescriptor
     public IDictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();
 
     /// <summary>
-    /// Gets or sets the startup type that implements <c>IShellStartup</c> for this feature.
+    /// Gets or initializes the startup type that implements <c>IShellStartup</c> for this feature.
     /// </summary>
-    public Type? StartupType { get; set; }
+    public Type? StartupType { get; init; }
 }

@@ -43,13 +43,10 @@ public class ShellFeatureDescriptorTests
     }
 
     [Fact]
-    public void Id_CanBeSet()
+    public void Id_CanBeInitialized()
     {
-        // Arrange
-        var descriptor = new ShellFeatureDescriptor();
-
         // Act
-        descriptor.Id = TestFeatureId;
+        var descriptor = new ShellFeatureDescriptor { Id = TestFeatureId };
 
         // Assert
         Assert.Equal(TestFeatureId, descriptor.Id);
@@ -85,13 +82,10 @@ public class ShellFeatureDescriptorTests
     }
 
     [Fact]
-    public void StartupType_CanBeSet()
+    public void StartupType_CanBeInitialized()
     {
-        // Arrange
-        var descriptor = new ShellFeatureDescriptor(TestFeatureId);
-
         // Act
-        descriptor.StartupType = typeof(TestStartupClass);
+        var descriptor = new ShellFeatureDescriptor(TestFeatureId) { StartupType = typeof(TestStartupClass) };
 
         // Assert
         Assert.Equal(typeof(TestStartupClass), descriptor.StartupType);
