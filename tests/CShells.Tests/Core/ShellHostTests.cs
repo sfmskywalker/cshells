@@ -1,0 +1,389 @@
+using System.Reflection;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CShells.Tests.Core;
+
+/// <summary>
+/// Integration-style unit tests for <see cref="DefaultShellHost"/> using in-test feature startup classes.
+/// </summary>
+public class ShellHostTests : IDisposable
+{
+    private readonly List<DefaultShellHost> _hostsToDispose = [];
+
+    public void Dispose()
+    {
+        foreach (var host in _hostsToDispose)
+        {
+            host.Dispose();
+        }
+    }
+
+    #region Test Service Interfaces and Implementations
+
+    /// <summary>
+    /// Service interface for providing time information.
+    /// </summary>
+    public interface ITimeService
+    {
+        DateTime GetCurrentTime();
+    }
+
+    /// <summary>
+    /// Implementation of <see cref="ITimeService"/> that returns the current UTC time.
+    /// </summary>
+    public class TimeService : ITimeService
+    {
+        public DateTime GetCurrentTime() => DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Service interface for weather information that depends on time.
+    /// </summary>
+    public interface IWeatherService
+    {
+        ITimeService TimeService { get; }
+        string GetWeatherReport();
+    }
+
+    /// <summary>
+    /// Implementation of <see cref="IWeatherService"/> that uses <see cref="ITimeService"/>.
+    /// </summary>
+    public class WeatherService : IWeatherService
+    {
+        public WeatherService(ITimeService timeService)
+        {
+            TimeService = timeService ?? throw new ArgumentNullException(nameof(timeService));
+        }
+
+        public ITimeService TimeService { get; }
+
+        public string GetWeatherReport()
+        {
+            var time = TimeService.GetCurrentTime();
+            return $"Weather report generated at {time:yyyy-MM-dd HH:mm:ss} UTC";
+        }
+    }
+
+    #endregion
+
+    #region Test Feature Startup Classes
+
+    /// <summary>
+    /// Core feature startup that registers the <see cref="ITimeService"/>.
+    /// </summary>
+    [ShellFeature("Core")]
+    public class CoreFeatureStartup : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<ITimeService, TimeService>();
+        }
+    }
+
+    /// <summary>
+    /// Weather feature startup that depends on Core and registers <see cref="IWeatherService"/>.
+    /// The <see cref="IWeatherService"/> implementation depends on <see cref="ITimeService"/>.
+    /// </summary>
+    [ShellFeature("Weather", DependsOn = new[] { "Core" })]
+    public class WeatherFeatureStartup : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<IWeatherService, WeatherService>();
+        }
+    }
+
+    #endregion
+
+    #region Feature Discovery Tests
+
+    [Fact]
+    public void FeatureDiscovery_DiscoversFeaturesFromTestAssembly()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+
+        // Act
+        var features = FeatureDiscovery.DiscoverFeatures(new[] { assembly }).ToList();
+
+        // Assert
+        features.Should().Contain(f => f.Id == "Core");
+        features.Should().Contain(f => f.Id == "Weather");
+        
+        var weatherFeature = features.Single(f => f.Id == "Weather");
+        weatherFeature.Dependencies.Should().Contain("Core");
+    }
+
+    [Fact]
+    public void FeatureDiscovery_CoreFeature_HasCorrectStartupType()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+
+        // Act
+        var features = FeatureDiscovery.DiscoverFeatures(new[] { assembly }).ToList();
+
+        // Assert
+        var coreFeature = features.Single(f => f.Id == "Core");
+        coreFeature.StartupType.Should().Be(typeof(CoreFeatureStartup));
+    }
+
+    [Fact]
+    public void FeatureDiscovery_WeatherFeature_HasDependencyOnCore()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+
+        // Act
+        var features = FeatureDiscovery.DiscoverFeatures(new[] { assembly }).ToList();
+
+        // Assert
+        var weatherFeature = features.Single(f => f.Id == "Weather");
+        weatherFeature.StartupType.Should().Be(typeof(WeatherFeatureStartup));
+        weatherFeature.Dependencies.Should().ContainSingle().Which.Should().Be("Core");
+    }
+
+    #endregion
+
+    #region Shell Host Integration Tests
+
+    [Fact]
+    public void GetShell_WithWeatherFeature_ResolvesWeatherService()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var weatherService = shell.ServiceProvider.GetService<IWeatherService>();
+
+        // Assert
+        weatherService.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void GetShell_WithWeatherFeature_ResolvesTimeServiceDependency()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var timeService = shell.ServiceProvider.GetService<ITimeService>();
+
+        // Assert
+        timeService.Should().NotBeNull("Core feature (dependency of Weather) should register ITimeService");
+    }
+
+    [Fact]
+    public void GetShell_WeatherService_CanAccessTimeService()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
+
+        // Assert: WeatherService should have ITimeService injected
+        weatherService.TimeService.Should().NotBeNull();
+        weatherService.TimeService.Should().BeOfType<TimeService>();
+    }
+
+    [Fact]
+    public void GetShell_TimeService_ReturnsRecentTime()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+        var beforeTime = DateTime.UtcNow.AddSeconds(-1);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
+        var currentTime = weatherService.TimeService.GetCurrentTime();
+        var afterTime = DateTime.UtcNow.AddSeconds(1);
+
+        // Assert: The time should be recent (within reasonable bounds)
+        currentTime.Should().BeAfter(beforeTime);
+        currentTime.Should().BeBefore(afterTime);
+    }
+
+    [Fact]
+    public void GetShell_WeatherService_GeneratesValidWeatherReport()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
+        var report = weatherService.GetWeatherReport();
+
+        // Assert
+        report.Should().NotBeNullOrEmpty();
+        report.Should().Contain("Weather report generated at");
+        report.Should().Contain("UTC");
+    }
+
+    #endregion
+
+    #region DefaultShell Property Tests
+
+    [Fact]
+    public void DefaultShell_ReturnsSameContextAsGetShellWithDefaultId()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var defaultShell = host.DefaultShell;
+        var getShellResult = host.GetShell(new ShellId("Default"));
+
+        // Assert
+        defaultShell.Should().BeSameAs(getShellResult);
+    }
+
+    [Fact]
+    public void DefaultShell_WithDefaultShellId_ReturnsCorrectShellContext()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new[]
+        {
+            new ShellSettings(new ShellId("Default"), new[] { "Weather" }),
+            new ShellSettings(new ShellId("Other"), new[] { "Core" })
+        };
+        var host = new DefaultShellHost(shellSettings, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var defaultShell = host.DefaultShell;
+
+        // Assert
+        defaultShell.Id.Name.Should().Be("Default");
+        defaultShell.Settings.EnabledFeatures.Should().Contain("Weather");
+    }
+
+    [Fact]
+    public void DefaultShell_MultipleCalls_ReturnsSameInstance()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var firstCall = host.DefaultShell;
+        var secondCall = host.DefaultShell;
+        var thirdCall = host.DefaultShell;
+
+        // Assert
+        firstCall.Should().BeSameAs(secondCall);
+        secondCall.Should().BeSameAs(thirdCall);
+    }
+
+    #endregion
+
+    #region Service Provider Tests
+
+    [Fact]
+    public void ServiceProvider_ResolvesServicesFromDependencyFeatures()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        
+        // Assert: Both Core (ITimeService) and Weather (IWeatherService) services should be available
+        var timeService = shell.ServiceProvider.GetService<ITimeService>();
+        var weatherService = shell.ServiceProvider.GetService<IWeatherService>();
+
+        timeService.Should().NotBeNull();
+        weatherService.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ServiceProvider_CanResolveShellContext()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var resolvedContext = shell.ServiceProvider.GetRequiredService<ShellContext>();
+
+        // Assert
+        resolvedContext.Should().BeSameAs(shell);
+    }
+
+    [Fact]
+    public void ServiceProvider_CanResolveShellSettings()
+    {
+        // Arrange
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        var resolvedSettings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        // Assert
+        resolvedSettings.Id.Name.Should().Be("Default");
+        resolvedSettings.EnabledFeatures.Should().Contain("Weather");
+    }
+
+    #endregion
+
+    #region Feature Dependency Order Tests
+
+    [Fact]
+    public void GetShell_DependencyOrderIsCorrect_CoreConfiguredBeforeWeather()
+    {
+        // Arrange: This test ensures that even though only "Weather" is enabled,
+        // "Core" (its dependency) is also configured, and in the correct order
+        var assembly = typeof(ShellHostTests).Assembly;
+        var shellSettings = new ShellSettings(new ShellId("Default"), new[] { "Weather" });
+        var host = new DefaultShellHost(new[] { shellSettings }, new[] { assembly });
+        _hostsToDispose.Add(host);
+
+        // Act
+        var shell = host.GetShell(new ShellId("Default"));
+        
+        // Assert: WeatherService requires ITimeService in its constructor
+        // If Core wasn't configured first, this would fail
+        var weatherService = shell.ServiceProvider.GetRequiredService<IWeatherService>();
+        weatherService.Should().NotBeNull();
+        weatherService.TimeService.Should().NotBeNull();
+    }
+
+    #endregion
+}

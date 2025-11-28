@@ -5,4 +5,8 @@
     <ProjectReference Include="..\..\src\CShells.AspNetCore\CShells.AspNetCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
 </Project>
