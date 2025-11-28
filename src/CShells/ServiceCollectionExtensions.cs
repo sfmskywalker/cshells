@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Reflection;
 using CShells.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,8 +17,13 @@ namespace CShells
         /// <param name="services">The service collection.</param>
         /// <param name="configuration">The application configuration.</param>
         /// <param name="sectionName">The configuration section name (default: "CShells").</param>
+        /// <param name="assemblies">Optional assemblies to scan for features. If null, scans all loaded assemblies.</param>
         /// <returns>The updated service collection.</returns>
-        public static IServiceCollection AddCShells(this IServiceCollection services, IConfiguration configuration, string sectionName = "CShells")
+        public static IServiceCollection AddCShells(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            string sectionName = "CShells",
+            IEnumerable<Assembly>? assemblies = null)
         {
             if (services is null) throw new ArgumentNullException(nameof(services));
             if (configuration is null) throw new ArgumentNullException(nameof(configuration));
@@ -38,7 +41,9 @@ namespace CShells
             services.AddSingleton<IShellHost>(sp =>
             {
                 var logger = sp.GetService<ILogger<DefaultShellHost>>();
-                return new DefaultShellHost(shells, logger);
+                return assemblies is null
+                    ? new DefaultShellHost(shells, logger)
+                    : new DefaultShellHost(shells, assemblies, logger);
             });
 
             return services;

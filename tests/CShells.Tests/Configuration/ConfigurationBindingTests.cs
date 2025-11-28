@@ -1,10 +1,6 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 using CShells.Configuration;
 
 namespace CShells.Tests.Configuration
@@ -56,7 +52,8 @@ namespace CShells.Tests.Configuration
             var config = new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build();
 
             var services = new ServiceCollection();
-            services.AddCShells(config);
+            // Pass empty assemblies to avoid scanning test assembly with invalid test fixtures
+            services.AddCShells(config, assemblies: Array.Empty<System.Reflection.Assembly>());
 
             var sp = services.BuildServiceProvider();
 
