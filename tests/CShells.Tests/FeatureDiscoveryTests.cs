@@ -42,7 +42,7 @@ public class FeatureDiscoveryTests
     {
         // Arrange - use assembly with only valid features
         var assembly = CreateTestAssembly(
-            ("ValidTestFeature", typeof(IShellStartup), Array.Empty<string>(), Array.Empty<object>())
+            ("ValidTestFeature", typeof(IShellFeature), Array.Empty<string>(), Array.Empty<object>())
         );
 
         // Act
@@ -60,7 +60,7 @@ public class FeatureDiscoveryTests
     {
         // Arrange - use assembly with feature that has dependencies
         var assembly = CreateTestAssembly(
-            ("FeatureWithDeps", typeof(IShellStartup), new[] { "Dependency1", "Dependency2" }, Array.Empty<object>())
+            ("FeatureWithDeps", typeof(IShellFeature), new[] { "Dependency1", "Dependency2" }, Array.Empty<object>())
         );
 
         // Act
@@ -77,7 +77,7 @@ public class FeatureDiscoveryTests
     {
         // Arrange - use assembly with feature that has metadata
         var assembly = CreateTestAssembly(
-            ("FeatureWithMeta", typeof(IShellStartup), Array.Empty<string>(), new object[] { "key1", "value1", "key2", "value2" })
+            ("FeatureWithMeta", typeof(IShellFeature), Array.Empty<string>(), new object[] { "key1", "value1", "key2", "value2" })
         );
 
         // Act
@@ -108,8 +108,8 @@ public class FeatureDiscoveryTests
     {
         // Arrange - create assembly with two features having the same name
         var assembly = CreateTestAssembly(
-            ("DuplicateFeatureName", typeof(IShellStartup), Array.Empty<string>(), Array.Empty<object>()),
-            ("DuplicateFeatureName", typeof(IShellStartup), Array.Empty<string>(), Array.Empty<object>())
+            ("DuplicateFeatureName", typeof(IShellFeature), Array.Empty<string>(), Array.Empty<object>()),
+            ("DuplicateFeatureName", typeof(IShellFeature), Array.Empty<string>(), Array.Empty<object>())
         );
 
         // Act & Assert
@@ -123,8 +123,8 @@ public class FeatureDiscoveryTests
     {
         // Arrange
         var assembly = CreateTestAssembly(
-            ("Feature1", typeof(IShellStartup), Array.Empty<string>(), Array.Empty<object>()),
-            ("Feature2", typeof(IShellStartup), new[] { "Feature1" }, Array.Empty<object>())
+            ("Feature1", typeof(IShellFeature), Array.Empty<string>(), Array.Empty<object>()),
+            ("Feature2", typeof(IShellFeature), new[] { "Feature1" }, Array.Empty<object>())
         );
 
         // Act
@@ -141,7 +141,7 @@ public class FeatureDiscoveryTests
     {
         // Arrange - create assembly with odd number of metadata elements
         var assembly = CreateTestAssembly(
-            ("FeatureWithOddMetadata", typeof(IShellStartup), Array.Empty<string>(), new object[] { "key1", "value1", "orphanKey" })
+            ("FeatureWithOddMetadata", typeof(IShellFeature), Array.Empty<string>(), new object[] { "key1", "value1", "orphanKey" })
         );
 
         // Act & Assert
@@ -166,10 +166,10 @@ public class FeatureDiscoveryTests
             
             // Create the type, optionally implementing IShellStartup
             TypeBuilder typeBuilder;
-            if (implementInterface == typeof(IShellStartup))
+            if (implementInterface == typeof(IShellFeature))
             {
                 typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
-                typeBuilder.AddInterfaceImplementation(typeof(IShellStartup));
+                typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
                 
                 // Implement ConfigureServices method
                 var configureServicesMethod = typeBuilder.DefineMethod(

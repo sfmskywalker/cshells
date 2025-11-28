@@ -17,7 +17,7 @@ public class DefaultShellHost : IShellHost, IDisposable
     private readonly ConcurrentDictionary<ShellId, ShellContext> _shellContexts = new();
     private readonly FeatureDependencyResolver _dependencyResolver = new();
     private readonly ILogger<DefaultShellHost> _logger;
-    private readonly object _buildLock = new();
+    private readonly Lock _buildLock = new();
     private bool _disposed;
 
     /// <summary>
@@ -249,7 +249,7 @@ public class DefaultShellHost : IShellHost, IDisposable
             try
             {
                 // Create the startup instance using ActivatorUtilities
-                var startup = (IShellStartup)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType!);
+                var startup = (IShellFeature)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType!);
                 startup.ConfigureServices(services);
 
                 _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",

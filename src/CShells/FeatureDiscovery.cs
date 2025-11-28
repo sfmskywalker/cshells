@@ -14,7 +14,7 @@ public static class FeatureDiscovery
     /// <returns>A collection of feature descriptors for all valid features found.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="assemblies"/> is null.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a type decorated with <see cref="ShellFeatureAttribute"/> does not implement <see cref="IShellStartup"/>,
+    /// Thrown when a type decorated with <see cref="ShellFeatureAttribute"/> does not implement <see cref="IShellFeature"/>,
     /// or when duplicate feature names are found.
     /// </exception>
     public static IEnumerable<ShellFeatureDescriptor> DiscoverFeatures(IEnumerable<Assembly> assemblies)
@@ -23,7 +23,7 @@ public static class FeatureDiscovery
 
         var features = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var assembly in assemblies.Where(a => a != null))
+        foreach (var assembly in assemblies)
         {
             foreach (var type in GetExportedTypes(assembly))
             {
@@ -32,7 +32,7 @@ public static class FeatureDiscovery
                     continue;
 
                 // Validate that the type implements IShellStartup
-                if (!typeof(IShellStartup).IsAssignableFrom(type))
+                if (!typeof(IShellFeature).IsAssignableFrom(type))
                 {
                     throw new InvalidOperationException(
                         $"Type '{type.FullName}' is decorated with [ShellFeature(\"{attribute.Name}\")] but does not implement IShellStartup.");

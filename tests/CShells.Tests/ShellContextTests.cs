@@ -17,7 +17,7 @@ public class ShellContextTests
     public void Constructor_WithNullServiceProvider_ThrowsArgumentNullException()
     {
         // Arrange
-        var settings = new ShellSettings(new ShellId("Test"));
+        var settings = new ShellSettings(new("Test"));
 
         // Act & Assert
         var ex = Assert.Throws<ArgumentNullException>(() => new ShellContext(settings, null!));
@@ -28,7 +28,7 @@ public class ShellContextTests
     public void Constructor_WithValidParameters_SetsProperties()
     {
         // Arrange
-        var settings = new ShellSettings(new ShellId("TestShell"));
+        var settings = new ShellSettings(new("TestShell"));
         var serviceProvider = new TestServiceProvider();
 
         // Act
@@ -43,7 +43,7 @@ public class ShellContextTests
     public void Id_ReturnsShellIdFromSettings()
     {
         // Arrange
-        var settings = new ShellSettings(new ShellId("MyShell"));
+        var settings = new ShellSettings(new("MyShell"));
         var serviceProvider = new TestServiceProvider();
 
         // Act

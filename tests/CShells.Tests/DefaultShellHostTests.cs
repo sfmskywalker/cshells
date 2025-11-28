@@ -28,7 +28,7 @@ public class DefaultShellHostTests : IDisposable
     public void Constructor_WithNullAssemblies_ThrowsArgumentNullException()
     {
         // Arrange
-        var settings = new[] { new ShellSettings(new ShellId("Test")) };
+        var settings = new[] { new ShellSettings(new("Test")) };
         IEnumerable<Assembly>? nullAssemblies = null;
 
         // Act & Assert
@@ -54,8 +54,8 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("Default")),
-            new ShellSettings(new ShellId("Other"))
+            new ShellSettings(new("Default")),
+            new ShellSettings(new("Other"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
@@ -73,8 +73,8 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("First")),
-            new ShellSettings(new ShellId("Second"))
+            new ShellSettings(new("First")),
+            new ShellSettings(new("Second"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
@@ -92,13 +92,13 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
 
         // Assert
         Assert.NotNull(shell);
@@ -113,13 +113,13 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act & Assert
-        var ex = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new ShellId("NonExistent")));
+        var ex = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new("NonExistent")));
         Assert.Contains("NonExistent", ex.Message);
     }
 
@@ -129,14 +129,14 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell1 = host.GetShell(new ShellId("TestShell"));
-        var shell2 = host.GetShell(new ShellId("TestShell"));
+        var shell1 = host.GetShell(new("TestShell"));
+        var shell2 = host.GetShell(new("TestShell"));
 
         // Assert
         Assert.Same(shell1, shell2);
@@ -148,9 +148,9 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("Shell1")),
-            new ShellSettings(new ShellId("Shell2")),
-            new ShellSettings(new ShellId("Shell3"))
+            new ShellSettings(new("Shell1")),
+            new ShellSettings(new("Shell2")),
+            new ShellSettings(new("Shell3"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
@@ -170,17 +170,17 @@ public class DefaultShellHostTests : IDisposable
     {
         // Arrange
         var assembly = CreateTestAssembly(
-            ("TestFeature", typeof(TestFeatureStartup), [])
+            ("TestFeature", typeof(TestFeatureFeature), [])
         );
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"), ["TestFeature"])
+            new ShellSettings(new("TestShell"), ["TestFeature"])
         };
         var host = new DefaultShellHost(settings, [assembly]);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
 
         // Assert
         Assert.NotNull(shell);
@@ -195,13 +195,13 @@ public class DefaultShellHostTests : IDisposable
         var assembly = CreateTestAssemblyWithDependencies();
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"), ["ChildFeature"])
+            new ShellSettings(new("TestShell"), ["ChildFeature"])
         };
         var host = new DefaultShellHost(settings, [assembly]);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
 
         // Assert - Both services should be registered (parent dependency is auto-resolved)
         var parentService = shell.ServiceProvider.GetService<IParentService>();
@@ -216,13 +216,13 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"), ["UnknownFeature"])
+            new ShellSettings(new("TestShell"), ["UnknownFeature"])
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => host.GetShell(new ShellId("TestShell")));
+        var ex = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("TestShell")));
         Assert.Contains("UnknownFeature", ex.Message);
         Assert.Contains("not found", ex.Message);
     }
@@ -233,13 +233,13 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var resolvedSettings = shell.ServiceProvider.GetService<ShellSettings>();
 
         // Assert
@@ -253,13 +253,13 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
         _hostsToDispose.Add(host);
 
         // Act
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var resolvedContext = shell.ServiceProvider.GetRequiredService<ShellContext>();
 
         // Assert
@@ -274,17 +274,17 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
-        _ = host.GetShell(new ShellId("TestShell")); // Ensure the shell is built
+        _ = host.GetShell(new("TestShell")); // Ensure the shell is built
 
         // Act
         host.Dispose();
 
         // Assert - After dispose, accessing shells should throw
         Assert.Throws<ObjectDisposedException>(() => host.DefaultShell);
-        Assert.Throws<ObjectDisposedException>(() => host.GetShell(new ShellId("TestShell")));
+        Assert.Throws<ObjectDisposedException>(() => host.GetShell(new("TestShell")));
         Assert.Throws<ObjectDisposedException>(() => _ = host.AllShells);
     }
 
@@ -294,7 +294,7 @@ public class DefaultShellHostTests : IDisposable
         // Arrange
         var settings = new[]
         {
-            new ShellSettings(new ShellId("TestShell"))
+            new ShellSettings(new("TestShell"))
         };
         var host = new DefaultShellHost(settings, []);
 
@@ -315,7 +315,7 @@ public class DefaultShellHostTests : IDisposable
 
     // Helper class for test features - cannot be used with dynamic assembly
     // but keeping for reference
-    public class TestFeatureStartup : IShellStartup
+    public class TestFeatureFeature : IShellFeature
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -339,10 +339,10 @@ public class DefaultShellHostTests : IDisposable
 
             // Create the type implementing IShellStartup
             var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
-            typeBuilder.AddInterfaceImplementation(typeof(IShellStartup));
+            typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
             // Set static field value
-            if (startupType == typeof(TestFeatureStartup))
+            if (startupType == typeof(TestFeatureFeature))
             {
                 // Will configure ITestService
                 DefineConfigureServicesWithTestService(typeBuilder, typeof(ITestService), typeof(TestService));
@@ -421,7 +421,7 @@ public class DefaultShellHostTests : IDisposable
     {
         var typeName = $"{featureName}Startup";
         var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
-        typeBuilder.AddInterfaceImplementation(typeof(IShellStartup));
+        typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
         // Implement ConfigureServices method that registers a service
         var configureServicesMethod = typeBuilder.DefineMethod(
