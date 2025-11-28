@@ -47,7 +47,7 @@ public class ShellSettings
     public IReadOnlyList<string> EnabledFeatures
     {
         get => _enabledFeatures;
-        set => _enabledFeatures = value?.ToArray() ?? [];
+        set => _enabledFeatures = value.ToArray();
     }
 
     /// <summary>
