@@ -1,0 +1,315 @@
+using System.Collections.Concurrent;
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace CShells.AspNetCore;
+
+/// <summary>
+/// Default implementation of <see cref="IShellHost"/> that builds and caches per-shell
+/// <see cref="IServiceProvider"/> instances.
+/// </summary>
+public class DefaultShellHost : IShellHost, IDisposable
+{
+    private readonly IReadOnlyDictionary<string, ShellFeatureDescriptor> _featureMap;
+    private readonly IEnumerable<ShellSettings> _shellSettings;
+    private readonly ConcurrentDictionary<ShellId, ShellContext> _shellContexts = new();
+    private readonly FeatureDependencyResolver _dependencyResolver = new();
+    private readonly ILogger<DefaultShellHost> _logger;
+    private readonly object _buildLock = new();
+    private bool _disposed;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultShellHost"/> class.
+    /// </summary>
+    /// <param name="shellSettings">The collection of shell settings to manage.</param>
+    /// <param name="logger">Optional logger for diagnostic output.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/> is null.</exception>
+    public DefaultShellHost(IEnumerable<ShellSettings> shellSettings, ILogger<DefaultShellHost>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(shellSettings);
+        _shellSettings = shellSettings;
+        _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
+
+        // Discover all features from loaded assemblies
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var features = FeatureDiscovery.DiscoverFeatures(assemblies).ToList();
+
+        _logger.LogInformation("Discovered {FeatureCount} features: {FeatureNames}",
+            features.Count,
+            string.Join(", ", features.Select(f => f.Id)));
+
+        // Build feature map for quick lookup
+        _featureMap = features.ToDictionary(f => f.Id, f => f, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultShellHost"/> class with custom assemblies.
+    /// </summary>
+    /// <param name="shellSettings">The collection of shell settings to manage.</param>
+    /// <param name="assemblies">The assemblies to scan for features.</param>
+    /// <param name="logger">Optional logger for diagnostic output.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/> or <paramref name="assemblies"/> is null.</exception>
+    public DefaultShellHost(IEnumerable<ShellSettings> shellSettings, IEnumerable<Assembly> assemblies, ILogger<DefaultShellHost>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(shellSettings);
+        ArgumentNullException.ThrowIfNull(assemblies);
+        _shellSettings = shellSettings;
+        _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
+
+        // Discover all features from specified assemblies
+        var features = FeatureDiscovery.DiscoverFeatures(assemblies).ToList();
+
+        _logger.LogInformation("Discovered {FeatureCount} features: {FeatureNames}",
+            features.Count,
+            string.Join(", ", features.Select(f => f.Id)));
+
+        // Build feature map for quick lookup
+        _featureMap = features.ToDictionary(f => f.Id, f => f, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public ShellContext DefaultShell
+    {
+        get
+        {
+            ThrowIfDisposed();
+
+            // Try to find shell with Id "Default"
+            var defaultId = new ShellId("Default");
+            if (_shellContexts.TryGetValue(defaultId, out var context))
+            {
+                return context;
+            }
+
+            // Check if there's a settings entry for "Default"
+            var defaultSettings = _shellSettings.FirstOrDefault(s =>
+                string.Equals(s.Id.Name, "Default", StringComparison.OrdinalIgnoreCase));
+
+            if (defaultSettings != null)
+            {
+                return GetShell(defaultSettings.Id);
+            }
+
+            // Otherwise, return the first shell
+            var firstSettings = _shellSettings.FirstOrDefault();
+            if (firstSettings == null)
+            {
+                throw new InvalidOperationException("No shells have been configured.");
+            }
+
+            return GetShell(firstSettings.Id);
+        }
+    }
+
+    /// <inheritdoc />
+    public ShellContext GetShell(ShellId id)
+    {
+        ThrowIfDisposed();
+
+        // Try to get from cache first
+        if (_shellContexts.TryGetValue(id, out var context))
+        {
+            return context;
+        }
+
+        // Build the shell context
+        return BuildShellContext(id);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<ShellContext> AllShells
+    {
+        get
+        {
+            ThrowIfDisposed();
+
+            // Ensure all shells are built
+            foreach (var settings in _shellSettings)
+            {
+                GetShell(settings.Id);
+            }
+
+            return _shellContexts.Values.ToList().AsReadOnly();
+        }
+    }
+
+    /// <summary>
+    /// Builds a shell context for the specified shell ID.
+    /// </summary>
+    private ShellContext BuildShellContext(ShellId id)
+    {
+        // Find the settings for this shell
+        var settings = _shellSettings.FirstOrDefault(s => s.Id.Equals(id));
+        if (settings == null)
+        {
+            throw new KeyNotFoundException($"Shell with Id '{id}' was not found in the configured shell settings.");
+        }
+
+        // Double-check locking for thread safety
+        lock (_buildLock)
+        {
+            // Check again after acquiring lock
+            if (_shellContexts.TryGetValue(id, out var existingContext))
+            {
+                return existingContext;
+            }
+
+            _logger.LogInformation("Building shell context for '{ShellId}'", id);
+
+            // Validate and resolve feature dependencies
+            var enabledFeatures = settings.EnabledFeatures;
+            foreach (var featureName in enabledFeatures)
+            {
+                if (!_featureMap.ContainsKey(featureName))
+                {
+                    _logger.LogWarning("Unknown feature '{FeatureName}' configured for shell '{ShellId}'",
+                        featureName, id);
+                    throw new InvalidOperationException(
+                        $"Feature '{featureName}' configured for shell '{id}' was not found in discovered features.");
+                }
+            }
+
+            // Resolve dependencies and get ordered list of features
+            List<string> orderedFeatures;
+            try
+            {
+                orderedFeatures = _dependencyResolver.GetOrderedFeatures(enabledFeatures, _featureMap);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Failed to resolve feature dependencies for shell '{ShellId}'", id);
+                throw;
+            }
+
+            _logger.LogInformation("Shell '{ShellId}' will use features (in order): {Features}",
+                id, string.Join(", ", orderedFeatures));
+
+            // Build the service provider with a context holder
+            var contextHolder = new ShellContextHolder();
+            var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder);
+            var context = new ShellContext(settings, serviceProvider);
+            
+            // Populate the holder so ShellContext can be resolved from DI
+            contextHolder.Context = context;
+
+            _shellContexts[id] = context;
+            return context;
+        }
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IServiceProvider"/> for a shell with the specified features.
+    /// </summary>
+    /// <param name="settings">The shell settings.</param>
+    /// <param name="orderedFeatures">The ordered list of features to configure.</param>
+    /// <param name="contextHolder">A holder that will be populated with the ShellContext after the service provider is built.</param>
+    private IServiceProvider BuildServiceProvider(ShellSettings settings, List<string> orderedFeatures, ShellContextHolder contextHolder)
+    {
+        var services = new ServiceCollection();
+
+        // Add shell-specific services
+        services.AddSingleton(settings);
+        
+        // Register the ShellContext using the holder pattern
+        // The holder will be populated after the service provider is built
+        services.AddSingleton(contextHolder);
+        services.AddSingleton<ShellContext>(sp => sp.GetRequiredService<ShellContextHolder>().Context 
+            ?? throw new InvalidOperationException("ShellContext has not been initialized yet."));
+
+        // Create a temporary service provider for startup activation
+        // This allows startups to have constructor dependencies resolved
+        var tempProvider = services.BuildServiceProvider();
+
+        // Configure services from each feature's startup in dependency order
+        foreach (var featureName in orderedFeatures)
+        {
+            var descriptor = _featureMap[featureName];
+            if (descriptor.StartupType == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                // Create the startup instance using ActivatorUtilities
+                var startup = (IShellStartup)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType);
+                startup.ConfigureServices(services);
+
+                _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",
+                    featureName, descriptor.StartupType.FullName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to configure services for feature '{FeatureName}'", featureName);
+                throw new InvalidOperationException(
+                    $"Failed to configure services for feature '{featureName}': {ex.Message}", ex);
+            }
+        }
+
+        // Dispose temporary provider
+        tempProvider.Dispose();
+
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// A holder class that allows the ShellContext to be set after the service provider is built.
+    /// </summary>
+    private sealed class ShellContextHolder
+    {
+        public ShellContext? Context { get; set; }
+    }
+
+    /// <summary>
+    /// Throws an <see cref="ObjectDisposedException"/> if this instance has been disposed.
+    /// </summary>
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes resources used by this instance.
+    /// </summary>
+    /// <param name="disposing">True if disposing managed resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            // Dispose all service providers
+            foreach (var context in _shellContexts.Values)
+            {
+                if (context.ServiceProvider is IDisposable disposable)
+                {
+                    try
+                    {
+                        disposable.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error disposing service provider for shell '{ShellId}'",
+                            context.Id);
+                    }
+                }
+            }
+
+            _shellContexts.Clear();
+        }
+
+        _disposed = true;
+    }
+}
