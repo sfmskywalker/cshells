@@ -15,19 +15,24 @@ public class PathShellResolverTests
         // Arrange
         var pathMap = new Dictionary<string, ShellId>
         {
-            ["tenant1"] = new ShellId("Tenant1Shell"),
-            ["tenant2"] = new ShellId("Tenant2Shell")
+            ["tenant1"] = new("Tenant1Shell"),
+            ["tenant2"] = new("Tenant2Shell")
         };
         var resolver = new PathShellResolver(pathMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/tenant1/some/path";
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = "/tenant1/some/path"
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(new ShellId("Tenant1Shell"), result.Value);
+        Assert.Equal(new("Tenant1Shell"), result.Value);
     }
 
     [Fact(DisplayName = "Resolve with non-matching path segment returns null")]
@@ -36,11 +41,16 @@ public class PathShellResolverTests
         // Arrange
         var pathMap = new Dictionary<string, ShellId>
         {
-            ["tenant1"] = new ShellId("Tenant1Shell")
+            ["tenant1"] = new("Tenant1Shell")
         };
         var resolver = new PathShellResolver(pathMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/unknown/path";
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = "/unknown/path"
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
@@ -55,11 +65,16 @@ public class PathShellResolverTests
         // Arrange
         var pathMap = new Dictionary<string, ShellId>
         {
-            ["tenant1"] = new ShellId("Tenant1Shell")
+            ["tenant1"] = new("Tenant1Shell")
         };
         var resolver = new PathShellResolver(pathMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "";
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = ""
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
@@ -74,11 +89,16 @@ public class PathShellResolverTests
         // Arrange
         var pathMap = new Dictionary<string, ShellId>
         {
-            ["tenant1"] = new ShellId("Tenant1Shell")
+            ["tenant1"] = new("Tenant1Shell")
         };
         var resolver = new PathShellResolver(pathMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/";
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = "/"
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);

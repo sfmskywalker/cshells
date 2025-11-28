@@ -27,8 +27,10 @@ public class ShellMiddlewareTests
             resolver: resolver,
             host: host);
 
-        var httpContext = new DefaultHttpContext();
-        httpContext.RequestServices = originalServiceProvider;
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = originalServiceProvider
+        };
 
         // Act
         await middleware.InvokeAsync(httpContext);
@@ -47,10 +49,10 @@ public class ShellMiddlewareTests
         shellServices.AddSingleton<ITestService, TestService>();
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
-        var settings = new ShellSettings(new ShellId("TestShell"));
+        var settings = new ShellSettings(new("TestShell"));
         var shellContext = new ShellContext(settings, shellServiceProvider);
 
-        var resolver = new FixedShellResolver(new ShellId("TestShell"));
+        var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
 
         IServiceProvider? capturedRequestServices = null;
@@ -66,8 +68,10 @@ public class ShellMiddlewareTests
             resolver: resolver,
             host: host);
 
-        var httpContext = new DefaultHttpContext();
-        httpContext.RequestServices = originalServiceProvider;
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = originalServiceProvider
+        };
 
         // Act
         await middleware.InvokeAsync(httpContext);
@@ -88,10 +92,10 @@ public class ShellMiddlewareTests
         var shellServices = new ServiceCollection();
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
-        var settings = new ShellSettings(new ShellId("TestShell"));
+        var settings = new ShellSettings(new("TestShell"));
         var shellContext = new ShellContext(settings, shellServiceProvider);
 
-        var resolver = new FixedShellResolver(new ShellId("TestShell"));
+        var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
 
         var middleware = new ShellMiddleware(
@@ -99,8 +103,10 @@ public class ShellMiddlewareTests
             resolver: resolver,
             host: host);
 
-        var httpContext = new DefaultHttpContext();
-        httpContext.RequestServices = originalServiceProvider;
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = originalServiceProvider
+        };
 
         // Act
         await middleware.InvokeAsync(httpContext);
@@ -117,10 +123,10 @@ public class ShellMiddlewareTests
         var shellServices = new ServiceCollection();
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
-        var settings = new ShellSettings(new ShellId("TestShell"));
+        var settings = new ShellSettings(new("TestShell"));
         var shellContext = new ShellContext(settings, shellServiceProvider);
 
-        var resolver = new FixedShellResolver(new ShellId("TestShell"));
+        var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
 
         var middleware = new ShellMiddleware(
@@ -128,8 +134,10 @@ public class ShellMiddlewareTests
             resolver: resolver,
             host: host);
 
-        var httpContext = new DefaultHttpContext();
-        httpContext.RequestServices = originalServiceProvider;
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = originalServiceProvider
+        };
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));

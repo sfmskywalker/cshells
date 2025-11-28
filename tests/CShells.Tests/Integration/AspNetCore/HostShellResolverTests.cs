@@ -15,19 +15,24 @@ public class HostShellResolverTests
         // Arrange
         var hostMap = new Dictionary<string, ShellId>
         {
-            ["tenant1.example.com"] = new ShellId("Tenant1Shell"),
-            ["tenant2.example.com"] = new ShellId("Tenant2Shell")
+            ["tenant1.example.com"] = new("Tenant1Shell"),
+            ["tenant2.example.com"] = new("Tenant2Shell")
         };
         var resolver = new HostShellResolver(hostMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Host = new HostString("tenant1.example.com");
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Host = new("tenant1.example.com")
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(new ShellId("Tenant1Shell"), result.Value);
+        Assert.Equal(new("Tenant1Shell"), result.Value);
     }
 
     [Fact(DisplayName = "Resolve with non-matching host returns null")]
@@ -36,11 +41,16 @@ public class HostShellResolverTests
         // Arrange
         var hostMap = new Dictionary<string, ShellId>
         {
-            ["tenant1.example.com"] = new ShellId("Tenant1Shell")
+            ["tenant1.example.com"] = new("Tenant1Shell")
         };
         var resolver = new HostShellResolver(hostMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Host = new HostString("unknown.example.com");
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Host = new("unknown.example.com")
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
@@ -55,18 +65,23 @@ public class HostShellResolverTests
         // Arrange
         var hostMap = new Dictionary<string, ShellId>
         {
-            ["localhost"] = new ShellId("DefaultShell")
+            ["localhost"] = new("DefaultShell")
         };
         var resolver = new HostShellResolver(hostMap);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Host = new HostString("localhost", 5000);
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Host = new("localhost", 5000)
+            }
+        };
 
         // Act
         var result = resolver.Resolve(httpContext);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(new ShellId("DefaultShell"), result.Value);
+        Assert.Equal(new("DefaultShell"), result.Value);
     }
 
     [Fact(DisplayName = "Constructor with null hostMap throws ArgumentNullException")]

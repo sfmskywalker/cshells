@@ -39,7 +39,7 @@ public class ServiceCollectionExtensionsTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(new ShellId("Default"), result.Value);
+        Assert.Equal(new("Default"), result.Value);
     }
 
     [Fact(DisplayName = "AddCShellsAspNetCore does not override custom IShellResolver")]
