@@ -156,34 +156,46 @@ public class DefaultShellHost : IShellHost, IDisposable
 
             _logger.LogInformation("Building shell context for '{ShellId}'", settings.Id);
 
-            // Validate configured features exist
             ValidateEnabledFeatures(settings);
-
-            // Resolve dependencies and get ordered list of features
-            List<string> orderedFeatures;
-            try
-            {
-                orderedFeatures = _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, _featureMap);
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Failed to resolve feature dependencies for shell '{ShellId}'", settings.Id);
-                throw;
-            }
+            var orderedFeatures = ResolveFeatureDependencies(settings);
 
             _logger.LogInformation("Shell '{ShellId}' will use features (in order): {Features}",
                 settings.Id, string.Join(", ", orderedFeatures));
 
-            // Build the service provider with a context holder
-            var contextHolder = new ShellContextHolder();
-            var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder);
-            var context = new ShellContext(settings, serviceProvider);
-            
-            // Populate the holder so ShellContext can be resolved from DI
-            contextHolder.Context = context;
-
-            return context;
+            return CreateShellContext(settings, orderedFeatures);
         }
+    }
+
+    /// <summary>
+    /// Resolves feature dependencies and returns an ordered list of features for the shell.
+    /// </summary>
+    private List<string> ResolveFeatureDependencies(ShellSettings settings)
+    {
+        try
+        {
+            return _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, _featureMap);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Failed to resolve feature dependencies for shell '{ShellId}'", settings.Id);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Creates a shell context with its service provider and configured features.
+    /// Uses the holder pattern to allow ShellContext to be resolved from DI.
+    /// </summary>
+    private ShellContext CreateShellContext(ShellSettings settings, List<string> orderedFeatures)
+    {
+        var contextHolder = new ShellContextHolder();
+        var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder);
+        var context = new ShellContext(settings, serviceProvider);
+
+        // Populate the holder so ShellContext can be resolved from DI
+        contextHolder.Context = context;
+
+        return context;
     }
 
     /// <summary>
@@ -220,50 +232,70 @@ public class DefaultShellHost : IShellHost, IDisposable
     {
         var services = new ServiceCollection();
 
-        // Add shell-specific services
-        services.AddSingleton(settings);
-        
-        // Register the ShellContext using the holder pattern
-        // The holder will be populated after the service provider is built
-        // Note: ShellContextHolder is not registered; it's an internal implementation detail
-        services.AddSingleton<ShellContext>(sp => contextHolder.Context 
-            ?? throw new InvalidOperationException($"ShellContext for shell '{settings.Id}' has not been initialized yet. This may indicate a service is being resolved during shell construction."));
+        RegisterCoreServices(services, settings, contextHolder);
 
-        // If there are no features to configure, build and return immediately
         if (orderedFeatures.Count == 0)
         {
             return services.BuildServiceProvider();
         }
 
-        // Create a temporary service provider for startup activation
-        // This allows startups to have constructor dependencies resolved
-        using var tempProvider = services.BuildServiceProvider();
+        ConfigureFeatureServices(services, orderedFeatures);
 
-        // Configure services from each feature's startup in dependency order
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Registers core services required by all shells.
+    /// </summary>
+    private static void RegisterCoreServices(ServiceCollection services, ShellSettings settings, ShellContextHolder contextHolder)
+    {
+        services.AddSingleton(settings);
+
+        // Register the ShellContext using the holder pattern
+        // The holder will be populated after the service provider is built
+        services.AddSingleton<ShellContext>(sp => contextHolder.Context
+            ?? throw new InvalidOperationException($"ShellContext for shell '{settings.Id}' has not been initialized yet. This may indicate a service is being resolved during shell construction."));
+    }
+
+    /// <summary>
+    /// Configures services from each feature's startup in dependency order.
+    /// Each feature is instantiated with a temp provider that includes services from all previously-processed features.
+    /// </summary>
+    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures)
+    {
         var featuresWithStartups = orderedFeatures
             .Select(name => (Name: name, Descriptor: _featureMap[name]))
             .Where(f => f.Descriptor.StartupType != null);
 
         foreach (var (featureName, descriptor) in featuresWithStartups)
         {
-            try
-            {
-                // Create the startup instance using ActivatorUtilities
-                var startup = (IShellFeature)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType!);
-                startup.ConfigureServices(services);
-
-                _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",
-                    featureName, descriptor.StartupType!.FullName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to configure services for feature '{FeatureName}'", featureName);
-                throw new InvalidOperationException(
-                    $"Failed to configure services for feature '{featureName}': {ex.Message}", ex);
-            }
+            ConfigureFeature(services, featureName, descriptor);
         }
+    }
 
-        return services.BuildServiceProvider();
+    /// <summary>
+    /// Configures services for a single feature by instantiating its startup and calling ConfigureServices.
+    /// </summary>
+    private void ConfigureFeature(ServiceCollection services, string featureName, ShellFeatureDescriptor descriptor)
+    {
+        try
+        {
+            // Create a temporary service provider that includes services registered so far
+            // This allows each startup to depend on services from its dependency features
+            using var tempProvider = services.BuildServiceProvider();
+
+            var startup = (IShellFeature)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType!);
+            startup.ConfigureServices(services);
+
+            _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",
+                featureName, descriptor.StartupType!.FullName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to configure services for feature '{FeatureName}'", featureName);
+            throw new InvalidOperationException(
+                $"Failed to configure services for feature '{featureName}': {ex.Message}", ex);
+        }
     }
 
     /// <summary>

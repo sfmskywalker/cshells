@@ -35,52 +35,82 @@ public static class FeatureDiscovery
                 if (attribute == null)
                     continue;
 
-                // Validate that the type implements IShellStartup
-                if (!typeof(IShellFeature).IsAssignableFrom(type))
-                {
-                    throw new InvalidOperationException(
-                        $"Type '{type.FullName}' is decorated with [ShellFeature(\"{attribute.Name}\")] but does not implement IShellStartup.");
-                }
+                ValidateFeatureType(type, attribute);
+                EnsureUniqueFeatureName(attribute.Name, type, features);
 
-                // Check for duplicate feature names
-                if (features.ContainsKey(attribute.Name))
-                {
-                    throw new InvalidOperationException(
-                        $"Duplicate feature name '{attribute.Name}' found. Type '{type.FullName}' conflicts with an existing feature.");
-                }
-
-                var descriptor = new ShellFeatureDescriptor(attribute.Name)
-                {
-                    StartupType = type,
-                    Dependencies = attribute.DependsOn
-                };
-
-                // Convert metadata array to dictionary (pairs of key-value)
-                if (attribute.Metadata.Length > 0)
-                {
-                    if (attribute.Metadata.Length % 2 != 0)
-                    {
-                        throw new InvalidOperationException(
-                            $"Feature '{attribute.Name}' has an odd number of metadata elements. Metadata must be specified as key-value pairs.");
-                    }
-                    
-                    var metadata = new Dictionary<string, object>();
-                    for (var i = 0; i + 1 < attribute.Metadata.Length; i += 2)
-                    {
-                        var key = attribute.Metadata[i]?.ToString();
-                        if (!string.IsNullOrEmpty(key))
-                        {
-                            metadata[key] = attribute.Metadata[i + 1];
-                        }
-                    }
-                    descriptor.Metadata = metadata;
-                }
-
+                var descriptor = CreateFeatureDescriptor(type, attribute);
                 features[attribute.Name] = descriptor;
             }
         }
 
         return features.Values;
+    }
+
+    /// <summary>
+    /// Validates that a type decorated with ShellFeatureAttribute implements IShellFeature.
+    /// </summary>
+    private static void ValidateFeatureType(Type type, ShellFeatureAttribute attribute)
+    {
+        if (!typeof(IShellFeature).IsAssignableFrom(type))
+        {
+            throw new InvalidOperationException(
+                $"Type '{type.FullName}' is decorated with [ShellFeature(\"{attribute.Name}\")] but does not implement IShellStartup.");
+        }
+    }
+
+    /// <summary>
+    /// Ensures that a feature name is unique within the collection.
+    /// </summary>
+    private static void EnsureUniqueFeatureName(string featureName, Type type, Dictionary<string, ShellFeatureDescriptor> features)
+    {
+        if (features.ContainsKey(featureName))
+        {
+            throw new InvalidOperationException(
+                $"Duplicate feature name '{featureName}' found. Type '{type.FullName}' conflicts with an existing feature.");
+        }
+    }
+
+    /// <summary>
+    /// Creates a feature descriptor from a type and its ShellFeatureAttribute.
+    /// </summary>
+    private static ShellFeatureDescriptor CreateFeatureDescriptor(Type type, ShellFeatureAttribute attribute)
+    {
+        var descriptor = new ShellFeatureDescriptor(attribute.Name)
+        {
+            StartupType = type,
+            Dependencies = attribute.DependsOn
+        };
+
+        if (attribute.Metadata.Length > 0)
+        {
+            descriptor.Metadata = ParseMetadata(attribute.Name, attribute.Metadata);
+        }
+
+        return descriptor;
+    }
+
+    /// <summary>
+    /// Parses metadata from an array of key-value pairs into a dictionary.
+    /// </summary>
+    private static Dictionary<string, object> ParseMetadata(string featureName, object[] metadataArray)
+    {
+        if (metadataArray.Length % 2 != 0)
+        {
+            throw new InvalidOperationException(
+                $"Feature '{featureName}' has an odd number of metadata elements. Metadata must be specified as key-value pairs.");
+        }
+
+        var metadata = new Dictionary<string, object>();
+        for (var i = 0; i + 1 < metadataArray.Length; i += 2)
+        {
+            var key = metadataArray[i]?.ToString();
+            if (!string.IsNullOrEmpty(key))
+            {
+                metadata[key] = metadataArray[i + 1];
+            }
+        }
+
+        return metadata;
     }
 
     private static IEnumerable<Type> GetExportedTypes(Assembly assembly)
