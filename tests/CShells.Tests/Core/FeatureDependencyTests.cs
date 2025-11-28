@@ -12,7 +12,7 @@ public class FeatureDependencyTests
 
     #region Transitive Dependency Resolution
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with transitive dependencies returns topological order")]
     public void GetOrderedFeatures_WithTransitiveDependencies_ReturnsTopologicalOrder()
     {
         // Arrange: A -> B -> C (A depends on B, B depends on C)
@@ -30,7 +30,7 @@ public class FeatureDependencyTests
         result.Should().ContainInOrder("C", "B", "A");
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with deep transitive dependencies returns dependencies first")]
     public void GetOrderedFeatures_WithDeepTransitiveDependencies_ReturnsDependenciesBeforeDependents()
     {
         // Arrange: A -> B -> C -> D -> E
@@ -47,7 +47,7 @@ public class FeatureDependencyTests
 
         // Assert
         result.Should().HaveCount(5);
-        
+
         // Each feature should come after its dependencies
         result.IndexOf("E").Should().BeLessThan(result.IndexOf("D"));
         result.IndexOf("D").Should().BeLessThan(result.IndexOf("C"));
@@ -55,7 +55,7 @@ public class FeatureDependencyTests
         result.IndexOf("B").Should().BeLessThan(result.IndexOf("A"));
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with multiple dependencies returns dependencies first")]
     public void GetOrderedFeatures_WithMultipleDependencies_ReturnsDependenciesFirst()
     {
         // Arrange: A depends on both B and C, which have no dependencies
@@ -74,7 +74,7 @@ public class FeatureDependencyTests
         result.IndexOf("C").Should().BeLessThan(result.IndexOf("A"));
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with diamond dependency handles duplicates correctly")]
     public void GetOrderedFeatures_WithDiamondDependency_HandlesDuplicatesCorrectly()
     {
         // Arrange: Diamond pattern A -> B, A -> C, B -> D, C -> D
@@ -99,7 +99,7 @@ public class FeatureDependencyTests
 
     #region Cycle Detection
 
-    [Theory]
+    [Theory(DisplayName = "GetOrderedFeatures with circular dependency throws InvalidOperationException")]
     [InlineData("DirectCycle", "A:B", "B:A")] // A -> B -> A
     [InlineData("IndirectCycle", "A:B", "B:C", "C:A")] // A -> B -> C -> A
     [InlineData("SelfReference", "A:A")] // A -> A
@@ -124,7 +124,7 @@ public class FeatureDependencyTests
             .WithMessage("*Circular dependency*", $"scenario '{scenario}' should detect circular dependency");
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with cycle throws with feature name")]
     public void ResolveDependencies_WithCycle_ThrowsInvalidOperationExceptionWithFeatureName()
     {
         // Arrange
@@ -146,7 +146,7 @@ public class FeatureDependencyTests
 
     #region Unknown Feature Dependency Handling
 
-    [Theory]
+    [Theory(DisplayName = "GetOrderedFeatures with unknown dependency throws with feature name")]
     [InlineData("DirectDependency", "NonExistent", "A:NonExistent")]
     [InlineData("TransitiveDependency", "NonExistent", "A:B", "B:NonExistent")]
     [InlineData("MissingFeatureName", "MissingFeature", "A:MissingFeature")]
@@ -168,7 +168,7 @@ public class FeatureDependencyTests
             .WithMessage("*not found*");
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with unknown feature throws InvalidOperationException")]
     public void ResolveDependencies_WithUnknownFeature_ThrowsInvalidOperationException()
     {
         // Arrange

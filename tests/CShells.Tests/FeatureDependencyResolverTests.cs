@@ -4,7 +4,7 @@ public class FeatureDependencyResolverTests
 {
     private readonly FeatureDependencyResolver _resolver = new();
 
-    [Theory]
+    [Theory(DisplayName = "ResolveDependencies with null parameters throws ArgumentNullException")]
     [InlineData(null, "featureName")]
     [InlineData("Feature1", "features")]
     public void ResolveDependencies_WithNullParameters_ThrowsArgumentNullException(string? featureName, string expectedParamName)
@@ -17,7 +17,7 @@ public class FeatureDependencyResolverTests
         Assert.Equal(expectedParamName, ex.ParamName);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with unknown feature throws InvalidOperationException")]
     public void ResolveDependencies_WithFeatureNotFound_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -29,7 +29,7 @@ public class FeatureDependencyResolverTests
         Assert.Contains("NonExistent", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with no dependencies returns empty list")]
     public void ResolveDependencies_WithNoDependencies_ReturnsEmptyList()
     {
         // Arrange
@@ -44,7 +44,7 @@ public class FeatureDependencyResolverTests
         Assert.Empty(result);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with single dependency returns dependency")]
     public void ResolveDependencies_WithSingleDependency_ReturnsDependency()
     {
         // Arrange
@@ -61,7 +61,7 @@ public class FeatureDependencyResolverTests
         Assert.Equal("Feature2", result[0]);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with transitive dependencies returns all in order")]
     public void ResolveDependencies_WithTransitiveDependencies_ReturnsAllDependenciesInOrder()
     {
         // Arrange
@@ -80,7 +80,7 @@ public class FeatureDependencyResolverTests
         Assert.Equal("Feature2", result[1]);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with circular dependency throws InvalidOperationException")]
     public void ResolveDependencies_WithCircularDependency_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -94,7 +94,7 @@ public class FeatureDependencyResolverTests
         Assert.Contains("Circular dependency", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "ResolveDependencies with missing dependency throws InvalidOperationException")]
     public void ResolveDependencies_WithMissingDependency_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -108,7 +108,7 @@ public class FeatureDependencyResolverTests
         Assert.Contains("NonExistent", ex.Message);
     }
 
-    [Theory]
+    [Theory(DisplayName = "GetOrderedFeatures with null features throws ArgumentNullException")]
     [InlineData(true)]
     [InlineData(false)]
     public void GetOrderedFeatures_WithNullFeatures_ThrowsArgumentNullException(bool withFeatureNames)
@@ -126,7 +126,7 @@ public class FeatureDependencyResolverTests
         }
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with empty features returns empty list")]
     public void GetOrderedFeatures_WithEmptyFeatures_ReturnsEmptyList()
     {
         // Arrange
@@ -139,7 +139,7 @@ public class FeatureDependencyResolverTests
         Assert.Empty(result);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with no dependencies returns all features")]
     public void GetOrderedFeatures_WithNoDependencies_ReturnsAllFeatures()
     {
         // Arrange
@@ -157,7 +157,7 @@ public class FeatureDependencyResolverTests
         Assert.Contains("Feature2", result);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with dependencies returns dependencies first")]
     public void GetOrderedFeatures_WithDependencies_ReturnsDependenciesFirst()
     {
         // Arrange
@@ -176,7 +176,7 @@ public class FeatureDependencyResolverTests
         Assert.True(result.IndexOf("Feature2") < result.IndexOf("Feature1"));
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with circular dependency throws InvalidOperationException")]
     public void GetOrderedFeatures_WithCircularDependency_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -191,7 +191,7 @@ public class FeatureDependencyResolverTests
         Assert.Contains("Circular dependency", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with null feature names throws ArgumentNullException")]
     public void GetOrderedFeatures_WithFeatureNames_NullFeatureNames_ThrowsArgumentNullException()
     {
         // Arrange
@@ -202,7 +202,7 @@ public class FeatureDependencyResolverTests
         Assert.Equal("featureNames", ex.ParamName);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with selected features returns only those and dependencies")]
     public void GetOrderedFeatures_WithSelectedFeatures_ReturnsOnlySelectedFeaturesAndDependencies()
     {
         // Arrange
@@ -224,7 +224,7 @@ public class FeatureDependencyResolverTests
         Assert.DoesNotContain("Feature4", result);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with selected features returns dependencies first")]
     public void GetOrderedFeatures_WithSelectedFeatures_ReturnsDependenciesFirst()
     {
         // Arrange
@@ -243,7 +243,7 @@ public class FeatureDependencyResolverTests
         Assert.True(result.IndexOf("Feature2") < result.IndexOf("Feature1"));
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetOrderedFeatures with diamond dependency handles correctly")]
     public void GetOrderedFeatures_WithDiamondDependency_HandlesCorrectly()
     {
         // Arrange: Diamond pattern A -> B, A -> C, B -> D, C -> D

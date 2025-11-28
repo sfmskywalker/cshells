@@ -98,7 +98,7 @@ public class ShellHostTests : IDisposable
 
     #region Feature Discovery Tests
 
-    [Fact]
+    [Fact(DisplayName = "FeatureDiscovery discovers features from test assembly")]
     public void FeatureDiscovery_DiscoversFeaturesFromTestAssembly()
     {
         // Arrange
@@ -110,12 +110,12 @@ public class ShellHostTests : IDisposable
         // Assert
         features.Should().Contain(f => f.Id == "Core");
         features.Should().Contain(f => f.Id == "Weather");
-        
+
         var weatherFeature = features.Single(f => f.Id == "Weather");
         weatherFeature.Dependencies.Should().Contain("Core");
     }
 
-    [Fact]
+    [Fact(DisplayName = "FeatureDiscovery Core feature has correct startup type")]
     public void FeatureDiscovery_CoreFeature_HasCorrectStartupType()
     {
         // Arrange
@@ -129,7 +129,7 @@ public class ShellHostTests : IDisposable
         coreFeature.StartupType.Should().Be(typeof(CoreFeatureStartup));
     }
 
-    [Fact]
+    [Fact(DisplayName = "FeatureDiscovery Weather feature has dependency on Core")]
     public void FeatureDiscovery_WeatherFeature_HasDependencyOnCore()
     {
         // Arrange
@@ -148,7 +148,7 @@ public class ShellHostTests : IDisposable
 
     #region Shell Host Integration Tests
 
-    [Theory]
+    [Theory(DisplayName = "GetShell with Weather feature resolves expected services")]
     [InlineData(typeof(IWeatherService), "Weather feature should register IWeatherService")]
     [InlineData(typeof(ITimeService), "Core feature (dependency of Weather) should register ITimeService")]
     public void GetShell_WithWeatherFeature_ResolvesExpectedServices(Type serviceType, string reason)
@@ -164,7 +164,7 @@ public class ShellHostTests : IDisposable
         service.Should().NotBeNull(reason);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell WeatherService can access TimeService")]
     public void GetShell_WeatherService_CanAccessTimeService()
     {
         // Arrange
@@ -179,7 +179,7 @@ public class ShellHostTests : IDisposable
         weatherService.TimeService.Should().BeOfType<TimeService>();
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell TimeService returns recent time")]
     public void GetShell_TimeService_ReturnsRecentTime()
     {
         // Arrange
@@ -198,7 +198,7 @@ public class ShellHostTests : IDisposable
         currentTime.Should().BeBefore(afterTime);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell WeatherService generates valid weather report")]
     public void GetShell_WeatherService_GeneratesValidWeatherReport()
     {
         // Arrange
@@ -219,7 +219,7 @@ public class ShellHostTests : IDisposable
 
     #region DefaultShell Property Tests
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell returns same context as GetShell with default ID")]
     public void DefaultShell_ReturnsSameContextAsGetShellWithDefaultId()
     {
         // Arrange
@@ -233,7 +233,7 @@ public class ShellHostTests : IDisposable
         defaultShell.Should().BeSameAs(getShellResult);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell with Default ID returns correct shell context")]
     public void DefaultShell_WithDefaultShellId_ReturnsCorrectShellContext()
     {
         // Arrange
@@ -254,7 +254,7 @@ public class ShellHostTests : IDisposable
         defaultShell.Settings.EnabledFeatures.Should().Contain("Weather");
     }
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell multiple calls return same instance")]
     public void DefaultShell_MultipleCalls_ReturnsSameInstance()
     {
         // Arrange
@@ -274,7 +274,7 @@ public class ShellHostTests : IDisposable
 
     #region Service Provider Tests
 
-    [Fact]
+    [Fact(DisplayName = "ServiceProvider resolves services from dependency features")]
     public void ServiceProvider_ResolvesServicesFromDependencyFeatures()
     {
         // Arrange
@@ -291,7 +291,7 @@ public class ShellHostTests : IDisposable
         weatherService.Should().NotBeNull();
     }
 
-    [Theory]
+    [Theory(DisplayName = "ServiceProvider can resolve shell infrastructure")]
     [InlineData(typeof(ShellContext), "ShellContext")]
     [InlineData(typeof(ShellSettings), "ShellSettings")]
     public void ServiceProvider_CanResolveShellInfrastructure(Type serviceType, string serviceName)
@@ -338,7 +338,7 @@ public class ShellHostTests : IDisposable
 
     #region Feature Dependency Order Tests
 
-    [Fact]
+    [Fact(DisplayName = "GetShell dependency order is correct Core before Weather")]
     public void GetShell_DependencyOrderIsCorrect_CoreConfiguredBeforeWeather()
     {
         // Arrange: This test ensures that even though only "Weather" is enabled,

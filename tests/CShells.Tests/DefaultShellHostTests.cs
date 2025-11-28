@@ -17,7 +17,7 @@ public class DefaultShellHostTests : IDisposable
         }
     }
 
-    [Fact]
+    [Fact(DisplayName = "Constructor with null shell settings throws ArgumentNullException")]
     public void Constructor_WithNullShellSettings_ThrowsArgumentNullException()
     {
         // Act & Assert
@@ -25,7 +25,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("shellSettings", ex.ParamName);
     }
 
-    [Fact]
+    [Fact(DisplayName = "Constructor with null assemblies throws ArgumentNullException")]
     public void Constructor_WithNullAssemblies_ThrowsArgumentNullException()
     {
         // Arrange
@@ -37,7 +37,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("assemblies", ex.ParamName);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell with no shells throws InvalidOperationException")]
     public void DefaultShell_WithNoShells_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -49,7 +49,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Contains("No shells have been configured", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell with Default shell configured returns default shell")]
     public void DefaultShell_WithDefaultShellConfigured_ReturnsDefaultShell()
     {
         // Arrange
@@ -68,7 +68,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("Default", shell.Id.Name);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DefaultShell without default shell returns first shell")]
     public void DefaultShell_WithoutDefaultShell_ReturnsFirstShell()
     {
         // Arrange
@@ -87,7 +87,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("First", shell.Id.Name);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell with valid ID returns shell context")]
     public void GetShell_WithValidId_ReturnsShellContext()
     {
         // Arrange
@@ -108,7 +108,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.NotNull(shell.ServiceProvider);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell with invalid ID throws KeyNotFoundException")]
     public void GetShell_WithInvalidId_ThrowsKeyNotFoundException()
     {
         // Arrange
@@ -124,7 +124,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Contains("NonExistent", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell called multiple times returns same instance")]
     public void GetShell_CalledMultipleTimes_ReturnsSameInstance()
     {
         // Arrange
@@ -143,7 +143,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Same(shell1, shell2);
     }
 
-    [Fact]
+    [Fact(DisplayName = "AllShells returns all configured shells")]
     public void AllShells_ReturnsAllConfiguredShells()
     {
         // Arrange
@@ -166,7 +166,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Contains(allShells, s => s.Id.Name == "Shell3");
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell with enabled features resolves and configures services")]
     public void GetShell_WithEnabledFeatures_ResolvesAndConfiguresServices()
     {
         // Arrange
@@ -187,7 +187,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.NotNull(testService);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell with feature dependencies configures in correct order")]
     public void GetShell_WithFeatureDependencies_ConfiguresInCorrectOrder()
     {
         // Arrange
@@ -209,7 +209,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.NotNull(childService);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell feature constructor can resolve dependency services")]
     public void GetShell_FeatureConstructorCanResolveDependencyServices()
     {
         // Arrange - Create features where child feature constructor depends on parent's registered service
@@ -231,7 +231,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.NotNull(validationService);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell with unknown feature throws InvalidOperationException")]
     public void GetShell_WithUnknownFeature_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -248,7 +248,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Contains("not found", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell returns ShellSettings from service provider")]
     public void GetShell_ShellSettingsIsRegistered_ReturnsFromServiceProvider()
     {
         // Arrange
@@ -268,7 +268,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("TestShell", resolvedSettings.Id.Name);
     }
 
-    [Fact]
+    [Fact(DisplayName = "GetShell returns ShellContext from service provider")]
     public void GetShell_ShellContextIsRegistered_ReturnsFromServiceProvider()
     {
         // Arrange
@@ -289,7 +289,7 @@ public class DefaultShellHostTests : IDisposable
         Assert.Equal("TestShell", resolvedContext.Id.Name);
     }
 
-    [Fact]
+    [Fact(DisplayName = "Dispose disposes all service providers")]
     public void Dispose_DisposesServiceProviders()
     {
         // Arrange

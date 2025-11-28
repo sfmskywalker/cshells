@@ -5,7 +5,7 @@ namespace CShells.Tests;
 
 public class FeatureDiscoveryTests
 {
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with null assemblies throws ArgumentNullException")]
     public void DiscoverFeatures_WithNullAssemblies_ThrowsArgumentNullException()
     {
         // Act & Assert
@@ -13,7 +13,7 @@ public class FeatureDiscoveryTests
         Assert.Equal("assemblies", ex.ParamName);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with empty assemblies returns empty collection")]
     public void DiscoverFeatures_WithEmptyAssemblies_ReturnsEmptyCollection()
     {
         // Act
@@ -23,7 +23,7 @@ public class FeatureDiscoveryTests
         Assert.Empty(features);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with null assembly in collection skips null")]
     public void DiscoverFeatures_WithNullAssemblyInCollection_SkipsNullAssembly()
     {
         // Arrange
@@ -40,7 +40,7 @@ public class FeatureDiscoveryTests
         Assert.Equal("ValidFeature", features[0].Id);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with valid feature returns feature descriptor")]
     public void DiscoverFeatures_WithValidFeature_ReturnsFeatureDescriptor()
     {
         // Arrange - use assembly with only valid features
@@ -58,7 +58,7 @@ public class FeatureDiscoveryTests
         Assert.NotNull(feature.StartupType);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with feature having dependencies sets dependencies")]
     public void DiscoverFeatures_WithFeatureHavingDependencies_SetsDependencies()
     {
         // Arrange - use assembly with feature that has dependencies
@@ -75,7 +75,7 @@ public class FeatureDiscoveryTests
         Assert.Equal(new[] { "Dependency1", "Dependency2" }, feature.Dependencies);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with feature having metadata sets metadata")]
     public void DiscoverFeatures_WithFeatureHavingMetadata_SetsMetadata()
     {
         // Arrange - use assembly with feature that has metadata
@@ -93,7 +93,7 @@ public class FeatureDiscoveryTests
         Assert.Equal("value2", feature.Metadata["key2"]);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with type missing IShellStartup throws InvalidOperationException")]
     public void DiscoverFeatures_WithTypeMissingIShellStartup_ThrowsInvalidOperationException()
     {
         // Arrange - create assembly with a type that has ShellFeature but doesn't implement IShellStartup
@@ -106,7 +106,7 @@ public class FeatureDiscoveryTests
         Assert.Contains("does not implement IShellStartup", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with duplicate feature names throws InvalidOperationException")]
     public void DiscoverFeatures_WithDuplicateFeatureNames_ThrowsInvalidOperationException()
     {
         // Arrange - create assembly with two features having the same name
@@ -121,7 +121,7 @@ public class FeatureDiscoveryTests
         Assert.Contains("DuplicateFeatureName", ex.Message);
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with multiple valid features returns all features")]
     public void DiscoverFeatures_WithMultipleValidFeatures_ReturnsAllFeatures()
     {
         // Arrange
@@ -139,7 +139,7 @@ public class FeatureDiscoveryTests
         Assert.Contains(features, f => f.Id == "Feature2");
     }
 
-    [Fact]
+    [Fact(DisplayName = "DiscoverFeatures with odd metadata elements throws InvalidOperationException")]
     public void DiscoverFeatures_WithOddMetadataElements_ThrowsInvalidOperationException()
     {
         // Arrange - create assembly with odd number of metadata elements
