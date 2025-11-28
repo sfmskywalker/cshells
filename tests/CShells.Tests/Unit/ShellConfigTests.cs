@@ -35,7 +35,9 @@ public class ShellConfigTests
 
         // Assert
         Assert.Equal("TestShell", config.Name);
-        Assert.Equal(["Feature1", "Feature2"], config.Features);
+        Assert.Equal(2, config.Features.Length);
+        Assert.Equal("Feature1", config.Features[0]);
+        Assert.Equal("Feature2", config.Features[1]);
         Assert.Equal(2, config.Properties.Count);
         Assert.Equal("Value1", config.Properties["Key1"]);
         Assert.Equal(42, config.Properties["Key2"]);

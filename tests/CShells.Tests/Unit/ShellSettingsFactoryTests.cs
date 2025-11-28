@@ -95,4 +95,39 @@ public class ShellSettingsFactoryTests
         // Assert
         Assert.Empty(settingsList);
     }
+
+    [Fact(DisplayName = "Create normalizes feature names by trimming whitespace and filtering nulls")]
+    public void Create_NormalizesFeatureNames()
+    {
+        // Arrange
+        var config = new ShellConfig
+        {
+            Name = "TestShell",
+            Features = [" Feature1 ", "Feature2", "  ", null, "Feature3  "]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert
+        Assert.Equal(["Feature1", "Feature2", "Feature3"], settings.EnabledFeatures);
+    }
+
+    [Fact(DisplayName = "CreateAll with duplicate shell names throws ArgumentException")]
+    public void CreateAll_WithDuplicateShellNames_ThrowsArgumentException()
+    {
+        // Arrange
+        var options = new CShellsOptions
+        {
+            Shells =
+            [
+                new ShellConfig { Name = "DuplicateShell" },
+                new ShellConfig { Name = "DuplicateShell" }
+            ]
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentException>(() => ShellSettingsFactory.CreateAll(options));
+        Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

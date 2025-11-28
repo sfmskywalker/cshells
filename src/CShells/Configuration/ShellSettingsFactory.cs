@@ -18,7 +18,7 @@ public static class ShellSettingsFactory
         var shellId = new ShellId(config.Name);
         var normalizedFeatures = config.Features
             .Where(f => !string.IsNullOrWhiteSpace(f))
-            .Select(f => f.Trim())
+            .Select(f => f!.Trim())
             .ToArray();
         var settings = new ShellSettings(shellId, normalizedFeatures);
 

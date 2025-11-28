@@ -13,7 +13,7 @@ public class ShellConfig
     /// <summary>
     /// Gets or sets the list of enabled features for this shell.
     /// </summary>
-    public string[] Features { get; set; } = [];
+    public string?[] Features { get; set; } = [];
 
     /// <summary>
     /// Gets or sets arbitrary properties associated with this shell.
