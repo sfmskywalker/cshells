@@ -223,7 +223,7 @@ public class DefaultShellHost : IShellHost, IDisposable
         
         // Register the ShellContext using the holder pattern
         // The holder will be populated after the service provider is built
-        services.AddSingleton(contextHolder);
+        // Do not register ShellContextHolder itself; it's an internal implementation detail.
         services.AddSingleton<ShellContext>(sp => sp.GetRequiredService<ShellContextHolder>().Context 
             ?? throw new InvalidOperationException($"ShellContext for shell '{settings.Id}' has not been initialized yet. This may indicate a service is being resolved during shell construction."));
 
