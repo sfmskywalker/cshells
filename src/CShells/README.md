@@ -125,3 +125,48 @@ Register your background worker in your service collection:
 ```csharp
 services.AddHostedService<ShellBackgroundWorker>();
 ```
+
+## Sample Application
+
+The `samples/CShells.SampleApp` project provides a complete working example of CShells integration with ASP.NET Core.
+
+### Features in the Sample
+
+The sample app defines three features:
+
+1. **Core Feature** (`CoreFeatureStartup.cs`)
+   - Provides `ITimeService` for time-related operations
+   - Base feature with no dependencies
+
+2. **Weather Feature** (`WeatherFeatureStartup.cs`)
+   - Provides `IWeatherService` for weather forecasts
+   - Depends on Core feature
+
+3. **Admin Feature** (`AdminFeatureStartup.cs`)
+   - Provides `IAdminService` for admin operations
+   - Depends on Core feature
+
+### Shell Configuration
+
+The sample configures two shells:
+
+- **Default Shell** - Enables Core and Weather features
+- **Admin Shell** - Enables Core and Admin features
+
+### Running the Sample
+
+```bash
+cd samples/CShells.SampleApp
+dotnet run
+```
+
+Access the endpoints:
+- `GET /` - Returns weather forecast from the Default shell
+- `GET /admin` - Returns admin info from the Admin shell
+
+### Key Concepts Demonstrated
+
+1. **Feature Discovery** - Features are discovered automatically from assemblies
+2. **Dependency Resolution** - Features are loaded in dependency order
+3. **Path-based Shell Resolution** - Requests to `/admin` use the Admin shell
+4. **Isolated DI Containers** - Each shell has its own service container
