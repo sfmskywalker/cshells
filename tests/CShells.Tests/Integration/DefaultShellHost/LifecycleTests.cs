@@ -1,3 +1,5 @@
+using CShells.Tests.Integration.ShellHost;
+
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
@@ -13,7 +15,7 @@ public class LifecycleTests
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _ = host.GetShell(new("TestShell")); // Ensure the shell is built
 
         // Act

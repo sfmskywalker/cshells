@@ -1,3 +1,5 @@
+using CShells.Tests.Integration.ShellHost;
+
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
@@ -19,7 +21,7 @@ public class ShellRetrievalTests : IDisposable
     public void DefaultShell_WithNoShells_ThrowsInvalidOperationException()
     {
         // Arrange
-        var host = new CShells.DefaultShellHost([], []);
+        var host = new CShells.DefaultShellHost([], [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act & Assert
@@ -36,7 +38,7 @@ public class ShellRetrievalTests : IDisposable
             new ShellSettings(new("Default")),
             new ShellSettings(new("Other"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -55,7 +57,7 @@ public class ShellRetrievalTests : IDisposable
             new ShellSettings(new("First")),
             new ShellSettings(new("Second"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -73,7 +75,7 @@ public class ShellRetrievalTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -94,7 +96,7 @@ public class ShellRetrievalTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act & Assert
@@ -110,7 +112,7 @@ public class ShellRetrievalTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -131,7 +133,7 @@ public class ShellRetrievalTests : IDisposable
             new ShellSettings(new("Shell2")),
             new ShellSettings(new("Shell3"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -152,7 +154,7 @@ public class ShellRetrievalTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["UnknownFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act & Assert

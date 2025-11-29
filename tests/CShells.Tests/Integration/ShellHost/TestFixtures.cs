@@ -83,13 +83,23 @@ public static class TestFixtures
     #region Helper Methods
 
     /// <summary>
+    /// Creates a minimal root service provider for testing DefaultShellHost.
+    /// </summary>
+    public static IServiceProvider CreateRootProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
     /// Creates a DefaultShellHost configured with the Weather feature for testing.
     /// </summary>
     public static CShells.DefaultShellHost CreateDefaultHostWithWeatherFeature(List<CShells.DefaultShellHost> hostsToDispose)
     {
         var assembly = typeof(TestFixtures).Assembly;
         var shellSettings = new ShellSettings(new("Default"), ["Weather"]);
-        var host = new CShells.DefaultShellHost([shellSettings], [assembly]);
+        var host = new CShells.DefaultShellHost([shellSettings], [assembly], CreateRootProvider());
         hostsToDispose.Add(host);
         return host;
     }

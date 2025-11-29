@@ -30,7 +30,7 @@ public class TimeService : ITimeService
 public class CoreFeature : IShellFeature
 {
     /// <inheritdoc />
-    public void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services, ShellSettings shellSettings)
     {
         services.AddSingleton<ITimeService, TimeService>();
     }

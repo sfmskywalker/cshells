@@ -51,7 +51,7 @@ public class AdminService : IAdminService
 public class AdminFeature : IShellFeature
 {
     /// <inheritdoc />
-    public void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services, ShellSettings shellSettings)
     {
         services.AddSingleton<IAdminService, AdminService>();
     }

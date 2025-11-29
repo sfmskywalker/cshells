@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using CShells.Tests.Integration.ShellHost;
 using CShells.Tests.TestHelpers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,7 +30,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["TestFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -50,7 +51,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["ChildFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -72,7 +73,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["SettingsAwareFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act - This should not throw because ShellSettings is provided explicitly
@@ -93,7 +94,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["DependentFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act & Assert - This should throw because IBaseService is not available from root provider
@@ -109,7 +110,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -129,7 +130,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
