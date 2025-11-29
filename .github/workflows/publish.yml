@@ -9,16 +9,19 @@ on:
       - published
 
 jobs:
-  build-test-pack-preview:
-    name: Build, Test, Pack preview (Feedz)
+  build-pack:
+    name: Build, Test, Pack
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Only run this job when either preview or release jobs are going to run
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'release' && github.event.action == 'published')
     permissions:
       contents: read
-
+    outputs:
+      artifacts-path: ${{ steps.set-artifacts-path.outputs.path }}
     env:
       FEEDZ_SOURCE: "https://f.feedz.io/sfmskywalker/cshells/nuget/index.json"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,18 +35,21 @@ jobs:
       - name: Show dotnet version
         run: dotnet --version
 
-      - name: Compute preview package version from Directory.Build.props
+      - name: Compute base package version from Directory.Build.props
+        id: compute-base-version
         run: |
-          # Read the central base version defined in Directory.Build.props
-          BASE_VERSION=$(dotnet msbuild -nologo -property:TargetFramework=net10.0 -target:Evaluate -verbosity:quiet 2>/dev/null | grep -m 1 "<Version>" | sed -E 's/.*<Version>([^<]+)<.*/\1/')
+          BASE_VERSION=$(grep -m 1 '<Version>' Directory.Build.props | sed -E 's/.*<Version>([^<]+)<.*/\1/')
           if [ -z "$BASE_VERSION" ]; then
             echo "Failed to read base Version from Directory.Build.props"
             exit 1
           fi
 
-          PACKAGE_VERSION="${BASE_VERSION}-preview.${GITHUB_RUN_NUMBER}"
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
-          echo "Using preview package version: $PACKAGE_VERSION"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Base version from Directory.Build.props: $BASE_VERSION"
+
+      - name: Set artifacts path
+        id: set-artifacts-path
+        run: echo "path=./artifacts" >> "$GITHUB_OUTPUT"
 
       - name: Restore
         run: dotnet restore CShells.sln
@@ -70,6 +76,28 @@ jobs:
             -o ./artifacts \
             /p:Version=${{ env.PACKAGE_VERSION }}
 
+  build-test-pack-preview:
+    name: Build, Test, Pack preview (Feedz)
+    needs: build-pack
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    env:
+      FEEDZ_SOURCE: "https://f.feedz.io/sfmskywalker/cshells/nuget/index.json"
+    steps:
+      - name: Compute preview package version
+        run: |
+          BASE_VERSION='${{ needs.build-pack.outputs.base_version }}'
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Base version from build-pack outputs is empty."
+            exit 1
+          fi
+
+          PACKAGE_VERSION="${BASE_VERSION}-preview.${GITHUB_RUN_NUMBER}"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+          echo "Using preview package version: $PACKAGE_VERSION"
+
       - name: Push packages to Feedz.io
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
@@ -86,9 +114,10 @@ jobs:
             --store-password-in-clear-text
 
           shopt -s nullglob
-          nupkgs=(./artifacts/*.nupkg)
+          artifacts_path='${{ needs.build-pack.outputs.artifacts-path }}'
+          nupkgs=("${artifacts_path}"/*.nupkg)
           if [ ${#nupkgs[@]} -eq 0 ]; then
-            echo "No .nupkg files found in ./artifacts/"
+            echo "No .nupkg files found in ${artifacts_path}/"
             exit 1
           fi
           for nupkg in "${nupkgs[@]}"; do
@@ -101,32 +130,19 @@ jobs:
 
   publish-nuget:
     name: Publish release to Feedz.io and NuGet.org
+    needs: build-pack
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     permissions:
       contents: read
-
     env:
       FEEDZ_SOURCE: "https://f.feedz.io/sfmskywalker/cshells/nuget/index.json"
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Show dotnet version
-        run: dotnet --version
-
-      - name: Compute release package version from Directory.Build.props and tag
+      - name: Compute release package version
         run: |
-          # Read base version from Directory.Build.props
-          BASE_VERSION=$(dotnet msbuild -nologo -property:TargetFramework=net10.0 -target:Evaluate -verbosity:quiet 2>/dev/null | grep -m 1 "<Version>" | sed -E 's/.*<Version>([^<]+)<.*/\1/')
+          BASE_VERSION='${{ needs.build-pack.outputs.base_version }}'
           if [ -z "$BASE_VERSION" ]; then
-            echo "Failed to read base Version from Directory.Build.props"
+            echo "Base version from build-pack outputs is empty."
             exit 1
           fi
 
@@ -145,31 +161,6 @@ jobs:
           echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Using release package version: $VERSION"
 
-      - name: Restore
-        run: dotnet restore CShells.sln
-
-      - name: Build
-        run: dotnet build CSShells.sln --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test CSShells.sln --configuration Release --no-build --verbosity normal
-
-      - name: Pack CShells
-        run: |
-          dotnet pack src/CShells/CShells.csproj \
-            --configuration Release \
-            --no-build \
-            -o ./artifacts \
-            /p:Version=${{ env.PACKAGE_VERSION }}
-
-      - name: Pack CShells.AspNetCore
-        run: |
-          dotnet pack src/CShells.AspNetCore/CSShells.AspNetCore.csproj \
-            --configuration Release \
-            --no-build \
-            -o ./artifacts \
-            /p:Version=${{ env.PACKAGE_VERSION }}
-
       - name: Push packages to Feedz.io
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
@@ -186,9 +177,10 @@ jobs:
             --store-password-in-clear-text
 
           shopt -s nullglob
-          nupkgs=(./artifacts/*.nupkg)
+          artifacts_path='${{ needs.build-pack.outputs.artifacts-path }}'
+          nupkgs=("${artifacts_path}"/*.nupkg)
           if [ ${#nupkgs[@]} -eq 0 ]; then
-            echo "No .nupkg files found in ./artifacts/"
+            echo "No .nupkg files found in ${artifacts_path}/"
             exit 1
           fi
           for nupkg in "${nupkgs[@]}"; do
@@ -208,13 +200,13 @@ jobs:
             exit 1
           fi
 
-          # Official NuGet.org v3 endpoint
           NUGET_SOURCE="https://api.nuget.org/v3/index.json"
 
           shopt -s nullglob
-          nupkgs=(./artifacts/*.nupkg)
+          artifacts_path='${{ needs.build-pack.outputs.artifacts-path }}'
+          nupkgs=("${artifacts_path}"/*.nupkg)
           if [ ${#nupkgs[@]} -eq 0 ]; then
-            echo "No .nupkg files found in ./artifacts/"
+            echo "No .nupkg files found in ${artifacts_path}/"
             exit 1
           fi
           for nupkg in "${nupkgs[@]}"; do
