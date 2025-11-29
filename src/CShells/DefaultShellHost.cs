@@ -46,6 +46,19 @@ public class DefaultShellHost : IShellHost, IDisposable
     private List<ServiceDescriptor>? _cachedRootDescriptors;
 
     /// <summary>
+    /// CShell infrastructure service types that should NOT be copied into shell containers.
+    /// Copying these would cause shells to resolve a new DefaultShellHost using the shell provider
+    /// as the "root," breaking the documented semantics and fragmenting the shell cache.
+    /// </summary>
+    private static readonly HashSet<Type> ExcludedInfrastructureTypes =
+    [
+        typeof(IShellHost),
+        typeof(IShellContextScopeFactory),
+        typeof(IRootServiceCollectionAccessor),
+        typeof(IReadOnlyCollection<ShellSettings>)
+    ];
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="DefaultShellHost"/> class.
     /// </summary>
     /// <param name="shellSettings">The collection of shell settings to manage.</param>
@@ -324,7 +337,8 @@ public class DefaultShellHost : IShellHost, IDisposable
     }
 
     /// <summary>
-    /// Copies all service descriptors from the root <see cref="IServiceCollection"/> to the shell's service collection.
+    /// Copies all service descriptors from the root <see cref="IServiceCollection"/> to the shell's service collection,
+    /// excluding CShell infrastructure types that should not be inherited by shells.
     /// </summary>
     /// <param name="shellServices">The shell's service collection to copy to.</param>
     /// <remarks>
@@ -333,9 +347,13 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// shell-specific registrations added later will override them via "last registration wins" semantics.
     /// </para>
     /// <para>
-    /// Performance optimization: The root service descriptors are cached on first access to avoid
-    /// re-enumerating the root IServiceCollection for each shell. This is safe because the root
-    /// service collection is not modified after shells start being built.
+    /// CShell infrastructure types (IShellHost, IShellContextScopeFactory, etc.) are excluded from copying
+    /// to prevent shells from resolving a new DefaultShellHost using the shell provider as the "root,"
+    /// which would break the documented semantics and fragment the shell cache.
+    /// </para>
+    /// <para>
+    /// Performance optimization: The filtered root service descriptors are cached on first access to avoid
+    /// re-enumerating and filtering the root IServiceCollection for each shell.
     /// </para>
     /// <para>
     /// Thread safety: This method is called within BuildServiceProvider, which is invoked inside
@@ -344,11 +362,12 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// </remarks>
     private void CopyRootServices(ServiceCollection shellServices)
     {
-        // Cache the root descriptors on first access for efficient bulk-copy to subsequent shells.
-        // This avoids repeatedly enumerating the root IServiceCollection.
+        // Cache the filtered root descriptors on first access for efficient bulk-copy to subsequent shells.
+        // This avoids repeatedly enumerating and filtering the root IServiceCollection.
         // Thread-safe: This method is always called under _buildLock (see BuildShellContextInternal).
-        _cachedRootDescriptors ??= [.. _rootServices];
-        _cachedRootDescriptors ??= [.. _rootServices];
+        _cachedRootDescriptors ??= _rootServices
+            .Where(d => !ExcludedInfrastructureTypes.Contains(d.ServiceType))
+            .ToList();
 
         // Bulk-copy cached descriptors to the shell's service collection
         foreach (var descriptor in _cachedRootDescriptors)
@@ -356,7 +375,9 @@ public class DefaultShellHost : IShellHost, IDisposable
             shellServices.Add(descriptor);
         }
 
-        _logger.LogDebug("Copied {Count} service descriptors from root service collection", _cachedRootDescriptors.Count);
+        _logger.LogDebug("Copied {Count} service descriptors from root service collection (excluded {ExcludedCount} infrastructure types)",
+            _cachedRootDescriptors.Count,
+            ExcludedInfrastructureTypes.Count);
     }
 
     /// <summary>

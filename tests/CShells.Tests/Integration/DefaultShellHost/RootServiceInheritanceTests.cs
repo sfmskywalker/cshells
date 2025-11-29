@@ -275,4 +275,61 @@ public class RootServiceInheritanceTests : IDisposable
     }
 
     #endregion
+
+    #region Infrastructure Exclusion Tests
+
+    [Fact(DisplayName = "CShell infrastructure types are not copied to shell containers")]
+    public void CShellInfrastructure_IsNotCopied_ToShellContainers()
+    {
+        // Arrange: Root registers CShell infrastructure services.
+        // These should NOT be copied to shell containers to prevent shells from
+        // resolving a new DefaultShellHost using the shell provider as the "root."
+        var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
+
+        // Also register some CShell infrastructure manually to verify they are excluded
+        rootServices.AddSingleton<IShellHost>(sp => null!); // Dummy registration
+        rootServices.AddSingleton<IShellContextScopeFactory>(sp => null!); // Dummy registration
+        rootServices.AddSingleton<IRootServiceCollectionAccessor>(sp => null!); // Dummy registration
+
+        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
+
+        // Act: Build the shell and try to resolve CShell infrastructure.
+        var shell = host.GetShell(new ShellId("TestShell"));
+
+        // Assert: CShell infrastructure should NOT be resolvable from shell container.
+        // Note: GetService returns null for unregistered types, unlike GetRequiredService which throws.
+        var shellHost = shell.ServiceProvider.GetService<IShellHost>();
+        var scopeFactory = shell.ServiceProvider.GetService<IShellContextScopeFactory>();
+        var rootAccessor = shell.ServiceProvider.GetService<IRootServiceCollectionAccessor>();
+
+        Assert.Null(shellHost);
+        Assert.Null(scopeFactory);
+        Assert.Null(rootAccessor);
+    }
+
+    [Fact(DisplayName = "Root-only services are still inherited while infrastructure is excluded")]
+    public void RootOnlyServices_AreInherited_WhileInfrastructureIsExcluded()
+    {
+        // Arrange: Root registers both regular services and CShell infrastructure.
+        var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
+
+        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
+
+        // Act: Build the shell and resolve services.
+        var shell = host.GetShell(new ShellId("TestShell"));
+        var rootOnlyService = shell.ServiceProvider.GetService<IRootOnlyService>();
+        var sharedService = shell.ServiceProvider.GetService<ISharedService>();
+        var shellHost = shell.ServiceProvider.GetService<IShellHost>();
+
+        // Assert: Regular root services are inherited, but CShell infrastructure is excluded.
+        Assert.NotNull(rootOnlyService);
+        Assert.Equal("Root", rootOnlyService.GetValue());
+        Assert.NotNull(sharedService);
+        Assert.Equal("Root", sharedService.GetSource());
+        Assert.Null(shellHost); // Infrastructure should be excluded
+    }
+
+    #endregion
 }
