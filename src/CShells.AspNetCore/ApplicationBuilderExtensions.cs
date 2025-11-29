@@ -109,29 +109,21 @@ public static class ApplicationBuilderExtensions
             // Get enabled features from all shells to only configure web features that are actually used
             var (enabledFeatureIds, shouldFilterFeatures) = GetEnabledFeatureIds(rootProvider, logger);
 
-            // Apply deterministic ordering by feature Id (case-insensitive) and filter explicitly
+            // Filter and partition web shell features in a single pass
             var webShellFeatureDescriptors = descriptors
-                .Where(d => d.StartupType is not null)
-                .Where(d => typeof(IWebShellFeature).IsAssignableFrom(d.StartupType))
-                .Where(d => !shouldFilterFeatures || enabledFeatureIds.Contains(d.Id))
-                .OrderBy(d => d.Id, StringComparer.OrdinalIgnoreCase);
-
-            // Log skipped features for debugging
-            if (shouldFilterFeatures)
-            {
-                var skippedFeatures = descriptors
-                    .Where(d => d.StartupType is not null)
-                    .Where(d => typeof(IWebShellFeature).IsAssignableFrom(d.StartupType))
-                    .Where(d => !enabledFeatureIds.Contains(d.Id));
-
-                foreach (var skipped in skippedFeatures)
-                {
-                    logger.LogDebug("Skipping web shell feature '{FeatureId}' as it is not enabled for any shell", skipped.Id);
-                }
-            }
+                .Where(d => d.StartupType is not null && typeof(IWebShellFeature).IsAssignableFrom(d.StartupType))
+                .OrderBy(d => d.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             foreach (var descriptor in webShellFeatureDescriptors)
             {
+                // Skip features that are not enabled for any shell (only if we should filter)
+                if (shouldFilterFeatures && !enabledFeatureIds.Contains(descriptor.Id))
+                {
+                    logger.LogDebug("Skipping web shell feature '{FeatureId}' as it is not enabled for any shell", descriptor.Id);
+                    continue;
+                }
+
                 try
                 {
                     // Instantiate using root provider (feature can depend on root-level services)
