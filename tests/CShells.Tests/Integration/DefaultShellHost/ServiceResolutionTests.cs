@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using CShells.Tests.Integration.ShellHost;
 using CShells.Tests.TestHelpers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,7 +30,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["TestFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -50,7 +51,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"), ["ChildFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -63,26 +64,48 @@ public class ServiceResolutionTests : IDisposable
         Assert.NotNull(childService);
     }
 
-    [Fact(DisplayName = "GetShell feature constructor can resolve dependency services")]
-    public void GetShell_FeatureConstructorCanResolveDependencyServices()
+    [Fact(DisplayName = "GetShell feature constructor can accept ShellSettings")]
+    public void GetShell_FeatureConstructorCanAcceptShellSettings()
     {
-        // Arrange - Create features where child feature constructor depends on parent's registered service
+        // Arrange - Create a feature whose constructor accepts ShellSettings
+        var assembly = CreateTestAssemblyWithShellSettingsConstructor();
+        var settings = new[]
+        {
+            new ShellSettings(new("TestShell"), ["SettingsAwareFeature"])
+        };
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
+        _hostsToDispose.Add(host);
+
+        // Act - This should not throw because ShellSettings is provided explicitly
+        var shell = host.GetShell(new("TestShell"));
+
+        // Assert - The service registered by the feature should be available
+        var settingsService = shell.ServiceProvider.GetService<ISettingsAwareService>();
+        Assert.NotNull(settingsService);
+    }
+
+    [Fact(DisplayName = "GetShell feature constructor with shell dependency throws")]
+    public void GetShell_FeatureConstructorWithShellDependency_Throws()
+    {
+        // Arrange - Create a feature whose constructor depends on a shell-level service
+        // According to the new design, this is NOT allowed
         var assembly = CreateTestAssemblyWithConstructorDependency();
         var settings = new[]
         {
             new ShellSettings(new("TestShell"), ["DependentFeature"])
         };
-        var host = new CShells.DefaultShellHost(settings, [assembly]);
+        var host = new CShells.DefaultShellHost(settings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
-        // Act - This should not throw
-        var shell = host.GetShell(new("TestShell"));
-
-        // Assert - Both services should be registered and the validation service should exist
-        var baseService = shell.ServiceProvider.GetService<IBaseService>();
-        var validationService = shell.ServiceProvider.GetService<IValidationService>();
-        Assert.NotNull(baseService);
-        Assert.NotNull(validationService);
+        // Act & Assert - This should throw because IBaseService is not available from root provider
+        var ex = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("TestShell")));
+        Assert.Contains("DependentFeature", ex.Message);
+        
+        // Verify the inner exception is from ActivatorUtilities indicating constructor dependency resolution failure
+        // The inner exception message indicates the service could not be resolved
+        Assert.NotNull(ex.InnerException);
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+        Assert.Contains("Unable to resolve service", ex.InnerException.Message);
     }
 
     [Fact(DisplayName = "GetShell returns ShellSettings from service provider")]
@@ -93,7 +116,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -113,7 +136,7 @@ public class ServiceResolutionTests : IDisposable
         {
             new ShellSettings(new("TestShell"))
         };
-        var host = new CShells.DefaultShellHost(settings, []);
+        var host = new CShells.DefaultShellHost(settings, [], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act
@@ -147,6 +170,19 @@ public class ServiceResolutionTests : IDisposable
             // Validation service depends on base service in constructor
             ArgumentNullException.ThrowIfNull(baseService);
         }
+    }
+
+    public interface ISettingsAwareService
+    {
+        ShellId ShellId { get; }
+    }
+    public class SettingsAwareService : ISettingsAwareService
+    {
+        public SettingsAwareService(ShellId shellId)
+        {
+            ShellId = shellId;
+        }
+        public ShellId ShellId { get; }
     }
 
     private static Assembly CreateTestAssemblyWithService(Type serviceInterface, Type serviceImplementation, string featureName)
@@ -185,10 +221,80 @@ public class ServiceResolutionTests : IDisposable
         TestAssemblyBuilder.CreateFeatureType(moduleBuilder, "BaseFeature", [], typeof(IBaseService), typeof(BaseService));
 
         // DependentFeature depends on BaseFeature and its constructor requires IBaseService
-        // Then it registers IValidationService
+        // According to new design, this should FAIL because shell services cannot be injected into feature constructors
         CreateFeatureTypeWithConstructorDependency(moduleBuilder, "DependentFeature", ["BaseFeature"], typeof(IBaseService), typeof(IValidationService), typeof(ValidationService));
 
         return assemblyBuilder;
+    }
+
+    private static Assembly CreateTestAssemblyWithShellSettingsConstructor()
+    {
+        var assemblyName = new AssemblyName($"TestAssembly_{Guid.NewGuid():N}");
+        var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+        var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
+
+        // Create a feature whose constructor accepts ShellSettings (which is allowed)
+        CreateFeatureTypeWithShellSettingsConstructor(moduleBuilder, "SettingsAwareFeature", [], typeof(ISettingsAwareService), typeof(SettingsAwareService));
+
+        return assemblyBuilder;
+    }
+
+    private static void CreateFeatureTypeWithShellSettingsConstructor(ModuleBuilder moduleBuilder, string featureName, string[] dependencies, Type serviceInterface, Type serviceImplementation)
+    {
+        var typeName = $"{featureName}Startup";
+        var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
+        typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
+
+        // Add a field to store ShellSettings
+        var settingsField = typeBuilder.DefineField("_settings", typeof(ShellSettings), FieldAttributes.Private | FieldAttributes.InitOnly);
+
+        // Define constructor that takes ShellSettings
+        var constructor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [typeof(ShellSettings)]);
+
+        var ctorIl = constructor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, settingsField);
+        ctorIl.Emit(OpCodes.Ret);
+
+        // Implement ConfigureServices method that registers the service
+        // ConfigureServices(IServiceCollection services)
+        var configureServicesMethod = typeBuilder.DefineMethod(
+            "ConfigureServices",
+            MethodAttributes.Public | MethodAttributes.Virtual,
+            typeof(void),
+            [typeof(IServiceCollection)]);
+
+        var il = configureServicesMethod.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_1); // services
+
+        var addSingletonMethod = typeof(ServiceCollectionServiceExtensions)
+            .GetMethods()
+            .First(m => m.Name == "AddSingleton" &&
+                        m.IsGenericMethod &&
+                        m.GetGenericArguments().Length == 2 &&
+                        m.GetParameters().Length == 1)
+            .MakeGenericMethod(serviceInterface, serviceImplementation);
+
+        il.Emit(OpCodes.Call, addSingletonMethod);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        // Add the ShellFeatureAttribute
+        var attributeConstructor = typeof(ShellFeatureAttribute).GetConstructor([typeof(string)])!;
+        var attributeBuilder = new CustomAttributeBuilder(
+            attributeConstructor,
+            [featureName],
+            [typeof(ShellFeatureAttribute).GetProperty("DependsOn")!],
+            [dependencies]);
+        typeBuilder.SetCustomAttribute(attributeBuilder);
+
+        typeBuilder.CreateType();
     }
 
     private static void CreateFeatureTypeWithConstructorDependency(ModuleBuilder moduleBuilder, string featureName, string[] dependencies, Type constructorDependency, Type serviceInterface, Type serviceImplementation)
@@ -200,7 +306,7 @@ public class ServiceResolutionTests : IDisposable
         // Add a field to store the constructor dependency
         var dependencyField = typeBuilder.DefineField("_dependency", constructorDependency, FieldAttributes.Private | FieldAttributes.InitOnly);
 
-        // Define constructor that takes the dependency
+        // Define constructor that takes the dependency (shell-level service - NOT allowed in new design)
         var constructor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
@@ -215,6 +321,7 @@ public class ServiceResolutionTests : IDisposable
         ctorIl.Emit(OpCodes.Ret);
 
         // Implement ConfigureServices method that registers the service
+        // ConfigureServices(IServiceCollection services)
         var configureServicesMethod = typeBuilder.DefineMethod(
             "ConfigureServices",
             MethodAttributes.Public | MethodAttributes.Virtual,
@@ -222,7 +329,7 @@ public class ServiceResolutionTests : IDisposable
             [typeof(IServiceCollection)]);
 
         var il = configureServicesMethod.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_1); // services
 
         var addSingletonMethod = typeof(ServiceCollectionServiceExtensions)
             .GetMethods()

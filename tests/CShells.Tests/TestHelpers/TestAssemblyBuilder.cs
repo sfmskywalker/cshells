@@ -30,7 +30,7 @@ public static class TestAssemblyBuilder
                 typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
                 typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
-                // Implement ConfigureServices method
+                // Implement ConfigureServices method with signature (IServiceCollection)
                 var configureServicesMethod = typeBuilder.DefineMethod(
                     "ConfigureServices",
                     MethodAttributes.Public | MethodAttributes.Virtual,
@@ -78,7 +78,7 @@ public static class TestAssemblyBuilder
             var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
             typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
-            // Implement ConfigureServices method with empty body by default
+            // Implement ConfigureServices method with signature (IServiceCollection)
             var configureServicesMethod = typeBuilder.DefineMethod(
                 "ConfigureServices",
                 MethodAttributes.Public | MethodAttributes.Virtual,
@@ -131,6 +131,7 @@ public static class TestAssemblyBuilder
     /// </summary>
     public static void DefineConfigureServicesWithService(TypeBuilder typeBuilder, Type serviceInterface, Type serviceImplementation)
     {
+        // ConfigureServices takes (IServiceCollection services)
         var configureServicesMethod = typeBuilder.DefineMethod(
             "ConfigureServices",
             MethodAttributes.Public | MethodAttributes.Virtual,
@@ -139,7 +140,7 @@ public static class TestAssemblyBuilder
 
         var il = configureServicesMethod.GetILGenerator();
 
-        // Load the services collection
+        // Load the services collection (first argument after 'this')
         il.Emit(OpCodes.Ldarg_1);
 
         // Call ServiceCollectionServiceExtensions.AddSingleton<TService, TImplementation>(services)

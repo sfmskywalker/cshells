@@ -39,7 +39,7 @@ public class DefaultShellTests : IDisposable
             new ShellSettings(new("Default"), ["Weather"]),
             new ShellSettings(new("Other"), ["Core"])
         };
-        var host = new CShells.DefaultShellHost(shellSettings, [assembly]);
+        var host = new CShells.DefaultShellHost(shellSettings, [assembly], TestFixtures.CreateRootProvider());
         _hostsToDispose.Add(host);
 
         // Act

@@ -1,3 +1,5 @@
+using CShells.Tests.Integration.ShellHost;
+
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
@@ -9,7 +11,7 @@ public class ConstructorTests
     public void Constructor_WithNullShellSettings_ThrowsArgumentNullException()
     {
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(null!));
+        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(null!, TestFixtures.CreateRootProvider()));
         Assert.Equal("shellSettings", ex.ParamName);
     }
 
@@ -21,7 +23,18 @@ public class ConstructorTests
         IEnumerable<System.Reflection.Assembly>? nullAssemblies = null;
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, nullAssemblies!));
+        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, nullAssemblies!, TestFixtures.CreateRootProvider()));
         Assert.Equal("assemblies", ex.ParamName);
+    }
+
+    [Fact(DisplayName = "Constructor with null root provider throws ArgumentNullException")]
+    public void Constructor_WithNullRootProvider_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var settings = new[] { new ShellSettings(new("Test")) };
+
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, [], null!));
+        Assert.Equal("rootProvider", ex.ParamName);
     }
 }

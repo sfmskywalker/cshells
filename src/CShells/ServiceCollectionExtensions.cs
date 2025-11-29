@@ -40,13 +40,13 @@ namespace CShells
             // Register the shell settings as a read-only collection for consumers.
             services.AddSingleton<IReadOnlyCollection<ShellSettings>>(shells.AsReadOnly());
 
-            // Register IShellHost using the DefaultShellHost; allow DI to provide ILogger<DefaultShellHost> if available.
+            // Register IShellHost using the DefaultShellHost.
+            // The root IServiceProvider is passed to allow IShellFeature constructors to resolve root-level services.
             services.AddSingleton<IShellHost>(sp =>
             {
                 var logger = sp.GetService<ILogger<DefaultShellHost>>();
-                return assemblies is null
-                    ? new(shells, logger)
-                    : new DefaultShellHost(shells, assemblies, logger);
+                var assembliesToScan = assemblies ?? AppDomain.CurrentDomain.GetAssemblies();
+                return new DefaultShellHost(shells, assembliesToScan, rootProvider: sp, logger);
             });
 
             // Register the default shell context scope factory.
