@@ -1,0 +1,139 @@
+name: Build, Test, and Publish
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+
+jobs:
+  build-test-pack:
+    name: Build, Test, Pack (Feedz)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # TODO: Set to the .NET SDK your project uses (e.g. 8.0.x, 9.0.x, etc.)
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: |
+          # TODO: point to your .csproj or .sln if different
+          dotnet pack \
+            --configuration Release \
+            --no-build \
+            -o ./artifacts
+
+      - name: Push packages to Feedz.io
+        env:
+          # TODO: Set FEEDZ_API_KEY as an Actions secret
+          FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
+        run: |
+          if [ -z "$FEEDZ_API_KEY" ]; then
+            echo "FEEDZ_API_KEY secret is not set."
+            exit 1
+          fi
+
+          # TODO: Replace this URL with your Feedz.io source URL
+          FEEDZ_SOURCE="https://f.feedz.io/ORG/FEED/nuget/index.json"
+
+          dotnet nuget add source "$FEEDZ_SOURCE" \
+            --name Feedz \
+            --username "token" \
+            --password "$FEEDZ_API_KEY" \
+            --store-password-in-clear-text
+
+          shopt -s nullglob
+          nupkgs=(./artifacts/*.nupkg)
+          if [ ${#nupkgs[@]} -eq 0 ]; then
+            echo "No .nupkg files found in ./artifacts/"
+            exit 1
+          fi
+          for nupkg in "${nupkgs[@]}"; do
+            echo "Pushing $nupkg to Feedz..."
+            dotnet nuget push "$nupkg" \
+              --source Feedz \
+              --api-key "$FEEDZ_API_KEY" \
+              --skip-duplicate
+          done
+
+  publish-nuget:
+    name: Publish to NuGet.org
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # TODO: Set to the .NET SDK your project uses
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: |
+          # TODO: point to your .csproj or .sln if different
+          dotnet pack \
+            --configuration Release \
+            --no-build \
+            -o ./artifacts \
+            /p:PackageVersion=${{ github.event.release.tag_name }}
+
+      - name: Push packages to NuGet.org
+        env:
+          # TODO: Set NUGET_API_KEY as an Actions secret (from nuget.org)
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "NUGET_API_KEY secret is not set."
+            exit 1
+          fi
+
+          # Official NuGet.org v3 endpoint
+          NUGET_SOURCE="https://api.nuget.org/v3/index.json"
+
+          shopt -s nullglob
+          nupkgs=(./artifacts/*.nupkg)
+          if [ ${#nupkgs[@]} -eq 0 ]; then
+            echo "No .nupkg files found in ./artifacts/"
+            exit 1
+          fi
+          for nupkg in "${nupkgs[@]}"; do
+            echo "Pushing $nupkg to NuGet.org..."
+            dotnet nuget push "$nupkg" \
+              --source "$NUGET_SOURCE" \
+              --api-key "$NUGET_API_KEY" \
+              --skip-duplicate
+          done
