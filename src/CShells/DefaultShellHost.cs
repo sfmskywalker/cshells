@@ -284,7 +284,7 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// </para>
     /// <list type="number">
     ///   <item><description>Creating a fresh <see cref="ServiceCollection"/> for the shell.</description></item>
-    ///   <item><description>Copying all <see cref="ServiceDescriptor"/> entries from the root <see cref="IServiceCollection"/> (if available).</description></item>
+    ///   <item><description>Copying all <see cref="ServiceDescriptor"/> entries from the root <see cref="IServiceCollection"/>.</description></item>
     ///   <item><description>Adding shell-specific core services (ShellSettings, ShellId, ShellContext).</description></item>
     ///   <item><description>Invoking <see cref="IShellFeature.ConfigureServices"/> for each enabled feature in dependency order.</description></item>
     ///   <item><description>Building the <see cref="IServiceProvider"/> only after all registrations are complete.</description></item>
