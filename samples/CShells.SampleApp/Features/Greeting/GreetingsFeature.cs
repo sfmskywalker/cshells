@@ -1,7 +1,4 @@
 using CShells.AspNetCore;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace CShells.SampleApp.Features.Greeting;
 
