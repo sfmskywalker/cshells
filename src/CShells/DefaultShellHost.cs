@@ -285,7 +285,8 @@ public class DefaultShellHost : IShellHost, IDisposable
     {
         // Register shell settings and shell ID for convenience
         services.AddSingleton(settings);
-        // ShellId is a struct, register it directly as an instance
+        // ShellId is a value type, so we register it directly as a singleton instance
+        // rather than through AddSingleton<T>() which requires a reference type
         services.Add(ServiceDescriptor.Singleton(typeof(ShellId), settings.Id));
 
         // Add logging services so shell containers work with ASP.NET Core infrastructure
@@ -359,7 +360,8 @@ public class DefaultShellHost : IShellHost, IDisposable
     {
         // Check if any constructor accepts ShellSettings as a parameter
         var hasShellSettingsParameter = featureType.GetConstructors()
-            .Any(c => c.GetParameters().Any(p => p.ParameterType == typeof(ShellSettings)));
+            .SelectMany(c => c.GetParameters())
+            .Any(p => p.ParameterType == typeof(ShellSettings));
 
         if (hasShellSettingsParameter)
         {
