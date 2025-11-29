@@ -295,7 +295,7 @@ public class DefaultShellHost : IShellHost, IDisposable
         // Register shell settings and shell ID for convenience
         services.AddSingleton(settings);
         // ShellId is a struct, so we add it via the IServiceCollection interface method
-        services.Add(ServiceDescriptor.Singleton(typeof(ShellId), _ => settings.Id));
+        services.Add(ServiceDescriptor.Singleton(typeof(ShellId), settings.Id));
 
         // Add logging services so shell containers work with ASP.NET Core infrastructure
         services.AddLogging();
