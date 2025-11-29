@@ -30,12 +30,12 @@ public static class TestAssemblyBuilder
                 typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
                 typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
-                // Implement ConfigureServices method
+                // Implement ConfigureServices method with new signature (IServiceCollection, ShellSettings)
                 var configureServicesMethod = typeBuilder.DefineMethod(
                     "ConfigureServices",
                     MethodAttributes.Public | MethodAttributes.Virtual,
                     typeof(void),
-                    [typeof(IServiceCollection)]);
+                    [typeof(IServiceCollection), typeof(ShellSettings)]);
                 var ilConfigureServices = configureServicesMethod.GetILGenerator();
                 ilConfigureServices.Emit(OpCodes.Ret);
             }
@@ -78,12 +78,12 @@ public static class TestAssemblyBuilder
             var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
             typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
 
-            // Implement ConfigureServices method with empty body by default
+            // Implement ConfigureServices method with new signature (IServiceCollection, ShellSettings)
             var configureServicesMethod = typeBuilder.DefineMethod(
                 "ConfigureServices",
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 typeof(void),
-                [typeof(IServiceCollection)]);
+                [typeof(IServiceCollection), typeof(ShellSettings)]);
             var ilConfigureServices = configureServicesMethod.GetILGenerator();
             ilConfigureServices.Emit(OpCodes.Ret);
 
@@ -131,15 +131,16 @@ public static class TestAssemblyBuilder
     /// </summary>
     public static void DefineConfigureServicesWithService(TypeBuilder typeBuilder, Type serviceInterface, Type serviceImplementation)
     {
+        // ConfigureServices now takes (IServiceCollection services, ShellSettings shellSettings)
         var configureServicesMethod = typeBuilder.DefineMethod(
             "ConfigureServices",
             MethodAttributes.Public | MethodAttributes.Virtual,
             typeof(void),
-            [typeof(IServiceCollection)]);
+            [typeof(IServiceCollection), typeof(ShellSettings)]);
 
         var il = configureServicesMethod.GetILGenerator();
 
-        // Load the services collection
+        // Load the services collection (first argument after 'this')
         il.Emit(OpCodes.Ldarg_1);
 
         // Call ServiceCollectionServiceExtensions.AddSingleton<TService, TImplementation>(services)

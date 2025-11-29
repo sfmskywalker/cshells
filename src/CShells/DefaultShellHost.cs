@@ -10,10 +10,29 @@ namespace CShells;
 /// Default implementation of <see cref="IShellHost"/> that builds and caches per-shell
 /// <see cref="IServiceProvider"/> instances.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Shell features (<see cref="IShellFeature"/> implementations) are instantiated using the
+/// application's root <see cref="IServiceProvider"/> via <see cref="ActivatorUtilities.CreateInstance"/>,
+/// with <see cref="ShellSettings"/> passed as an explicit parameter. This means:
+/// </para>
+/// <list type="bullet">
+///   <item>
+///     <description>Feature constructors may only depend on root-level services (logging, configuration, etc.) and ShellSettings.</description>
+///   </item>
+///   <item>
+///     <description>No temporary shell ServiceProviders are created during feature configuration.</description>
+///   </item>
+///   <item>
+///     <description>Shell services are registered purely via IServiceCollection in ConfigureServices.</description>
+///   </item>
+/// </list>
+/// </remarks>
 public class DefaultShellHost : IShellHost, IDisposable
 {
     private readonly IReadOnlyDictionary<string, ShellFeatureDescriptor> _featureMap;
     private readonly IReadOnlyList<ShellSettings> _shellSettings;
+    private readonly IServiceProvider? _rootProvider;
     private readonly ConcurrentDictionary<ShellId, ShellContext> _shellContexts = new();
     private readonly FeatureDependencyResolver _dependencyResolver = new();
     private readonly ILogger<DefaultShellHost> _logger;
@@ -27,7 +46,7 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// <param name="logger">Optional logger for diagnostic output.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/> is null.</exception>
     public DefaultShellHost(IEnumerable<ShellSettings> shellSettings, ILogger<DefaultShellHost>? logger = null)
-        : this(shellSettings, AppDomain.CurrentDomain.GetAssemblies(), logger)
+        : this(shellSettings, AppDomain.CurrentDomain.GetAssemblies(), rootProvider: null, logger)
     {
     }
 
@@ -39,11 +58,34 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// <param name="logger">Optional logger for diagnostic output.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/> or <paramref name="assemblies"/> is null.</exception>
     public DefaultShellHost(IEnumerable<ShellSettings> shellSettings, IEnumerable<Assembly> assemblies, ILogger<DefaultShellHost>? logger = null)
+        : this(shellSettings, assemblies, rootProvider: null, logger)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultShellHost"/> class with a root service provider.
+    /// </summary>
+    /// <param name="shellSettings">The collection of shell settings to manage.</param>
+    /// <param name="assemblies">The assemblies to scan for features.</param>
+    /// <param name="rootProvider">
+    /// The application's root <see cref="IServiceProvider"/> used to instantiate <see cref="IShellFeature"/> implementations.
+    /// When provided, feature constructors can resolve root-level services (logging, configuration, etc.).
+    /// When null, features are instantiated using <see cref="Activator.CreateInstance"/> and can only have parameterless
+    /// constructors or constructors that accept <see cref="ShellSettings"/>.
+    /// </param>
+    /// <param name="logger">Optional logger for diagnostic output.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/> or <paramref name="assemblies"/> is null.</exception>
+    public DefaultShellHost(
+        IEnumerable<ShellSettings> shellSettings,
+        IEnumerable<Assembly> assemblies,
+        IServiceProvider? rootProvider,
+        ILogger<DefaultShellHost>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(shellSettings);
         ArgumentNullException.ThrowIfNull(assemblies);
         
         _shellSettings = shellSettings.ToList();
+        _rootProvider = rootProvider;
         _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
 
         // Discover all features from specified assemblies
@@ -239,7 +281,7 @@ public class DefaultShellHost : IShellHost, IDisposable
             return services.BuildServiceProvider();
         }
 
-        ConfigureFeatureServices(services, orderedFeatures);
+        ConfigureFeatureServices(services, orderedFeatures, settings);
 
         return services.BuildServiceProvider();
     }
@@ -249,7 +291,10 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// </summary>
     private static void RegisterCoreServices(ServiceCollection services, ShellSettings settings, ShellContextHolder contextHolder)
     {
+        // Register shell settings and shell ID for convenience
         services.AddSingleton(settings);
+        // ShellId is a struct, so we use the non-generic Add with a factory
+        ((IServiceCollection)services).Add(ServiceDescriptor.Singleton(typeof(ShellId), _ => settings.Id));
 
         // Register the ShellContext using the holder pattern
         // The holder will be populated after the service provider is built
@@ -259,9 +304,13 @@ public class DefaultShellHost : IShellHost, IDisposable
 
     /// <summary>
     /// Configures services from each feature's startup in dependency order.
-    /// Each feature is instantiated with a temp provider that includes services from all previously-processed features.
     /// </summary>
-    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures)
+    /// <remarks>
+    /// Features are instantiated using the root IServiceProvider (if available) plus ShellSettings
+    /// as an explicit parameter. No temporary shell ServiceProviders are created during configuration.
+    /// This ensures features can only depend on root-level services in their constructors.
+    /// </remarks>
+    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures, ShellSettings settings)
     {
         var featuresWithStartups = orderedFeatures
             .Select(name => (Name: name, Descriptor: _featureMap[name]))
@@ -269,23 +318,26 @@ public class DefaultShellHost : IShellHost, IDisposable
 
         foreach (var (featureName, descriptor) in featuresWithStartups)
         {
-            ConfigureFeature(services, featureName, descriptor);
+            ConfigureFeature(services, settings, featureName, descriptor);
         }
     }
 
     /// <summary>
     /// Configures services for a single feature by instantiating its startup and calling ConfigureServices.
     /// </summary>
-    private void ConfigureFeature(ServiceCollection services, string featureName, ShellFeatureDescriptor descriptor)
+    /// <remarks>
+    /// The feature is instantiated using the root IServiceProvider (via ActivatorUtilities.CreateInstance)
+    /// with ShellSettings passed as an explicit parameter. This means feature constructors can only
+    /// depend on root-level services (logging, configuration, etc.) and ShellSettings.
+    /// </remarks>
+    private void ConfigureFeature(ServiceCollection services, ShellSettings settings, string featureName, ShellFeatureDescriptor descriptor)
     {
         try
         {
-            // Create a temporary service provider that includes services registered so far
-            // This allows each startup to depend on services from its dependency features
-            using var tempProvider = services.BuildServiceProvider();
-
-            var startup = (IShellFeature)ActivatorUtilities.CreateInstance(tempProvider, descriptor.StartupType!);
-            startup.ConfigureServices(services);
+            // Create the feature instance using the root provider (if available) with ShellSettings as explicit parameter.
+            // This ensures features can only depend on root-level services and ShellSettings, not shell services.
+            var startup = CreateFeatureInstance(descriptor.StartupType!, settings);
+            startup.ConfigureServices(services, settings);
 
             _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",
                 featureName, descriptor.StartupType!.FullName);
@@ -296,6 +348,43 @@ public class DefaultShellHost : IShellHost, IDisposable
             throw new InvalidOperationException(
                 $"Failed to configure services for feature '{featureName}': {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Creates an instance of the specified feature type using the root provider.
+    /// </summary>
+    /// <param name="featureType">The feature type to instantiate.</param>
+    /// <param name="shellSettings">The shell settings to pass as an explicit parameter.</param>
+    /// <returns>The instantiated feature.</returns>
+    /// <remarks>
+    /// Uses ActivatorUtilities.CreateInstance with the root provider (if available) to instantiate
+    /// the feature. ShellSettings is passed as an explicit parameter, allowing feature constructors
+    /// to optionally accept it. If no root provider is available, uses Activator.CreateInstance.
+    /// </remarks>
+    private IShellFeature CreateFeatureInstance(Type featureType, ShellSettings shellSettings)
+    {
+        if (_rootProvider != null)
+        {
+            // Use the root provider to create the instance with ShellSettings as explicit parameter.
+            // ActivatorUtilities will match ShellSettings to constructor parameters that accept it.
+            return (IShellFeature)ActivatorUtilities.CreateInstance(_rootProvider, featureType, shellSettings);
+        }
+
+        // Fallback when no root provider is available: try to create with ShellSettings, then parameterless
+        var constructor = featureType.GetConstructors()
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault();
+
+        if (constructor != null)
+        {
+            var parameters = constructor.GetParameters();
+            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(ShellSettings))
+            {
+                return (IShellFeature)constructor.Invoke([shellSettings]);
+            }
+        }
+
+        return (IShellFeature)Activator.CreateInstance(featureType)!;
     }
 
     /// <summary>

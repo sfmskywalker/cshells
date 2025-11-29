@@ -59,7 +59,7 @@ public static class TestFixtures
     [ShellFeature("Core")]
     public class CoreFeatureStartup : IShellFeature
     {
-        public void ConfigureServices(IServiceCollection services)
+        public void ConfigureServices(IServiceCollection services, ShellSettings shellSettings)
         {
             services.AddSingleton<ITimeService, TimeService>();
         }
@@ -72,7 +72,7 @@ public static class TestFixtures
     [ShellFeature("Weather", DependsOn = ["Core"])]
     public class WeatherFeatureStartup : IShellFeature
     {
-        public void ConfigureServices(IServiceCollection services)
+        public void ConfigureServices(IServiceCollection services, ShellSettings shellSettings)
         {
             services.AddSingleton<IWeatherService, WeatherService>();
         }
