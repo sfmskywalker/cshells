@@ -99,7 +99,7 @@ namespace CShells.SampleApp
     /// </summary>
     file class CompositeShellResolver(params IShellResolver[] resolvers) : IShellResolver
     {
-        public ShellId? Resolve(Microsoft.AspNetCore.Http.HttpContext httpContext) =>
+        public ShellId? Resolve(HttpContext httpContext) =>
             resolvers
                 .Select(resolver => resolver.Resolve(httpContext))
                 .FirstOrDefault(shellId => shellId.HasValue);
@@ -110,7 +110,7 @@ namespace CShells.SampleApp
     /// </summary>
     file class DefaultShellIdResolver : IShellResolver
     {
-        public ShellId? Resolve(Microsoft.AspNetCore.Http.HttpContext httpContext) 
+        public ShellId? Resolve(HttpContext httpContext) 
             => new ShellId("Default");
     }
 }
