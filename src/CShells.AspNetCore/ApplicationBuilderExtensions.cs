@@ -19,7 +19,7 @@ public static class ApplicationBuilderExtensions
 
     /// <summary>
     /// Adds the CShells middleware to the application pipeline and configures all discovered
-    /// <see cref="IWebShellFeature"/> implementations.
+    /// <see cref="IWebShellFeature"/> implementations that are enabled for at least one shell.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -35,8 +35,9 @@ public static class ApplicationBuilderExtensions
     ///   <item>
     ///     <description>
     ///     Discovers all feature types implementing <see cref="IWebShellFeature"/> from feature descriptors
-    ///     available via <see cref="IShellHost"/> and calls their <see cref="IWebShellFeature.Configure"/>
-    ///     method to configure the application pipeline.
+    ///     and calls their <see cref="IWebShellFeature.Configure"/> method to configure the application pipeline,
+    ///     but only for features that are enabled for at least one shell. This prevents runtime errors
+    ///     when endpoints are mapped for features whose services are not registered.
     ///     </description>
     ///   </item>
     /// </list>
@@ -64,7 +65,7 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Configures all discovered <see cref="IWebShellFeature"/> implementations.
+    /// Configures all discovered <see cref="IWebShellFeature"/> implementations that are enabled for at least one shell.
     /// This method is idempotent and will only execute feature configuration once per process.
     /// </summary>
     /// <param name="app">The application builder.</param>
@@ -105,6 +106,9 @@ public static class ApplicationBuilderExtensions
                 return;
             }
 
+            // Get enabled features from all shells to only configure web features that are actually used
+            var (enabledFeatureIds, shouldFilterFeatures) = GetEnabledFeatureIds(rootProvider, logger);
+
             // Apply deterministic ordering by feature Id (case-insensitive)
             var orderedDescriptors = descriptors
                 .OrderBy(d => d.Id, StringComparer.OrdinalIgnoreCase);
@@ -118,6 +122,13 @@ public static class ApplicationBuilderExtensions
                 // Only process types implementing IWebShellFeature
                 if (!typeof(IWebShellFeature).IsAssignableFrom(descriptor.StartupType))
                     continue;
+
+                // Skip features that are not enabled for any shell (only if we should filter)
+                if (shouldFilterFeatures && !enabledFeatureIds.Contains(descriptor.Id))
+                {
+                    logger.LogDebug("Skipping web shell feature '{FeatureId}' as it is not enabled for any shell", descriptor.Id);
+                    continue;
+                }
 
                 try
                 {
@@ -137,6 +148,49 @@ public static class ApplicationBuilderExtensions
                     throw;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Gets the set of feature IDs that are enabled for at least one shell.
+    /// </summary>
+    /// <param name="rootProvider">The root service provider.</param>
+    /// <param name="logger">The logger instance.</param>
+    /// <returns>
+    /// A tuple containing:
+    /// - A hash set of enabled feature IDs (case-insensitive)
+    /// - A boolean indicating whether features should be filtered (false means configure all features for backwards compatibility)
+    /// </returns>
+    private static (HashSet<string> EnabledFeatureIds, bool ShouldFilter) GetEnabledFeatureIds(IServiceProvider rootProvider, ILogger logger)
+    {
+        var shellHost = rootProvider.GetService<IShellHost>();
+        if (shellHost is null)
+        {
+            logger.LogWarning("IShellHost not registered in service provider. All discovered web features will be configured.");
+            // Don't filter - configure all features (backwards compatibility)
+            return ([], false);
+        }
+
+        try
+        {
+            // Collect all enabled feature IDs from all shells
+            var enabledFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var shell in shellHost.AllShells)
+            {
+                foreach (var featureId in shell.Settings.EnabledFeatures)
+                {
+                    enabledFeatureIds.Add(featureId);
+                }
+            }
+
+            logger.LogDebug("Found {Count} unique enabled features across all shells", enabledFeatureIds.Count);
+            return (enabledFeatureIds, true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to retrieve enabled features from shell host. All discovered web features will be configured.");
+            // Don't filter - configure all features (backwards compatibility)
+            return ([], false);
         }
     }
 }

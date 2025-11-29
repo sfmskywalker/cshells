@@ -58,10 +58,12 @@ public class WebShellFeatureConfigurationTests : IDisposable
     {
         // Arrange
         TestWebShellFeature.ResetConfigureCallCount();
-        
+
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
-        services.AddSingleton<IShellHost, EmptyShellHost>();
+        // Create a shell that enables the TestWebShellFeature
+        var shellSettings = new ShellSettings(new ShellId("Default"), ["TestWebShellFeature"]);
+        services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
         services.AddSingleton<IHostEnvironment, TestHostEnvironment>();
         var serviceProvider = services.BuildServiceProvider();
         var app = new TestApplicationBuilder(serviceProvider);
@@ -85,10 +87,12 @@ public class WebShellFeatureConfigurationTests : IDisposable
     {
         // Arrange
         TestWebShellFeature.ResetConfigureCallCount();
-        
+
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
-        services.AddSingleton<IShellHost, EmptyShellHost>();
+        // Create a shell that enables the TestWebShellFeature
+        var shellSettings = new ShellSettings(new ShellId("Default"), ["TestWebShellFeature"]);
+        services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
         services.AddSingleton<IHostEnvironment, TestHostEnvironment>();
         var serviceProvider = services.BuildServiceProvider();
         var app = new TestApplicationBuilder(serviceProvider);
@@ -96,10 +100,10 @@ public class WebShellFeatureConfigurationTests : IDisposable
         // Act - call UseCShells() multiple times
         app.UseCShells();
         var firstCallCount = TestWebShellFeature.ConfigureCallCount;
-        
+
         app.UseCShells();
         var secondCallCount = TestWebShellFeature.ConfigureCallCount;
-        
+
         app.UseCShells();
         var thirdCallCount = TestWebShellFeature.ConfigureCallCount;
 
@@ -118,10 +122,13 @@ public class WebShellFeatureConfigurationTests : IDisposable
         OrderedWebShellFeatureA.ResetCallOrder();
         OrderedWebShellFeatureB.ResetCallOrder();
         OrderedWebShellFeatureC.ResetCallOrder();
-        
+
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
-        services.AddSingleton<IShellHost, EmptyShellHost>();
+        // Create a shell that enables the ordered features
+        var shellSettings = new ShellSettings(new ShellId("Default"),
+            ["AAA_OrderedFeature", "BBB_OrderedFeature", "CCC_OrderedFeature"]);
+        services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
         services.AddSingleton<IHostEnvironment, TestHostEnvironment>();
         var serviceProvider = services.BuildServiceProvider();
         var app = new TestApplicationBuilder(serviceProvider);
@@ -149,10 +156,12 @@ public class WebShellFeatureConfigurationTests : IDisposable
     {
         // Arrange
         NonWebShellFeature.ResetConfigureCallCount();
-        
+
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
-        services.AddSingleton<IShellHost, EmptyShellHost>();
+        // Create a shell that enables only the NonWebShellFeature (which is not a web feature)
+        var shellSettings = new ShellSettings(new ShellId("Default"), ["NonWebShellFeature"]);
+        services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
         services.AddSingleton<IHostEnvironment, TestHostEnvironment>();
         var serviceProvider = services.BuildServiceProvider();
         var app = new TestApplicationBuilder(serviceProvider);
@@ -162,6 +171,32 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         // Assert - NonWebShellFeature does not implement IWebShellFeature, so it should not be configured
         Assert.Equal(0, NonWebShellFeature.ConfigureServicesCallCount);
+    }
+
+    /// <summary>
+    /// Test that web features not enabled for any shell are NOT configured by <c>UseCShells()</c>.
+    /// This prevents runtime errors when endpoints reference services that aren't registered.
+    /// </summary>
+    [Fact(DisplayName = "UseCShells does not configure web features that are not enabled for any shell")]
+    public void UseCShells_DoesNotConfigureDisabledWebShellFeatures()
+    {
+        // Arrange
+        TestWebShellFeature.ResetConfigureCallCount();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IShellResolver, NullShellResolver>();
+        // Create a shell that does NOT enable TestWebShellFeature
+        var shellSettings = new ShellSettings(new ShellId("Default"), ["SomeOtherFeature"]);
+        services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
+        services.AddSingleton<IHostEnvironment, TestHostEnvironment>();
+        var serviceProvider = services.BuildServiceProvider();
+        var app = new TestApplicationBuilder(serviceProvider);
+
+        // Act
+        app.UseCShells();
+
+        // Assert - TestWebShellFeature is not enabled for any shell, so it should not be configured
+        Assert.Equal(0, TestWebShellFeature.ConfigureCallCount);
     }
 
     // Test helpers
@@ -175,6 +210,27 @@ public class WebShellFeatureConfigurationTests : IDisposable
         public ShellContext DefaultShell => throw new InvalidOperationException();
         public IReadOnlyCollection<ShellContext> AllShells => [];
         public ShellContext GetShell(ShellId id) => throw new KeyNotFoundException();
+    }
+
+    private class TestShellHost : IShellHost
+    {
+        private readonly List<ShellContext> _shells = [];
+
+        public TestShellHost(params ShellSettings[] shellSettings)
+        {
+            foreach (var settings in shellSettings)
+            {
+                // Create a minimal service provider for the shell
+                var services = new ServiceCollection();
+                services.AddSingleton(settings);
+                var serviceProvider = services.BuildServiceProvider();
+                _shells.Add(new ShellContext(settings, serviceProvider));
+            }
+        }
+
+        public ShellContext DefaultShell => _shells.FirstOrDefault() ?? throw new InvalidOperationException();
+        public IReadOnlyCollection<ShellContext> AllShells => _shells.AsReadOnly();
+        public ShellContext GetShell(ShellId id) => _shells.FirstOrDefault(s => s.Id.Equals(id)) ?? throw new KeyNotFoundException();
     }
 
     private class TestHostEnvironment : IHostEnvironment
