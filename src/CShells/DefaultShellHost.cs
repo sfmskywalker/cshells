@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -293,8 +294,8 @@ public class DefaultShellHost : IShellHost, IDisposable
     {
         // Register shell settings and shell ID for convenience
         services.AddSingleton(settings);
-        // ShellId is a struct, so we use the non-generic Add with a factory
-        ((IServiceCollection)services).Add(ServiceDescriptor.Singleton(typeof(ShellId), _ => settings.Id));
+        // ShellId is a struct, so we add it via the IServiceCollection interface method
+        services.Add(ServiceDescriptor.Singleton(typeof(ShellId), _ => settings.Id));
 
         // Register the ShellContext using the holder pattern
         // The holder will be populated after the service provider is built
