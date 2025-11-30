@@ -202,14 +202,14 @@ public class ShellMiddlewareTests
 
     private class NullShellResolver : IShellResolver
     {
-        public ShellId? Resolve(HttpContext httpContext) => null;
+        public ShellId? Resolve(ShellResolutionContext context) => null;
     }
 
     private class FixedShellResolver : IShellResolver
     {
         private readonly ShellId _shellId;
         public FixedShellResolver(ShellId shellId) => _shellId = shellId;
-        public ShellId? Resolve(HttpContext httpContext) => _shellId;
+        public ShellId? Resolve(ShellResolutionContext context) => _shellId;
     }
 
     private class TestShellHost : IShellHost

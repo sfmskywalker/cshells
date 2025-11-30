@@ -46,7 +46,8 @@ public class ShellMiddleware
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task InvokeAsync(HttpContext context)
     {
-        var shellId = _resolver.Resolve(context);
+        var resolutionContext = context.ToShellResolutionContext();
+        var shellId = _resolver.Resolve(resolutionContext);
 
         if (shellId is null)
         {

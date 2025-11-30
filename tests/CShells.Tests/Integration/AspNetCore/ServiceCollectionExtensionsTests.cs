@@ -1,5 +1,4 @@
 using CShells.AspNetCore;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.AspNetCore;
@@ -32,10 +31,10 @@ public class ServiceCollectionExtensionsTests
         services.AddCShellsAspNetCore();
         var serviceProvider = services.BuildServiceProvider();
         var resolver = serviceProvider.GetRequiredService<IShellResolver>();
-        var httpContext = new DefaultHttpContext();
+        var context = new ShellResolutionContext();
 
         // Act
-        var result = resolver.Resolve(httpContext);
+        var result = resolver.Resolve(context);
 
         // Assert
         Assert.NotNull(result);
@@ -82,6 +81,6 @@ public class ServiceCollectionExtensionsTests
 
     private class CustomShellResolver : IShellResolver
     {
-        public ShellId? Resolve(HttpContext httpContext) => new ShellId("Custom");
+        public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Custom");
     }
 }

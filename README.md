@@ -1,6 +1,6 @@
 # CShells
 
-A lightweight shell & feature system for .NET projects that lets you build modular and multi-tenant apps with per-shell DI containers and config-driven features.
+A lightweight, extensible shell and feature system for .NET projects that lets you build modular and multi-tenant apps with per-shell DI containers and config-driven features.
 
 ## Features
 

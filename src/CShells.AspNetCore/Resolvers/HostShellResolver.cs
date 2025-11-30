@@ -1,9 +1,7 @@
-using Microsoft.AspNetCore.Http;
-
 namespace CShells.AspNetCore.Resolvers;
 
 /// <summary>
-/// A shell resolver that determines the shell based on the HTTP Host header.
+/// A shell resolver that determines the shell based on the host name.
 /// </summary>
 public class HostShellResolver : IShellResolver
 {
@@ -22,11 +20,11 @@ public class HostShellResolver : IShellResolver
     }
 
     /// <inheritdoc />
-    public ShellId? Resolve(HttpContext httpContext)
+    public ShellId? Resolve(ShellResolutionContext context)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var host = httpContext.Request.Host.Host;
+        var host = context.Get<string>(ShellResolutionContextKeys.Host);
         if (string.IsNullOrEmpty(host))
         {
             return null;

@@ -15,34 +15,34 @@ public class ShellResolverTests
     private const string Tenant2Path = "tenant2";
     private const string Localhost = "localhost";
 
-    public static TheoryData<IShellResolver, HttpContext, ShellId?, string> ResolverTestCases => new()
+    public static TheoryData<IShellResolver, ShellResolutionContext, ShellId?, string> ResolverTestCases => new()
     {
         // HostShellResolver - matching hosts
-        { CreateHostResolver(), CreateContext(Tenant1Host), new ShellId("Tenant1Shell"), "HostResolver with matching host" },
-        { CreateHostResolver(), CreateContext(Tenant2Host), new ShellId("Tenant2Shell"), "HostResolver with second matching host" },
-        { CreateHostResolver(), CreateContext(Localhost, 5000), new ShellId("LocalhostShell"), "HostResolver with localhost and port" },
-        { CreateHostResolver(), CreateContext("TENANT1.EXAMPLE.COM"), new ShellId("Tenant1Shell"), "HostResolver case-insensitive host" },
+        { CreateHostResolver(), CreateResolutionContext(Tenant1Host), new ShellId("Tenant1Shell"), "HostResolver with matching host" },
+        { CreateHostResolver(), CreateResolutionContext(Tenant2Host), new ShellId("Tenant2Shell"), "HostResolver with second matching host" },
+        { CreateHostResolver(), CreateResolutionContext(Localhost), new ShellId("LocalhostShell"), "HostResolver with localhost" },
+        { CreateHostResolver(), CreateResolutionContext("TENANT1.EXAMPLE.COM"), new ShellId("Tenant1Shell"), "HostResolver case-insensitive host" },
 
         // HostShellResolver - non-matching
-        { CreateHostResolver(), CreateContext("unknown.example.com"), null, "HostResolver with non-matching host" },
+        { CreateHostResolver(), CreateResolutionContext("unknown.example.com"), null, "HostResolver with non-matching host" },
 
         // PathShellResolver - matching paths
-        { CreatePathResolver(), CreateContext(path: $"/{Tenant1Path}/some/path"), new ShellId("Tenant1Shell"), "PathResolver with matching first segment" },
-        { CreatePathResolver(), CreateContext(path: $"/{Tenant2Path}/api"), new ShellId("Tenant2Shell"), "PathResolver with matching second segment" },
-        { CreatePathResolver(), CreateContext(path: $"/{Tenant1Path}"), new ShellId("Tenant1Shell"), "PathResolver with single segment" },
-        { CreatePathResolver(), CreateContext(path: "/TENANT1/path"), new ShellId("Tenant1Shell"), "PathResolver case-insensitive path" },
+        { CreatePathResolver(), CreateResolutionContext(path: $"/{Tenant1Path}/some/path"), new ShellId("Tenant1Shell"), "PathResolver with matching first segment" },
+        { CreatePathResolver(), CreateResolutionContext(path: $"/{Tenant2Path}/api"), new ShellId("Tenant2Shell"), "PathResolver with matching second segment" },
+        { CreatePathResolver(), CreateResolutionContext(path: $"/{Tenant1Path}"), new ShellId("Tenant1Shell"), "PathResolver with single segment" },
+        { CreatePathResolver(), CreateResolutionContext(path: "/TENANT1/path"), new ShellId("Tenant1Shell"), "PathResolver case-insensitive path" },
 
         // PathShellResolver - non-matching
-        { CreatePathResolver(), CreateContext(path: "/unknown/path"), null, "PathResolver with non-matching path" },
-        { CreatePathResolver(), CreateContext(path: ""), null, "PathResolver with empty path" },
-        { CreatePathResolver(), CreateContext(path: "/"), null, "PathResolver with root path" },
+        { CreatePathResolver(), CreateResolutionContext(path: "/unknown/path"), null, "PathResolver with non-matching path" },
+        { CreatePathResolver(), CreateResolutionContext(path: ""), null, "PathResolver with empty path" },
+        { CreatePathResolver(), CreateResolutionContext(path: "/"), null, "PathResolver with root path" },
     };
 
     [Theory(DisplayName = "Resolve with various inputs returns expected result")]
     [MemberData(nameof(ResolverTestCases))]
     public void Resolve_WithVariousInputs_ReturnsExpectedResult(
         IShellResolver resolver,
-        HttpContext context,
+        ShellResolutionContext context,
         ShellId? expectedShellId,
         string scenario)
     {
@@ -69,17 +69,17 @@ public class ShellResolverTests
         Assert.Equal("pathMap", ex.ParamName);
     }
 
-    [Theory(DisplayName = "Resolve with null httpContext throws ArgumentNullException")]
+    [Theory(DisplayName = "Resolve with null context throws ArgumentNullException")]
     [InlineData(typeof(HostShellResolver))]
     [InlineData(typeof(PathShellResolver))]
-    public void Resolve_WithNullHttpContext_ThrowsArgumentNullException(Type resolverType)
+    public void Resolve_WithNullContext_ThrowsArgumentNullException(Type resolverType)
     {
         // Arrange
         var resolver = CreateResolverInstance(resolverType);
 
         // Act & Assert
         var ex = Assert.Throws<ArgumentNullException>(() => resolver.Resolve(null!));
-        Assert.Equal("httpContext", ex.ParamName);
+        Assert.Equal("context", ex.ParamName);
     }
 
     #region Helper Methods
@@ -103,15 +103,15 @@ public class ShellResolverTests
         return (IShellResolver)Activator.CreateInstance(resolverType, emptyMap)!;
     }
 
-    private static HttpContext CreateContext(string? host = null, int? port = null, string? path = null)
+    private static ShellResolutionContext CreateResolutionContext(string? host = null, string? path = null)
     {
-        var context = new DefaultHttpContext();
+        var context = new ShellResolutionContext();
 
         if (host != null)
-            context.Request.Host = port.HasValue ? new HostString(host, port.Value) : new HostString(host);
+            context.Set(ShellResolutionContextKeys.Host, host);
 
         if (path != null)
-            context.Request.Path = path;
+            context.Set(ShellResolutionContextKeys.Path, path);
 
         return context;
     }

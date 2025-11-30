@@ -40,7 +40,7 @@ public class ApplicationBuilderExtensionsTests
     // Test helpers
     private class NullShellResolver : IShellResolver
     {
-        public ShellId? Resolve(HttpContext httpContext) => null;
+        public ShellId? Resolve(ShellResolutionContext context) => null;
     }
 
     private class EmptyShellHost : IShellHost

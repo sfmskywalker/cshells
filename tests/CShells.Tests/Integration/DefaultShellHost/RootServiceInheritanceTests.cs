@@ -132,11 +132,11 @@ public class RootServiceInheritanceTests : IDisposable
     {
         // Arrange: Root registers IRootOnlyService and ISharedService. Shell has no overriding features.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve IRootOnlyService from the shell provider.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var rootOnlyService = shell.ServiceProvider.GetService<IRootOnlyService>();
 
         // Assert: Service resolves successfully and matches the root implementation.
@@ -149,11 +149,11 @@ public class RootServiceInheritanceTests : IDisposable
     {
         // Arrange: Root registers ISharedService. Shell has no overriding features.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve ISharedService from the shell provider.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var sharedService = shell.ServiceProvider.GetService<ISharedService>();
 
         // Assert: Service resolves to the root implementation.
@@ -166,11 +166,11 @@ public class RootServiceInheritanceTests : IDisposable
     {
         // Arrange: Root registers services. Shell has no enabled features.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve services from the shell provider.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var rootOnlyService = shell.ServiceProvider.GetService<IRootOnlyService>();
         var sharedService = shell.ServiceProvider.GetService<ISharedService>();
 
@@ -191,11 +191,11 @@ public class RootServiceInheritanceTests : IDisposable
         // Arrange: Root registers ISharedService with RootSharedService.
         // A shell feature registers ISharedService with ShellSharedService.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["OverrideFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["OverrideFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve ISharedService from the shell provider.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var sharedService = shell.ServiceProvider.GetService<ISharedService>();
 
         // Assert: The resolved implementation is ShellSharedService, not RootSharedService.
@@ -210,11 +210,11 @@ public class RootServiceInheritanceTests : IDisposable
         // Arrange: Root registers IRootOnlyService and ISharedService.
         // Shell overrides ISharedService but IRootOnlyService should still be inherited.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["OverrideFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["OverrideFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve both services.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var rootOnlyService = shell.ServiceProvider.GetService<IRootOnlyService>();
         var sharedService = shell.ServiceProvider.GetService<ISharedService>();
 
@@ -231,13 +231,13 @@ public class RootServiceInheritanceTests : IDisposable
         // Arrange: Root registers ISharedService.
         // Shell1 overrides it, Shell2 does not.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shell1Settings = new ShellSettings(new ShellId("Shell1"), ["OverrideFeature"]);
-        var shell2Settings = new ShellSettings(new ShellId("Shell2"), ["EmptyFeature"]);
+        var shell1Settings = new ShellSettings(new("Shell1"), ["OverrideFeature"]);
+        var shell2Settings = new ShellSettings(new("Shell2"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shell1Settings, shell2Settings);
 
         // Act: Build both shells and resolve ISharedService from each.
-        var shell1 = host.GetShell(new ShellId("Shell1"));
-        var shell2 = host.GetShell(new ShellId("Shell2"));
+        var shell1 = host.GetShell(new("Shell1"));
+        var shell2 = host.GetShell(new("Shell2"));
         var shell1SharedService = shell1.ServiceProvider.GetService<ISharedService>();
         var shell2SharedService = shell2.ServiceProvider.GetService<ISharedService>();
 
@@ -262,12 +262,12 @@ public class RootServiceInheritanceTests : IDisposable
 
         // Arrange
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Get the same shell multiple times
-        var shell1 = host.GetShell(new ShellId("TestShell"));
-        var shell2 = host.GetShell(new ShellId("TestShell"));
+        var shell1 = host.GetShell(new("TestShell"));
+        var shell2 = host.GetShell(new("TestShell"));
 
         // Assert: Same ShellContext instance is returned
         Assert.Same(shell1, shell2);
@@ -291,11 +291,11 @@ public class RootServiceInheritanceTests : IDisposable
         rootServices.AddSingleton<IShellContextScopeFactory>(sp => null!); // Dummy registration
         rootServices.AddSingleton<IRootServiceCollectionAccessor>(sp => null!); // Dummy registration
 
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and try to resolve CShell infrastructure.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
 
         // Assert: CShell infrastructure should NOT be resolvable from shell container.
         // Note: GetService returns null for unregistered types, unlike GetRequiredService which throws.
@@ -314,11 +314,11 @@ public class RootServiceInheritanceTests : IDisposable
         // Arrange: Root registers both regular services and CShell infrastructure.
         var (rootServices, rootProvider) = CreateRootServicesWithSharedService();
 
-        var shellSettings = new ShellSettings(new ShellId("TestShell"), ["EmptyFeature"]);
+        var shellSettings = new ShellSettings(new("TestShell"), ["EmptyFeature"]);
         var host = CreateHostWithRootServices(rootServices, rootProvider, shellSettings);
 
         // Act: Build the shell and resolve services.
-        var shell = host.GetShell(new ShellId("TestShell"));
+        var shell = host.GetShell(new("TestShell"));
         var rootOnlyService = shell.ServiceProvider.GetService<IRootOnlyService>();
         var sharedService = shell.ServiceProvider.GetService<ISharedService>();
         var shellHost = shell.ServiceProvider.GetService<IShellHost>();

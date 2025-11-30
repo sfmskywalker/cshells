@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-
 namespace CShells.AspNetCore.Resolvers;
 
 /// <summary>
@@ -22,18 +20,18 @@ public class PathShellResolver : IShellResolver
     }
 
     /// <inheritdoc />
-    public ShellId? Resolve(HttpContext httpContext)
+    public ShellId? Resolve(ShellResolutionContext context)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var path = httpContext.Request.Path;
-        if (!path.HasValue || path.Value!.Length <= 1)
+        var path = context.Get<string>(ShellResolutionContextKeys.Path);
+        if (string.IsNullOrEmpty(path) || path.Length <= 1)
         {
             return null;
         }
 
         // Extract first segment (skip leading slash)
-        var pathValue = path.Value.AsSpan(1);
+        var pathValue = path.AsSpan(1);
         var slashIndex = pathValue.IndexOf('/');
         var firstSegment = slashIndex >= 0 ? pathValue[..slashIndex].ToString() : pathValue.ToString();
 

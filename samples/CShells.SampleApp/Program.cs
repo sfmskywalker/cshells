@@ -1,7 +1,4 @@
-using CShells;
 using CShells.AspNetCore;
-using CShells.AspNetCore.Resolvers;
-using CShells.SampleApp;
 using CShells.SampleApp.Features.Admin;
 using CShells.SampleApp.Features.Core;
 using CShells.SampleApp.Features.Greeting;
@@ -10,19 +7,12 @@ using CShells.SampleApp.Features.Weather;
 var builder = WebApplication.CreateBuilder(args);
 
 // Register CShells services and ASP.NET Core integration using a single entry point
-// and configure a custom shell resolver.
-builder.AddCShells(services =>
+// and configure shell resolution using the fluent API.
+builder.AddCShells(shells =>
 {
-    var pathMappings = new Dictionary<string, ShellId>
-    {
-        ["admin"] = new("Admin"),
-        ["tropical"] = new("Tropical")
-    };
-
-    services.AddSingleton<IShellResolver>(_ =>
-        new CompositeShellResolver(
-            new PathShellResolver(pathMappings),
-            new DefaultShellIdResolver()));
+    shells.MapPath("admin", "Admin");
+    shells.MapPath("tropical", "Tropical");
+    shells.UseDefault("Default");
 }, assemblies: [typeof(Program).Assembly]);
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -101,16 +91,3 @@ app.MapGetWithShellPrefix("greet", (HttpContext context, string shellPath) =>
     .WithName("GetGreeting");
 
 app.Run();
-
-namespace CShells.SampleApp
-{
-
-    /// <summary>
-    /// A resolver that always returns the Default shell.
-    /// </summary>
-    internal sealed class DefaultShellIdResolver : IShellResolver
-    {
-        public ShellId? Resolve(HttpContext httpContext) 
-            => new ShellId("Default");
-    }
-}

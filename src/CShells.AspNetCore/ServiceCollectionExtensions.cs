@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -31,6 +30,6 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private sealed class DefaultShellResolver : IShellResolver
     {
-        public ShellId? Resolve(HttpContext httpContext) => new ShellId("Default");
+        public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Default");
     }
 }
