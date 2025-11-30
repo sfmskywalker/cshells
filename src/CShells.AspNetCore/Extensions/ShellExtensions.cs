@@ -2,6 +2,8 @@ namespace CShells.AspNetCore;
 
 using System.Reflection;
 using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +25,7 @@ public static class ShellExtensions
         {
             ArgumentNullException.ThrowIfNull(builder);
 
-            return builder.AddCShells(sectionName: "CShells", assemblies: null);
+            return builder.AddCShells(sectionName: CShellsOptions.SectionName, assemblies: null);
         }
 
         /// <summary>
@@ -36,7 +38,7 @@ public static class ShellExtensions
         {
             ArgumentNullException.ThrowIfNull(builder);
 
-            return builder.AddCShells(sectionName: "CShells", assemblies: assemblies);
+            return builder.AddCShells(sectionName: CShellsOptions.SectionName, assemblies: assemblies);
         }
 
         /// <summary>
@@ -56,27 +58,25 @@ public static class ShellExtensions
         }
 
         /// <summary>
-        /// Adds CShells core services and ASP.NET Core integration using the specified
-        /// configuration section and optional feature assemblies, allowing customization
-        /// of the <see cref="IShellResolver"/> registration.
+        /// Adds CShells core services and ASP.NET Core integration, allowing customization
+        /// of the shell settings provider and shell resolver.
         /// </summary>
-        /// <param name="configureShellResolver">Callback used to configure shell resolver-related services, typically to register a custom <see cref="IShellResolver"/>.</param>
-        /// <param name="sectionName">The configuration section name to bind CShells options from. Defaults to "CShells".</param>
+        /// <param name="configureCShells">Callback used to configure the CShells builder (e.g., shell settings provider).</param>
         /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddCShells(Action<IServiceCollection> configureShellResolver,
-            string sectionName = "CShells",
+        public WebApplicationBuilder AddCShells(
+            Action<CShellsBuilder> configureCShells,
             IEnumerable<Assembly>? assemblies = null)
         {
             ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureShellResolver);
-            ArgumentException.ThrowIfNullOrEmpty(sectionName);
+            ArgumentNullException.ThrowIfNull(configureCShells);
 
-            ConfigureCoreAndAspNetCore(builder, sectionName, assemblies);
+            // Register CShells core services
+            var cshellsBuilder = builder.Services.AddCShells(assemblies);
+            configureCShells(cshellsBuilder);
 
-            // Allow caller to override or customize IShellResolver registration before
-            // the default resolver is added by AddCShellsAspNetCore.
-            configureShellResolver(builder.Services);
+            // Register ASP.NET Core integration for CShells
+            builder.Services.AddCShellsAspNetCore();
 
             return builder;
         }
@@ -90,7 +90,7 @@ public static class ShellExtensions
         /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddCShells(Action<ShellResolutionBuilder> configureResolvers,
-            string sectionName = "CShells",
+            string sectionName = CShellsOptions.SectionName,
             IEnumerable<Assembly>? assemblies = null)
         {
             ArgumentNullException.ThrowIfNull(builder);
@@ -100,10 +100,10 @@ public static class ShellExtensions
             // Build the custom resolver
             var resolutionBuilder = new ShellResolutionBuilder();
             configureResolvers(resolutionBuilder);
-        
+
             // Register the resolver BEFORE ConfigureCoreAndAspNetCore so it takes precedence
             // and prevents the default resolver from being added (via TryAddSingleton).
-            builder.Services.AddSingleton<IShellResolver>(resolutionBuilder.Build());
+            builder.Services.AddSingleton(resolutionBuilder.Build());
 
             ConfigureCoreAndAspNetCore(builder, sectionName, assemblies);
 
@@ -116,14 +116,14 @@ public static class ShellExtensions
         string sectionName,
         IEnumerable<Assembly>? assemblies)
     {
-        IConfiguration configuration = builder.Configuration;
-        IServiceCollection services = builder.Services;
+        var configuration = builder.Configuration;
 
-        // Register CShells core services from configuration
-        services.AddCShells(configuration, sectionName, assemblies);
+        // Register CShells core services using configuration provider
+        builder.Services.AddCShells(assemblies)
+            .WithConfigurationProvider(configuration, sectionName);
 
         // Register ASP.NET Core integration for CShells (includes default IShellResolver
         // if none has been registered).
-        services.AddCShellsAspNetCore();
+        builder.Services.AddCShellsAspNetCore();
     }
 }

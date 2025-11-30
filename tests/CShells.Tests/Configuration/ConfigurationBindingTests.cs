@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CShells.Configuration;
+using CShells.DependencyInjection;
 
 namespace CShells.Tests.Configuration
 {
@@ -55,7 +56,8 @@ namespace CShells.Tests.Configuration
 
             var services = new ServiceCollection();
             // Pass empty assemblies to avoid scanning test assembly with invalid test fixtures
-            services.AddCShells(config, assemblies: []);
+            services.AddCShells([])
+                .WithConfigurationProvider(config);
 
             var sp = services.BuildServiceProvider();
 

@@ -1,0 +1,11 @@
+{
+  "name": "Contoso",
+  "features": [
+    "Core",
+    "ContosoTenant",
+    "StripePayment",
+    "MultiChannelNotification",
+    "FraudDetection",
+    "Reporting"
+  ]
+}

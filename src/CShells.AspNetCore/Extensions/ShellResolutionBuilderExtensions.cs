@@ -23,7 +23,7 @@ public static class ShellResolutionBuilderExtensions
         public ShellResolutionBuilder MapPath(string path, string shellId)
         {
             ArgumentNullException.ThrowIfNull(builder);
-            ArgumentException.ThrowIfNullOrEmpty(path);
+            ArgumentNullException.ThrowIfNull(path);
             ArgumentException.ThrowIfNullOrEmpty(shellId);
 
             EnsureFinalizerRegistered(builder);

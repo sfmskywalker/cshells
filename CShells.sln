@@ -35,6 +35,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "branding", "branding", "{93
 		branding\logo.png = branding\logo.png
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CShells.Providers.FluentStorage", "src\CShells.Providers.FluentStorage\CShells.Providers.FluentStorage.csproj", "{4F402D20-CCEF-4010-BD6B-475A01E191BC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,6 +95,18 @@ Global
 		{1F7DE24B-21B9-4419-9599-EFDE10D59875}.Release|x64.Build.0 = Release|Any CPU
 		{1F7DE24B-21B9-4419-9599-EFDE10D59875}.Release|x86.ActiveCfg = Release|Any CPU
 		{1F7DE24B-21B9-4419-9599-EFDE10D59875}.Release|x86.Build.0 = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|x64.Build.0 = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Debug|x86.Build.0 = Debug|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|x64.ActiveCfg = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|x64.Build.0 = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|x86.ActiveCfg = Release|Any CPU
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -102,5 +116,6 @@ Global
 		{28846D8F-872F-4993-BB45-6C89C0C50EA8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{4257791E-E26C-42A1-9515-F91E1B679271} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{1F7DE24B-21B9-4419-9599-EFDE10D59875} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4F402D20-CCEF-4010-BD6B-475A01E191BC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

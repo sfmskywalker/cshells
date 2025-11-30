@@ -1,27 +1,46 @@
 using CShells.AspNetCore;
-using CShells.SampleApp.Features.Admin;
-using CShells.SampleApp.Features.Core;
-using CShells.SampleApp.Features.Greeting;
-using CShells.SampleApp.Features.Weather;
+using CShells.Providers.FluentStorage;
+using FluentStorage;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register CShells services and ASP.NET Core integration using a single entry point
-// and configure shell resolution using the fluent API.
-builder.AddCShells(shells =>
+// Register CShells services and configure multi-tenant shell resolution.
+// This sample demonstrates a payment processing SaaS platform where different tenants
+// have different features and service implementations loaded from JSON files in the Shells folder.
+//
+// All endpoints are now exposed by the features themselves via IWebShellFeature:
+// - Core: Exposes / (tenant info)
+// - PaymentProcessing: Exposes /payments
+// - Notifications: Exposes /notifications
+// - FraudDetection: Exposes /fraud-check (premium feature)
+// - Reporting: Exposes /reports (enterprise feature)
+//
+// Shell configurations are loaded from the Shells folder using FluentStorage's disk provider.
+// Each JSON file (Default.json, Acme.json, Contoso.json) represents a shell configuration.
+
+// Configure FluentStorage to read shell configurations from the Shells folder
+var shellsPath = Path.Combine(builder.Environment.ContentRootPath, "Shells");
+var blobStorage = StorageFactory.Blobs.DirectoryFiles(shellsPath);
+
+// Register CShells with FluentStorage provider and configure shell resolution
+builder.AddCShells(cshells =>
 {
-    shells.MapPath("admin", "Admin");
-    shells.MapPath("tropical", "Tropical");
-    shells.UseDefault("Default");
+    // Load shell settings from FluentStorage.
+    cshells.WithFluentStorageProvider(blobStorage);
+    
+    // Register shell resolution builder with path mappings
+    var resolutionBuilder = new CShells.ShellResolutionBuilder();
+    resolutionBuilder.MapPath("", "Default");      // Default tenant - Basic tier
+    resolutionBuilder.MapPath("acme", "Acme");      // Acme Corp - Premium tier
+    resolutionBuilder.MapPath("contoso", "Contoso"); // Contoso Ltd - Enterprise tier
+    cshells.Services.AddSingleton(resolutionBuilder.Build());
 }, assemblies: [typeof(Program).Assembly]);
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -30,64 +49,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Enable shell resolution middleware - this sets HttpContext.RequestServices 
-// to the shell's service provider based on the request path
+// Enable shell resolution middleware - resolves tenant based on request path
+// and activates the appropriate features with their endpoints.
 app.UseCShells();
-
-// Root endpoint - resolves to Default shell with Weather feature
-app.MapGet("/", (HttpContext context) =>
-    {
-        var timeService = context.RequestServices.GetRequiredService<ITimeService>();
-        var weatherService = context.RequestServices.GetRequiredService<IWeatherService>();
-    
-        return Results.Ok(new
-        {
-            Shell = "Default",
-            CurrentTime = timeService.GetCurrentTime(),
-            Forecast = weatherService.GetForecast()
-        });
-    })
-    .WithName("GetDefaultHome");
-
-// Tropical endpoint - resolves to Tropical shell with TropicalWeather feature
-app.MapGet("/tropical", (HttpContext context) =>
-    {
-        var timeService = context.RequestServices.GetRequiredService<ITimeService>();
-        var weatherService = context.RequestServices.GetRequiredService<IWeatherService>();
-
-        return Results.Ok(new
-        {
-            Shell = "Tropical",
-            CurrentTime = timeService.GetCurrentTime(),
-            Forecast = weatherService.GetForecast()
-        });
-    })
-    .WithName("GetTropicalHome");
-
-// Admin endpoint - resolves to Admin shell with Admin feature
-app.MapGet("/admin", (HttpContext context) =>
-    {
-        var adminService = context.RequestServices.GetRequiredService<IAdminService>();
-
-        return Results.Ok(new
-        {
-            Shell = "Admin",
-            AdminInfo = adminService.GetAdminInfo()
-        });
-    })
-    .WithName("GetAdminHome");
-
-// Greet endpoint - uses IGreetingService from the resolved shell
-app.MapGetWithShellPrefix("greet", (HttpContext context, string shellPath) =>
-    {
-        var greetingService = context.RequestServices.GetRequiredService<IGreetingService>();
-
-        return Results.Ok(new
-        {
-            ShellPath = shellPath,
-            Greeting = greetingService.GetGreeting()
-        });
-    })
-    .WithName("GetGreeting");
 
 app.Run();

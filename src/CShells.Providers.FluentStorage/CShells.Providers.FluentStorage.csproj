@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="FluentStorage" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CShells\CShells.csproj" />
+  </ItemGroup>
+
+</Project>

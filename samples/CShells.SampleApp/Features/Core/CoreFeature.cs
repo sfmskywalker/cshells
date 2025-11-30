@@ -1,14 +1,36 @@
+using CShells.AspNetCore;
+
 namespace CShells.SampleApp.Features.Core;
 
 /// <summary>
-/// Core feature that registers fundamental services.
+/// Core feature that registers fundamental services and exposes tenant information endpoint.
 /// </summary>
 [ShellFeature("Core", DisplayName = "Core Services")]
-public class CoreFeature : IShellFeature
+public class CoreFeature : IWebShellFeature
 {
-    /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<ITimeService, TimeService>();
+        services.AddSingleton<IAuditLogger, AuditLogger>();
+    }
+
+    public void Configure(IApplicationBuilder app, IHostEnvironment? environment)
+    {
+        // Expose root endpoint that shows tenant information
+        app.Map("", homeApp =>
+        {
+            homeApp.Run(async context =>
+            {
+                var tenantInfo = context.RequestServices.GetRequiredService<ITenantInfo>();
+
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    Tenant = tenantInfo.TenantName,
+                    TenantId = tenantInfo.TenantId,
+                    Tier = tenantInfo.Tier,
+                    Message = "Welcome to the Payment Processing Platform"
+                });
+            });
+        });
     }
 }

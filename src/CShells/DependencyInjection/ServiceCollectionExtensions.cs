@@ -1,6 +1,6 @@
 using System.Reflection;
 using CShells.Configuration;
-using Microsoft.Extensions.Configuration;
+using CShells.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -8,26 +8,21 @@ using Microsoft.Extensions.Logging;
 namespace CShells
 {
     /// <summary>
-    /// ServiceCollection extensions for wiring CShells from IConfiguration.
+    /// ServiceCollection extensions for registering CShells.
     /// </summary>
     public static class ServiceCollectionExtensions
     {
         /// <summary>
-        /// Registers ShellSettings and a DefaultShellHost based on the configuration section.
+        /// Registers CShells services and returns a builder for further configuration.
         /// </summary>
         /// <param name="services">The service collection.</param>
-        /// <param name="configuration">The application configuration.</param>
-        /// <param name="sectionName">The configuration section name (default: "CShells").</param>
         /// <param name="assemblies">Optional assemblies to scan for features. If null, scans all loaded assemblies.</param>
-        /// <returns>The updated service collection.</returns>
-        public static IServiceCollection AddCShells(
+        /// <returns>A CShells builder for further configuration.</returns>
+        public static CShellsBuilder AddCShells(
             this IServiceCollection services,
-            IConfiguration configuration,
-            string sectionName = "CShells",
             IEnumerable<Assembly>? assemblies = null)
         {
             ArgumentNullException.ThrowIfNull(services);
-            ArgumentNullException.ThrowIfNull(configuration);
 
             // Register the root service collection accessor as early as possible.
             // This allows the shell host to copy root service registrations into each shell's service collection.
@@ -37,33 +32,53 @@ namespace CShells
             services.TryAddSingleton<IRootServiceCollectionAccessor>(
                 _ => new RootServiceCollectionAccessor(services));
 
-            var options = new CShellsOptions();
-            configuration.GetSection(sectionName).Bind(options);
-
-            // Validate that shells are configured
-            if (options.Shells == null || !options.Shells.Any())
-                throw new InvalidOperationException($"No shells configured in the configuration section '{sectionName}'.");
-            // Convert configuration DTOs to runtime ShellSettings (may throw on invalid config).
-            var shells = ShellSettingsFactory.CreateFromOptions(options).ToList();
-
-            // Register the shell settings as a read-only collection for consumers.
-            services.AddSingleton<IReadOnlyCollection<ShellSettings>>(shells.AsReadOnly());
-
             // Register IShellHost using the DefaultShellHost.
             // The root IServiceProvider is passed to allow IShellFeature constructors to resolve root-level services.
             // The root IServiceCollection is passed via the accessor to enable service inheritance in shells.
             services.AddSingleton<IShellHost>(sp =>
             {
+                var provider = sp.GetRequiredService<IShellSettingsProvider>();
                 var logger = sp.GetService<ILogger<DefaultShellHost>>();
                 var rootServicesAccessor = sp.GetRequiredService<IRootServiceCollectionAccessor>();
                 var assembliesToScan = assemblies ?? AppDomain.CurrentDomain.GetAssemblies();
+
+                // Load shell settings from the provider
+                var shellSettings = provider.GetShellSettingsAsync().GetAwaiter().GetResult();
+                var shells = ValidateAndConvertToList(shellSettings);
+
                 return new DefaultShellHost(shells, assembliesToScan, rootProvider: sp, rootServicesAccessor, logger);
             });
 
             // Register the default shell context scope factory.
             services.AddSingleton<IShellContextScopeFactory, DefaultShellContextScopeFactory>();
 
-            return services;
+            return new(services);
+        }
+
+        /// <summary>
+        /// Validates shell settings for duplicate names and converts to a list.
+        /// </summary>
+        private static List<ShellSettings> ValidateAndConvertToList(IEnumerable<ShellSettings> shellSettings)
+        {
+            var shells = shellSettings.ToList();
+
+            if (shells.Count == 0)
+            {
+                throw new InvalidOperationException("No shells were returned by the shell settings provider.");
+            }
+
+            var duplicates = shells
+                .GroupBy(s => s.Id.Name, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToArray();
+
+            if (duplicates.Length > 0)
+            {
+                throw new InvalidOperationException($"Duplicate shell name(s) found: {string.Join(", ", duplicates)}");
+            }
+
+            return shells;
         }
     }
 }
