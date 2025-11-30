@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Provides access to shell contexts and their configurations.

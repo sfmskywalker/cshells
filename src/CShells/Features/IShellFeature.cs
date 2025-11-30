@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CShells;
+namespace CShells.Features;
 
 /// <summary>
 /// Defines the contract for a shell feature.

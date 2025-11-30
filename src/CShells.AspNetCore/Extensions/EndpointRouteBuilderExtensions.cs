@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for <see cref="IEndpointRouteBuilder"/> to support shell-prefixed routing.

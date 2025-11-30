@@ -1,4 +1,6 @@
 using CShells.AspNetCore;
+using CShells.AspNetCore.Features;
+using CShells.Features;
 
 namespace CShells.SampleApp.Features.Core;
 
@@ -11,6 +13,7 @@ public class CoreFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IAuditLogger, AuditLogger>();
+        services.AddSingleton<ITimeService, TimeService>();
     }
 
     public void Configure(IApplicationBuilder app, IHostEnvironment? environment)

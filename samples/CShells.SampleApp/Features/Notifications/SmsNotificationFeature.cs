@@ -1,3 +1,5 @@
+using CShells.Features;
+
 namespace CShells.SampleApp.Features.Notifications;
 
 /// <summary>

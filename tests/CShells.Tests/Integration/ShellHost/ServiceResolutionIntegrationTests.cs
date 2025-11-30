@@ -7,7 +7,7 @@ namespace CShells.Tests.Integration.ShellHost;
 /// </summary>
 public class ServiceResolutionIntegrationTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {

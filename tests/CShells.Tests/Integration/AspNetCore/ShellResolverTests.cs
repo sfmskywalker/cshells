@@ -1,5 +1,6 @@
 using CShells.AspNetCore;
-using CShells.AspNetCore.Resolvers;
+using CShells.AspNetCore.Resolution;
+using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 
 namespace CShells.Tests.Integration.AspNetCore;

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.TestHelpers;

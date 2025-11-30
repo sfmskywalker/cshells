@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Features;
 
 /// <summary>
 /// Resolves feature dependencies and computes an ordered list of features using topological sort.

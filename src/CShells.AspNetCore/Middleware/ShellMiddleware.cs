@@ -1,9 +1,12 @@
+using CShells.AspNetCore.Extensions;
+using CShells.Hosting;
+using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Middleware;
 
 /// <summary>
 /// Middleware that resolves the current shell from the request and sets the appropriate

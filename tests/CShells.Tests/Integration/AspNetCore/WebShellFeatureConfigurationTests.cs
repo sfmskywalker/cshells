@@ -6,6 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
+using CShells.AspNetCore.Features;
+using CShells.Features;
+using CShells.Hosting;
+using CShells.Resolution;
 
 namespace CShells.Tests.Integration.AspNetCore;
 
@@ -46,7 +50,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
     /// </summary>
     private static void ResetWebShellFeaturesConfiguredFlag()
     {
-        var field = typeof(CShells.AspNetCore.ApplicationBuilderExtensions)
+        var field = typeof(CShells.AspNetCore.Extensions.ApplicationBuilderExtensions)
             .GetField("_webShellFeaturesConfigured", BindingFlags.NonPublic | BindingFlags.Static);
         field?.SetValue(null, false);
     }
@@ -69,7 +73,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
 
         // Assert - the feature's Configure method should have been called
         // (assuming TestWebShellFeature is discovered from loaded assemblies)
@@ -98,13 +102,13 @@ public class WebShellFeatureConfigurationTests : IDisposable
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act - call UseCShells() multiple times
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
         var firstCallCount = TestWebShellFeature.ConfigureCallCount;
 
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
         var secondCallCount = TestWebShellFeature.ConfigureCallCount;
 
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
         var thirdCallCount = TestWebShellFeature.ConfigureCallCount;
 
         // Assert - Configure should only be called once (in the first UseCShells call)
@@ -134,7 +138,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
 
         // Assert - features should be configured in alphabetical order by feature Id
         // Order should be: AAA_OrderedFeature, BBB_OrderedFeature, CCC_OrderedFeature (since TestWebShellFeature is also there)
@@ -167,7 +171,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
 
         // Assert - NonWebShellFeature does not implement IWebShellFeature, so it should not be configured
         Assert.Equal(0, NonWebShellFeature.ConfigureServicesCallCount);
@@ -193,7 +197,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act
-        app.UseCShells();
+        CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
 
         // Assert - TestWebShellFeature is not enabled for any shell, so it should not be configured
         Assert.Equal(0, TestWebShellFeature.ConfigureCallCount);

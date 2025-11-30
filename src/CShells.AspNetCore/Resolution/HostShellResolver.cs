@@ -1,4 +1,6 @@
-namespace CShells.AspNetCore.Resolvers;
+using CShells.Resolution;
+
+namespace CShells.AspNetCore.Resolution;
 
 /// <summary>
 /// A shell resolver that determines the shell based on the host name.

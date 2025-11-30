@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace CShells;
+namespace CShells.Features;
 
 /// <summary>
 /// Provides static methods for discovering shell features from assemblies.

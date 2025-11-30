@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Resolution;
 
 /// <summary>
 /// Defines well-known keys for <see cref="ShellResolutionContext"/> data.

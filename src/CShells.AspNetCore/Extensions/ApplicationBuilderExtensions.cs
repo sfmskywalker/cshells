@@ -1,10 +1,14 @@
+using CShells.AspNetCore.Features;
+using CShells.AspNetCore.Middleware;
+using CShells.Features;
+using CShells.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for configuring CShells middleware in the ASP.NET Core pipeline.
@@ -15,7 +19,7 @@ public static class ApplicationBuilderExtensions
     private static bool _webShellFeaturesConfigured;
 
     // Lock object for thread-safe initialization of web shell features.
-    private static readonly object _configurationLock = new();
+    private static readonly Lock ConfigurationLock = new();
 
     /// <summary>
     /// Adds the CShells middleware to the application pipeline and configures all discovered
@@ -72,12 +76,13 @@ public static class ApplicationBuilderExtensions
     private static void ConfigureWebShellFeatures(IApplicationBuilder app)
     {
         // Fast path: skip if already configured
+        // ReSharper disable once InconsistentlySynchronizedField
         if (_webShellFeaturesConfigured)
             return;
 
-        lock (_configurationLock)
+        lock (ConfigurationLock)
         {
-            // Double-check after acquiring lock
+            // Double-check after acquiring lock.
             if (_webShellFeaturesConfigured)
                 return;
 
@@ -86,8 +91,7 @@ public static class ApplicationBuilderExtensions
             var rootProvider = app.ApplicationServices;
             var environment = rootProvider.GetService<IHostEnvironment>();
             var loggerFactory = rootProvider.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger(typeof(ApplicationBuilderExtensions))
-                ?? NullLogger.Instance;
+            var logger = loggerFactory?.CreateLogger(typeof(ApplicationBuilderExtensions)) ?? NullLogger.Instance;
 
             IEnumerable<ShellFeatureDescriptor> descriptors;
             try

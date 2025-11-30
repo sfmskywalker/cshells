@@ -1,4 +1,6 @@
 using CShells.AspNetCore;
+using CShells.DependencyInjection;
+using CShells.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.AspNetCore;
@@ -15,7 +17,7 @@ public class ServiceCollectionExtensionsTests
         var services = new ServiceCollection();
 
         // Act
-        services.AddCShellsAspNetCore();
+        CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
         var serviceProvider = services.BuildServiceProvider();
         var resolver = serviceProvider.GetService<IShellResolver>();
 
@@ -28,7 +30,7 @@ public class ServiceCollectionExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddCShellsAspNetCore();
+        CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
         var serviceProvider = services.BuildServiceProvider();
         var resolver = serviceProvider.GetRequiredService<IShellResolver>();
         var context = new ShellResolutionContext();
@@ -49,7 +51,7 @@ public class ServiceCollectionExtensionsTests
         services.AddSingleton<IShellResolver, CustomShellResolver>();
 
         // Act
-        services.AddCShellsAspNetCore();
+        CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
         var serviceProvider = services.BuildServiceProvider();
         var resolver = serviceProvider.GetRequiredService<IShellResolver>();
 
@@ -62,7 +64,7 @@ public class ServiceCollectionExtensionsTests
     {
         // Act & Assert
         IServiceCollection services = null!;
-        var ex = Assert.Throws<ArgumentNullException>(() => services.AddCShellsAspNetCore());
+        var ex = Assert.Throws<ArgumentNullException>(() => CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services));
         Assert.Equal("services", ex.ParamName);
     }
 
@@ -73,7 +75,7 @@ public class ServiceCollectionExtensionsTests
         var services = new ServiceCollection();
 
         // Act
-        var result = services.AddCShellsAspNetCore();
+        var result = CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
 
         // Assert
         Assert.Same(services, result);

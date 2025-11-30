@@ -1,3 +1,5 @@
+using CShells.Features;
+
 namespace CShells.Tests.Unit;
 
 public class ShellFeatureDescriptorTests

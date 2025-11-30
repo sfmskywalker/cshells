@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CShells.Configuration;
 using CShells.DependencyInjection;
+using CShells.Hosting;
 
 namespace CShells.Tests.Configuration
 {

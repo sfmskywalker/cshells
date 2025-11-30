@@ -1,3 +1,5 @@
+using CShells.DependencyInjection;
+using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.ShellHost;
@@ -104,13 +106,13 @@ public static class TestFixtures
     /// <summary>
     /// Creates a DefaultShellHost configured with the Weather feature for testing.
     /// </summary>
-    public static CShells.DefaultShellHost CreateDefaultHostWithWeatherFeature(List<CShells.DefaultShellHost> hostsToDispose)
+    public static Hosting.DefaultShellHost CreateDefaultHostWithWeatherFeature(List<Hosting.DefaultShellHost> hostsToDispose)
     {
         var assembly = typeof(TestFixtures).Assembly;
         var shellSettings = new ShellSettings(new("Default"), ["Weather"]);
         var (services, provider) = CreateRootServices();
         var accessor = CreateRootServicesAccessor(services);
-        var host = new CShells.DefaultShellHost([shellSettings], [assembly], provider, accessor);
+        var host = new Hosting.DefaultShellHost([shellSettings], [assembly], provider, accessor);
         hostsToDispose.Add(host);
         return host;
     }

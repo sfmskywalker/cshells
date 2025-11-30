@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using CShells.DependencyInjection;
+using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Default implementation of <see cref="IShellHost"/> that builds and caches per-shell

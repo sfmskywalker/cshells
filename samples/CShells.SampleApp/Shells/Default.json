@@ -2,7 +2,6 @@
   "name": "Default",
   "features": [
     "Core",
-    "DefaultTenant",
     "StripePayment",
     "EmailNotification"
   ]

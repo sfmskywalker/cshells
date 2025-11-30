@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Resolution;
 
 /// <summary>
 /// Defines a contract for resolving shell identifiers from a resolution context.

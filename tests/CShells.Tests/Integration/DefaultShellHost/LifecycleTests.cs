@@ -1,9 +1,10 @@
+using CShells.Hosting;
 using CShells.Tests.Integration.ShellHost;
 
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
-/// Tests for <see cref="CShells.DefaultShellHost"/> lifecycle operations (Dispose).
+/// Tests for <see cref="DefaultShellHost"/> lifecycle operations (Dispose).
 /// </summary>
 public class LifecycleTests
 {
@@ -17,7 +18,7 @@ public class LifecycleTests
         };
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new CShells.DefaultShellHost(settings, [], provider, accessor);
+        var host = new Hosting.DefaultShellHost(settings, [], provider, accessor);
         _ = host.GetShell(new("TestShell")); // Ensure the shell is built
 
         // Act

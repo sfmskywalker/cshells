@@ -1,7 +1,8 @@
+using CShells.Features;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Features;
 
 /// <summary>
 /// Extends <see cref="IShellFeature"/> with ASP.NET Core specific configuration.

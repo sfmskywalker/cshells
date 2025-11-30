@@ -1,4 +1,5 @@
 using CShells.AspNetCore;
+using CShells.AspNetCore.Features;
 using CShells.SampleApp.Features.Core;
 
 namespace CShells.SampleApp.Features.Notifications;

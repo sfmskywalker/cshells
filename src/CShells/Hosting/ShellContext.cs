@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Represents an initialized shell with its settings and service provider.

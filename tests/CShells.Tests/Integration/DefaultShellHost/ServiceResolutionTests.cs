@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using CShells.Features;
+using CShells.Hosting;
 using CShells.Tests.Integration.ShellHost;
 using CShells.Tests.TestHelpers;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,11 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
-/// Tests for <see cref="CShells.DefaultShellHost"/> service resolution and dependency injection.
+/// Tests for <see cref="DefaultShellHost"/> service resolution and dependency injection.
 /// </summary>
 public class ServiceResolutionTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {
@@ -21,11 +23,11 @@ public class ServiceResolutionTests : IDisposable
         }
     }
 
-    private CShells.DefaultShellHost CreateHost(ShellSettings[] settings, Assembly[] assemblies)
+    private Hosting.DefaultShellHost CreateHost(ShellSettings[] settings, Assembly[] assemblies)
     {
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new CShells.DefaultShellHost(settings, assemblies, provider, accessor);
+        var host = new Hosting.DefaultShellHost(settings, assemblies, provider, accessor);
         _hostsToDispose.Add(host);
         return host;
     }

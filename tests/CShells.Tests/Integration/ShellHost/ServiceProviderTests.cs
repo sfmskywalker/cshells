@@ -1,3 +1,4 @@
+using CShells.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.ShellHost;
@@ -7,7 +8,7 @@ namespace CShells.Tests.Integration.ShellHost;
 /// </summary>
 public class ServiceProviderTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {

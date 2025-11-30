@@ -1,11 +1,11 @@
 using System.Reflection;
 using CShells.Configuration;
-using CShells.DependencyInjection;
+using CShells.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
-namespace CShells
+namespace CShells.DependencyInjection
 {
     /// <summary>
     /// ServiceCollection extensions for registering CShells.

@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Factory for creating <see cref="IShellContextScope"/> instances.

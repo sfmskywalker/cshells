@@ -1,12 +1,11 @@
-namespace CShells.AspNetCore;
-
 using System.Reflection;
-using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
+using CShells.Resolution;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for configuring CShells in ASP.NET Core applications.

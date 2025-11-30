@@ -1,9 +1,10 @@
+using CShells.Hosting;
 using CShells.Tests.Integration.ShellHost;
 
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
-/// Tests for <see cref="CShells.DefaultShellHost"/> constructor validation.
+/// Tests for <see cref="DefaultShellHost"/> constructor validation.
 /// </summary>
 public class ConstructorTests
 {
@@ -15,7 +16,7 @@ public class ConstructorTests
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(null!, provider, accessor));
+        var ex = Assert.Throws<ArgumentNullException>(() => new Hosting.DefaultShellHost(null!, provider, accessor));
         Assert.Equal("shellSettings", ex.ParamName);
     }
 
@@ -29,7 +30,7 @@ public class ConstructorTests
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, nullAssemblies!, provider, accessor));
+        var ex = Assert.Throws<ArgumentNullException>(() => new Hosting.DefaultShellHost(settings, nullAssemblies!, provider, accessor));
         Assert.Equal("assemblies", ex.ParamName);
     }
 
@@ -42,7 +43,7 @@ public class ConstructorTests
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, [], null!, accessor));
+        var ex = Assert.Throws<ArgumentNullException>(() => new Hosting.DefaultShellHost(settings, [], null!, accessor));
         Assert.Equal("rootProvider", ex.ParamName);
     }
 
@@ -54,7 +55,7 @@ public class ConstructorTests
         var (_, provider) = TestFixtures.CreateRootServices();
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new CShells.DefaultShellHost(settings, [], provider, null!));
+        var ex = Assert.Throws<ArgumentNullException>(() => new Hosting.DefaultShellHost(settings, [], provider, null!));
         Assert.Equal("rootServicesAccessor", ex.ParamName);
     }
 }

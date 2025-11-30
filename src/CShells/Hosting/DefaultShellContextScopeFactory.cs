@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Default implementation of <see cref="IShellContextScopeFactory"/> that creates

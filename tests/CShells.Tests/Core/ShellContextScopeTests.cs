@@ -1,3 +1,4 @@
+using CShells.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Core;

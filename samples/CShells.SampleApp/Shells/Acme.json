@@ -2,7 +2,6 @@
   "name": "Acme",
   "features": [
     "Core",
-    "AcmeTenant",
     "PayPalPayment",
     "SmsNotification",
     "FraudDetection"

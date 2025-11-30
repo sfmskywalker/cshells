@@ -1,4 +1,6 @@
 using CShells.AspNetCore;
+using CShells.Hosting;
+using CShells.Resolution;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -16,7 +18,7 @@ public class ApplicationBuilderExtensionsTests
     {
         // Act & Assert
         IApplicationBuilder app = null!;
-        var ex = Assert.Throws<ArgumentNullException>(() => app.UseCShells());
+        var ex = Assert.Throws<ArgumentNullException>(() => CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app));
         Assert.Equal("app", ex.ParamName);
     }
 
@@ -31,7 +33,7 @@ public class ApplicationBuilderExtensionsTests
         var app = new TestApplicationBuilder(serviceProvider);
 
         // Act
-        var result = app.UseCShells();
+        var result = CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.UseCShells(app);
 
         // Assert
         Assert.Same(app, result);

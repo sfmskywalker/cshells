@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CShells;
+namespace CShells.DependencyInjection;
 
 /// <summary>
 /// Default implementation of <see cref="IRootServiceCollectionAccessor"/> that stores

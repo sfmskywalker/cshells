@@ -1,4 +1,6 @@
 using CShells.AspNetCore;
+using CShells.AspNetCore.Features;
+using CShells.Features;
 using CShells.SampleApp.Features.Core;
 
 namespace CShells.SampleApp.Features.FraudDetection;

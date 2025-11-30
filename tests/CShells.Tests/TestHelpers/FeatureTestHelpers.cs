@@ -1,3 +1,5 @@
+using CShells.Features;
+
 namespace CShells.Tests.TestHelpers;
 
 /// <summary>

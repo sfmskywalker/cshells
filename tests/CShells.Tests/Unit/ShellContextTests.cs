@@ -1,3 +1,5 @@
+using CShells.Hosting;
+
 namespace CShells.Tests.Unit;
 
 public class ShellContextTests

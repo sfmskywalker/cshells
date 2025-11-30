@@ -1,4 +1,6 @@
-namespace CShells.AspNetCore.Resolvers;
+using CShells.Resolution;
+
+namespace CShells.AspNetCore.Resolution;
 
 /// <summary>
 /// A resolver that always returns a fixed shell identifier.

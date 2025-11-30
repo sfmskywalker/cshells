@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Features;
 
 /// <summary>
 /// An attribute that defines a feature's metadata for shell startup classes.

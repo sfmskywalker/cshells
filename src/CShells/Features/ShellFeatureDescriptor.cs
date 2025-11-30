@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Features;
 
 /// <summary>
 /// Describes a shell feature including its identity, dependencies, metadata, and startup type.

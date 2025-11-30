@@ -1,6 +1,7 @@
-using CShells.AspNetCore.Resolvers;
+using CShells.AspNetCore.Resolution;
+using CShells.Resolution;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for <see cref="ShellResolutionBuilder"/> providing HTTP-specific resolution strategies.

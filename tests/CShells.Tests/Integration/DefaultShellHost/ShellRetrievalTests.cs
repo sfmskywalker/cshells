@@ -1,13 +1,14 @@
+using CShells.Hosting;
 using CShells.Tests.Integration.ShellHost;
 
 namespace CShells.Tests.Integration.DefaultShellHost;
 
 /// <summary>
-/// Tests for <see cref="CShells.DefaultShellHost"/> shell retrieval operations (GetShell, DefaultShell, AllShells).
+/// Tests for <see cref="DefaultShellHost"/> shell retrieval operations (GetShell, DefaultShell, AllShells).
 /// </summary>
 public class ShellRetrievalTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {
@@ -17,11 +18,11 @@ public class ShellRetrievalTests : IDisposable
         }
     }
 
-    private CShells.DefaultShellHost CreateHost(ShellSettings[] settings)
+    private Hosting.DefaultShellHost CreateHost(ShellSettings[] settings)
     {
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new CShells.DefaultShellHost(settings, [], provider, accessor);
+        var host = new Hosting.DefaultShellHost(settings, [], provider, accessor);
         _hostsToDispose.Add(host);
         return host;
     }

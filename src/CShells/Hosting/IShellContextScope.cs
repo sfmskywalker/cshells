@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Hosting;
 
 /// <summary>
 /// Represents a scoped service provider for a shell context.

@@ -1,6 +1,7 @@
+using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for converting <see cref="HttpContext"/> to <see cref="ShellResolutionContext"/>.

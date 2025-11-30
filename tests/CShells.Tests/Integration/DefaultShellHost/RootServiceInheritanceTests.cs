@@ -1,4 +1,7 @@
 using CShells;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Hosting;
 using CShells.Tests.Integration.ShellHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,7 +12,7 @@ namespace CShells.Tests.Integration.DefaultShellHost;
 /// </summary>
 public class RootServiceInheritanceTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {
@@ -108,13 +111,13 @@ public class RootServiceInheritanceTests : IDisposable
     /// <summary>
     /// Creates a <see cref="DefaultShellHost"/> with root service inheritance enabled.
     /// </summary>
-    private CShells.DefaultShellHost CreateHostWithRootServices(
+    private Hosting.DefaultShellHost CreateHostWithRootServices(
         IServiceCollection rootServices,
         IServiceProvider rootProvider,
         params ShellSettings[] shellSettings)
     {
         var accessor = TestFixtures.CreateRootServicesAccessor(rootServices);
-        var host = new CShells.DefaultShellHost(
+        var host = new Hosting.DefaultShellHost(
             shellSettings,
             [typeof(RootServiceInheritanceTests).Assembly],
             rootProvider,

@@ -1,3 +1,4 @@
+using CShells.Features;
 using CShells.Tests.TestHelpers;
 
 namespace CShells.Tests.Unit;

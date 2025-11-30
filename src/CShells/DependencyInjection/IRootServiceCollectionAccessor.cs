@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CShells;
+namespace CShells.DependencyInjection;
 
 /// <summary>
 /// Provides access to the root <see cref="IServiceCollection"/> used during application startup.

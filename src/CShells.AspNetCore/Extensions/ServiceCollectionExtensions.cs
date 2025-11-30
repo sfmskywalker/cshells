@@ -1,7 +1,8 @@
+using CShells.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace CShells.AspNetCore;
+namespace CShells.AspNetCore.Extensions;
 
 /// <summary>
 /// Extension methods for configuring CShells ASP.NET Core services.

@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Resolution;
 
 /// <summary>
 /// A builder for configuring shell resolution strategies in a protocol-agnostic way.

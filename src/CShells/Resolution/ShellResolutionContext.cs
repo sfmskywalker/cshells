@@ -1,4 +1,4 @@
-namespace CShells;
+namespace CShells.Resolution;
 
 /// <summary>
 /// Provides a protocol-agnostic context for resolving shell identifiers.

@@ -1,5 +1,7 @@
 using CShells.AspNetCore;
+using CShells.AspNetCore.Extensions;
 using CShells.Providers.FluentStorage;
+using CShells.Resolution;
 using FluentStorage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +31,7 @@ builder.AddCShells(cshells =>
     cshells.WithFluentStorageProvider(blobStorage);
     
     // Register shell resolution builder with path mappings
-    var resolutionBuilder = new CShells.ShellResolutionBuilder();
+    var resolutionBuilder = new ShellResolutionBuilder();
     resolutionBuilder.MapPath("", "Default");      // Default tenant - Basic tier
     resolutionBuilder.MapPath("acme", "Acme");      // Acme Corp - Premium tier
     resolutionBuilder.MapPath("contoso", "Contoso"); // Contoso Ltd - Enterprise tier

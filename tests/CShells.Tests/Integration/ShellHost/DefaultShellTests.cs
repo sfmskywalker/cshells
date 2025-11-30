@@ -5,7 +5,7 @@ namespace CShells.Tests.Integration.ShellHost;
 /// </summary>
 public class DefaultShellTests : IDisposable
 {
-    private readonly List<CShells.DefaultShellHost> _hostsToDispose = [];
+    private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
     public void Dispose()
     {
@@ -41,7 +41,7 @@ public class DefaultShellTests : IDisposable
         };
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new CShells.DefaultShellHost(shellSettings, [assembly], provider, accessor);
+        var host = new Hosting.DefaultShellHost(shellSettings, [assembly], provider, accessor);
         _hostsToDispose.Add(host);
 
         // Act
