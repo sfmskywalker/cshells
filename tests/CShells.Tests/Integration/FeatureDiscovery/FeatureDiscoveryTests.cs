@@ -10,7 +10,7 @@ public class FeatureDiscoveryTests
     public void DiscoverFeatures_WithNullAssemblies_ThrowsArgumentNullException()
     {
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => Features.FeatureDiscovery.DiscoverFeatures(null!).ToList());
+        var ex = Assert.Throws<ArgumentNullException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures(null!).ToList());
         Assert.Equal("assemblies", ex.ParamName);
     }
 
@@ -18,7 +18,7 @@ public class FeatureDiscoveryTests
     public void DiscoverFeatures_WithEmptyAssemblies_ReturnsEmptyCollection()
     {
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures([]);
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([]);
 
         // Assert
         Assert.Empty(features);
@@ -34,7 +34,7 @@ public class FeatureDiscoveryTests
         var assemblies = new Assembly?[] { null, validAssembly, null };
 
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures(assemblies!).ToList();
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures(assemblies!).ToList();
 
         // Assert
         Assert.Single(features);
@@ -50,7 +50,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
 
         // Assert
         var feature = features.FirstOrDefault(f => f.Id == "ValidTestFeature");
@@ -68,7 +68,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
 
         // Assert
         var feature = features.FirstOrDefault(f => f.Id == "FeatureWithDeps");
@@ -85,7 +85,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
 
         // Assert
         var feature = features.FirstOrDefault(f => f.Id == "FeatureWithMeta");
@@ -103,7 +103,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
+        var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
         Assert.Contains("does not implement IShellStartup", ex.Message);
     }
 
@@ -117,7 +117,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
+        var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
         Assert.Contains("Duplicate feature name", ex.Message);
         Assert.Contains("DuplicateFeatureName", ex.Message);
     }
@@ -132,7 +132,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act
-        var features = Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
 
         // Assert
         Assert.Equal(2, features.Count);
@@ -149,7 +149,7 @@ public class FeatureDiscoveryTests
         );
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
+        var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
         Assert.Contains("odd number of metadata elements", ex.Message);
         Assert.Contains("FeatureWithOddMetadata", ex.Message);
     }

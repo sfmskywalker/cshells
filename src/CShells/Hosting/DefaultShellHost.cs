@@ -37,6 +37,7 @@ public class DefaultShellHost : IShellHost, IDisposable
     private readonly IReadOnlyList<ShellSettings> _shellSettings;
     private readonly IServiceProvider _rootProvider;
     private readonly IServiceCollection _rootServices;
+    private readonly IShellFeatureFactory _featureFactory;
     private readonly ConcurrentDictionary<ShellId, ShellContext> _shellContexts = new();
     private readonly FeatureDependencyResolver _dependencyResolver = new();
     private readonly ILogger<DefaultShellHost> _logger;
@@ -72,14 +73,16 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// An accessor to the root <see cref="IServiceCollection"/>. Root service registrations
     /// are copied into each shell's service collection, enabling inheritance of root services.
     /// </param>
+    /// <param name="featureFactory">The factory used to create shell feature instances.</param>
     /// <param name="logger">Optional logger for diagnostic output.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/>, <paramref name="rootProvider"/>, or <paramref name="rootServicesAccessor"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/>, <paramref name="rootProvider"/>, <paramref name="rootServicesAccessor"/>, or <paramref name="featureFactory"/> is null.</exception>
     public DefaultShellHost(
         IEnumerable<ShellSettings> shellSettings,
         IServiceProvider rootProvider,
         IRootServiceCollectionAccessor rootServicesAccessor,
+        IShellFeatureFactory featureFactory,
         ILogger<DefaultShellHost>? logger = null)
-        : this(shellSettings, AppDomain.CurrentDomain.GetAssemblies(), rootProvider, rootServicesAccessor, logger)
+        : this(shellSettings, AppDomain.CurrentDomain.GetAssemblies(), rootProvider, rootServicesAccessor, featureFactory, logger)
     {
     }
 
@@ -96,23 +99,27 @@ public class DefaultShellHost : IShellHost, IDisposable
     /// An accessor to the root <see cref="IServiceCollection"/>. Root service registrations
     /// are copied into each shell's service collection, enabling inheritance of root services.
     /// </param>
+    /// <param name="featureFactory">The factory used to create shell feature instances.</param>
     /// <param name="logger">Optional logger for diagnostic output.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/>, <paramref name="assemblies"/>, <paramref name="rootProvider"/>, or <paramref name="rootServicesAccessor"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="shellSettings"/>, <paramref name="assemblies"/>, <paramref name="rootProvider"/>, <paramref name="rootServicesAccessor"/>, or <paramref name="featureFactory"/> is null.</exception>
     public DefaultShellHost(
         IEnumerable<ShellSettings> shellSettings,
         IEnumerable<Assembly> assemblies,
         IServiceProvider rootProvider,
         IRootServiceCollectionAccessor rootServicesAccessor,
+        IShellFeatureFactory featureFactory,
         ILogger<DefaultShellHost>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(shellSettings);
         ArgumentNullException.ThrowIfNull(assemblies);
         ArgumentNullException.ThrowIfNull(rootProvider);
         ArgumentNullException.ThrowIfNull(rootServicesAccessor);
-        
+        ArgumentNullException.ThrowIfNull(featureFactory);
+
         _shellSettings = shellSettings.ToList();
         _rootProvider = rootProvider;
         _rootServices = rootServicesAccessor.Services;
+        _featureFactory = featureFactory;
         _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
 
         // Discover all features from specified assemblies
@@ -451,30 +458,18 @@ public class DefaultShellHost : IShellHost, IDisposable
     }
 
     /// <summary>
-    /// Creates an instance of the specified feature type using the root provider.
+    /// Creates an instance of the specified feature type using the feature factory.
     /// </summary>
     /// <param name="featureType">The feature type to instantiate.</param>
     /// <param name="shellSettings">The shell settings to pass as an explicit parameter.</param>
     /// <returns>The instantiated feature.</returns>
     /// <remarks>
-    /// Uses ActivatorUtilities.CreateInstance with the root provider to instantiate
-    /// the feature. ShellSettings is passed as an explicit parameter only if the constructor accepts it.
+    /// Uses the <see cref="IShellFeatureFactory"/> to instantiate the feature with proper
+    /// dependency injection and automatic ShellSettings parameter handling.
     /// </remarks>
     private IShellFeature CreateFeatureInstance(Type featureType, ShellSettings shellSettings)
     {
-        // Check if any constructor accepts ShellSettings as a parameter
-        var hasShellSettingsParameter = featureType.GetConstructors()
-            .SelectMany(c => c.GetParameters())
-            .Any(p => p.ParameterType == typeof(ShellSettings));
-
-        if (hasShellSettingsParameter)
-        {
-            // Pass ShellSettings as explicit parameter - ActivatorUtilities will match it to the constructor parameter
-            return (IShellFeature)ActivatorUtilities.CreateInstance(_rootProvider, featureType, shellSettings);
-        }
-
-        // No constructor accepts ShellSettings, create without explicit parameters
-        return (IShellFeature)ActivatorUtilities.CreateInstance(_rootProvider, featureType);
+        return _featureFactory.CreateFeature<IShellFeature>(featureType, shellSettings);
     }
 
     /// <summary>

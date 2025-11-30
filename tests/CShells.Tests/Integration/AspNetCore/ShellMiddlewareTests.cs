@@ -208,32 +208,23 @@ public class ShellMiddlewareTests
         public ShellId? Resolve(ShellResolutionContext context) => null;
     }
 
-    private class FixedShellResolver : IShellResolver
+    private class FixedShellResolver(ShellId shellId) : IShellResolver
     {
-        private readonly ShellId _shellId;
-        public FixedShellResolver(ShellId shellId) => _shellId = shellId;
-        public ShellId? Resolve(ShellResolutionContext context) => _shellId;
+        public ShellId? Resolve(ShellResolutionContext context) => shellId;
     }
 
-    private class TestShellHost : IShellHost
+    private class TestShellHost(ShellContext? shellContext = null) : IShellHost
     {
-        private readonly ShellContext? _shellContext;
-
-        public TestShellHost(ShellContext? shellContext = null)
-        {
-            _shellContext = shellContext;
-        }
-
-        public ShellContext DefaultShell => _shellContext ?? throw new InvalidOperationException("No shell configured");
-        public IReadOnlyCollection<ShellContext> AllShells => _shellContext != null ? [_shellContext] : [];
+        public ShellContext DefaultShell => shellContext ?? throw new InvalidOperationException("No shell configured");
+        public IReadOnlyCollection<ShellContext> AllShells => shellContext != null ? [shellContext] : [];
 
         public ShellContext GetShell(ShellId id)
         {
-            if (_shellContext == null)
+            if (shellContext == null)
             {
                 throw new KeyNotFoundException($"Shell '{id}' not found");
             }
-            return _shellContext;
+            return shellContext;
         }
     }
 }

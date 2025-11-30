@@ -3,9 +3,9 @@ using CShells.Resolution;
 namespace CShells.AspNetCore.Resolution;
 
 /// <summary>
-/// A shell resolver that determines the shell based on the host name.
+/// A shell resolver strategy that determines the shell based on the host name.
 /// </summary>
-public class HostShellResolver : IShellResolver
+public class HostShellResolver : IShellResolverStrategy
 {
     private readonly Dictionary<string, ShellId> _hostMap;
 

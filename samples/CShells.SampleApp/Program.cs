@@ -35,7 +35,10 @@ builder.AddCShells(cshells =>
     resolutionBuilder.MapPath("", "Default");      // Default tenant - Basic tier
     resolutionBuilder.MapPath("acme", "Acme");      // Acme Corp - Premium tier
     resolutionBuilder.MapPath("contoso", "Contoso"); // Contoso Ltd - Enterprise tier
-    cshells.Services.AddSingleton(resolutionBuilder.Build());
+    var strategies = resolutionBuilder.GetStrategies();
+    foreach (var strategy in strategies)
+        cshells.Services.AddSingleton(strategy);
+    
 }, assemblies: [typeof(Program).Assembly]);
 
 builder.Services.AddEndpointsApiExplorer();

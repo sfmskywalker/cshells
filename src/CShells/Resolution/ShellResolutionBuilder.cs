@@ -1,3 +1,5 @@
+using System.Collections;
+
 namespace CShells.Resolution;
 
 /// <summary>
@@ -5,31 +7,31 @@ namespace CShells.Resolution;
 /// </summary>
 public class ShellResolutionBuilder
 {
-    private readonly List<IShellResolver> _resolvers = [];
+    private readonly List<IShellResolverStrategy> _strategies = [];
     private readonly Dictionary<string, object> _properties = [];
     private readonly List<Action<ShellResolutionBuilder>> _finalizers = [];
 
     /// <summary>
-    /// Adds a custom shell resolver to the resolution pipeline.
+    /// Adds a custom shell resolver strategy to the resolution pipeline.
     /// </summary>
-    /// <param name="resolver">The resolver to add.</param>
+    /// <param name="strategy">The strategy to add.</param>
     /// <returns>The builder for method chaining.</returns>
-    public ShellResolutionBuilder AddResolver(IShellResolver resolver)
+    public ShellResolutionBuilder AddStrategy(IShellResolverStrategy strategy)
     {
-        ArgumentNullException.ThrowIfNull(resolver);
-        _resolvers.Add(resolver);
+        ArgumentNullException.ThrowIfNull(strategy);
+        _strategies.Add(strategy);
         return this;
     }
 
     /// <summary>
-    /// Adds a custom shell resolver to the resolution pipeline using a factory function.
+    /// Adds a custom shell resolver strategy to the resolution pipeline using a factory function.
     /// </summary>
-    /// <param name="resolverFactory">A function that creates the resolver.</param>
+    /// <param name="strategyFactory">A function that creates the strategy.</param>
     /// <returns>The builder for method chaining.</returns>
-    public ShellResolutionBuilder AddResolver(Func<IShellResolver> resolverFactory)
+    public ShellResolutionBuilder AddStrategy(Func<IShellResolverStrategy> strategyFactory)
     {
-        ArgumentNullException.ThrowIfNull(resolverFactory);
-        _resolvers.Add(resolverFactory());
+        ArgumentNullException.ThrowIfNull(strategyFactory);
+        _strategies.Add(strategyFactory());
         return this;
     }
 
@@ -100,57 +102,20 @@ public class ShellResolutionBuilder
     }
 
     /// <summary>
-    /// Builds the final composite shell resolver from all configured resolvers.
+    /// Gets all configured strategies.
     /// </summary>
-    /// <returns>An <see cref="IShellResolver"/> that evaluates all configured resolvers in order.</returns>
-    public IShellResolver Build()
+    /// <returns>A read-only collection of all configured strategies.</returns>
+    public IReadOnlyList<IShellResolverStrategy> GetStrategies()
     {
-        // Run all finalizers before building
+        // Run all finalizers before returning strategies
         foreach (var finalizer in _finalizers)
         {
             finalizer(this);
         }
 
-        if (_resolvers.Count == 0)
-        {
-            throw new InvalidOperationException("No resolvers have been configured. Add at least one resolver before building.");
-        }
+        // Clear finalizers so they don't run again
+        _finalizers.Clear();
 
-        if (_resolvers.Count == 1)
-        {
-            return _resolvers[0];
-        }
-
-        return new CompositeShellResolver(_resolvers.ToArray());
-    }
-
-    /// <summary>
-    /// A composite shell resolver that tries multiple <see cref="IShellResolver"/> instances in order
-    /// and returns the first non-null <see cref="ShellId"/>.
-    /// </summary>
-    private sealed class CompositeShellResolver : IShellResolver
-    {
-        private readonly IReadOnlyList<IShellResolver> _resolvers;
-
-        public CompositeShellResolver(IShellResolver[] resolvers)
-        {
-            _resolvers = resolvers;
-        }
-
-        public ShellId? Resolve(ShellResolutionContext context)
-        {
-            ArgumentNullException.ThrowIfNull(context);
-
-            foreach (var resolver in _resolvers)
-            {
-                var shellId = resolver.Resolve(context);
-                if (shellId.HasValue)
-                {
-                    return shellId;
-                }
-            }
-
-            return null;
-        }
+        return _strategies.AsReadOnly();
     }
 }

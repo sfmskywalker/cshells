@@ -27,7 +27,8 @@ public class ServiceResolutionTests : IDisposable
     {
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new Hosting.DefaultShellHost(settings, assemblies, provider, accessor);
+        var factory = new CShells.Features.DefaultShellFeatureFactory(provider);
+        var host = new Hosting.DefaultShellHost(settings, assemblies, provider, accessor, factory);
         _hostsToDispose.Add(host);
         return host;
     }
@@ -181,13 +182,9 @@ public class ServiceResolutionTests : IDisposable
     {
         ShellId ShellId { get; }
     }
-    public class SettingsAwareService : ISettingsAwareService
+    public class SettingsAwareService(ShellId shellId) : ISettingsAwareService
     {
-        public SettingsAwareService(ShellId shellId)
-        {
-            ShellId = shellId;
-        }
-        public ShellId ShellId { get; }
+        public ShellId ShellId { get; } = shellId;
     }
 
     private static Assembly CreateTestAssemblyWithService(Type serviceInterface, Type serviceImplementation, string featureName)

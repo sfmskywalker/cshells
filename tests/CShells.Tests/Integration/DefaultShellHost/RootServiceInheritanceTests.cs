@@ -117,11 +117,13 @@ public class RootServiceInheritanceTests : IDisposable
         params ShellSettings[] shellSettings)
     {
         var accessor = TestFixtures.CreateRootServicesAccessor(rootServices);
+        var factory = new CShells.Features.DefaultShellFeatureFactory(rootProvider);
         var host = new Hosting.DefaultShellHost(
             shellSettings,
             [typeof(RootServiceInheritanceTests).Assembly],
             rootProvider,
-            accessor);
+            accessor,
+            factory);
         _hostsToDispose.Add(host);
         return host;
     }

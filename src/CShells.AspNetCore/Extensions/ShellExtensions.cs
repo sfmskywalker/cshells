@@ -96,13 +96,16 @@ public static class ShellExtensions
             ArgumentNullException.ThrowIfNull(configureResolvers);
             ArgumentException.ThrowIfNullOrEmpty(sectionName);
 
-            // Build the custom resolver
+            // Build the custom strategies
             var resolutionBuilder = new ShellResolutionBuilder();
             configureResolvers(resolutionBuilder);
 
-            // Register the resolver BEFORE ConfigureCoreAndAspNetCore so it takes precedence
-            // and prevents the default resolver from being added (via TryAddSingleton).
-            builder.Services.AddSingleton(resolutionBuilder.Build());
+            // Register all strategies from the builder
+            var strategies = resolutionBuilder.GetStrategies();
+            foreach (var strategy in strategies)
+            {
+                builder.Services.AddSingleton<IShellResolverStrategy>(strategy);
+            }
 
             ConfigureCoreAndAspNetCore(builder, sectionName, assemblies);
 

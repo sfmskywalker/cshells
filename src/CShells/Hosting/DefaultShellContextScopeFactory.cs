@@ -15,18 +15,12 @@ public class DefaultShellContextScopeFactory : IShellContextScopeFactory
         return new DefaultShellContextScope(shellContext);
     }
 
-    private sealed class DefaultShellContextScope : IShellContextScope
+    private sealed class DefaultShellContextScope(ShellContext shellContext) : IShellContextScope
     {
-        private readonly IServiceScope _serviceScope;
+        private readonly IServiceScope _serviceScope = shellContext.ServiceProvider.CreateScope();
         private bool _disposed;
 
-        public DefaultShellContextScope(ShellContext shellContext)
-        {
-            ShellContext = shellContext;
-            _serviceScope = shellContext.ServiceProvider.CreateScope();
-        }
-
-        public ShellContext ShellContext { get; }
+        public ShellContext ShellContext { get; } = shellContext;
 
         public IServiceProvider ServiceProvider => _serviceScope.ServiceProvider;
 

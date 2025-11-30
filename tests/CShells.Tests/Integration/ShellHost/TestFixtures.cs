@@ -112,7 +112,8 @@ public static class TestFixtures
         var shellSettings = new ShellSettings(new("Default"), ["Weather"]);
         var (services, provider) = CreateRootServices();
         var accessor = CreateRootServicesAccessor(services);
-        var host = new Hosting.DefaultShellHost([shellSettings], [assembly], provider, accessor);
+        var factory = new CShells.Features.DefaultShellFeatureFactory(provider);
+        var host = new Hosting.DefaultShellHost([shellSettings], [assembly], provider, accessor, factory);
         hostsToDispose.Add(host);
         return host;
     }
@@ -120,14 +121,9 @@ public static class TestFixtures
     /// <summary>
     /// Test implementation of <see cref="IRootServiceCollectionAccessor"/>.
     /// </summary>
-    private sealed class TestRootServiceCollectionAccessor : IRootServiceCollectionAccessor
+    private sealed class TestRootServiceCollectionAccessor(IServiceCollection services) : IRootServiceCollectionAccessor
     {
-        public TestRootServiceCollectionAccessor(IServiceCollection services)
-        {
-            Services = services;
-        }
-
-        public IServiceCollection Services { get; }
+        public IServiceCollection Services { get; } = services;
     }
 
     #endregion

@@ -5,20 +5,13 @@ namespace CShells.SampleApp.Features.PaymentProcessing;
 /// <summary>
 /// Stripe payment processor implementation.
 /// </summary>
-public class StripePaymentProcessor : IPaymentProcessor
+public class StripePaymentProcessor(IAuditLogger logger) : IPaymentProcessor
 {
-    private readonly IAuditLogger _logger;
-
-    public StripePaymentProcessor(IAuditLogger logger)
-    {
-        _logger = logger;
-    }
-
     public string ProcessorName => "Stripe";
 
     public PaymentResult ProcessPayment(decimal amount, string currency)
     {
-        _logger.LogInfo($"Processing ${amount} {currency} payment via Stripe");
+        logger.LogInfo($"Processing ${amount} {currency} payment via Stripe");
 
         // Simulate payment processing
         var transactionId = $"stripe_{Guid.NewGuid():N}";

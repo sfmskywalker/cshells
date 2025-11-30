@@ -1,7 +1,9 @@
 using CShells.AspNetCore.Features;
 using CShells.AspNetCore.Middleware;
+using CShells.AspNetCore.Resolution;
 using CShells.Features;
 using CShells.Hosting;
+using CShells.Resolution;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -92,6 +94,7 @@ public static class ApplicationBuilderExtensions
             var environment = rootProvider.GetService<IHostEnvironment>();
             var loggerFactory = rootProvider.GetService<ILoggerFactory>();
             var logger = loggerFactory?.CreateLogger(typeof(ApplicationBuilderExtensions)) ?? NullLogger.Instance;
+            var featureFactory = rootProvider.GetRequiredService<IShellFeatureFactory>();
 
             IEnumerable<ShellFeatureDescriptor> descriptors;
             try
@@ -113,6 +116,9 @@ public static class ApplicationBuilderExtensions
             // Get enabled features from all shells to only configure web features that are actually used
             var (enabledFeatureIds, shouldFilterFeatures) = GetEnabledFeatureIds(rootProvider, logger);
 
+            // Get path mappings from the registered shell resolver strategies to support automatic sub-path configuration
+            var pathMappings = GetPathMappings(rootProvider);
+
             // Filter and partition web shell features in a single pass
             var webShellFeatureDescriptors = descriptors
                 .Where(d => d.StartupType is not null && typeof(IWebShellFeature).IsAssignableFrom(d.StartupType))
@@ -130,13 +136,49 @@ public static class ApplicationBuilderExtensions
 
                 try
                 {
-                    // Instantiate using root provider (feature can depend on root-level services)
-                    var feature = (IWebShellFeature)ActivatorUtilities.CreateInstance(rootProvider, descriptor.StartupType!);
+                    // Configure the feature for shells mapped to specific paths.
+                    // This automatically maps endpoints like "/fraud-check" to "/tenant1/fraud-check".
+                    if (pathMappings.Count > 0)
+                    {
+                        foreach (var (path, shellId) in pathMappings)
+                        {
+                            // Only configure if the feature is enabled for this specific shell
+                            if (IsFeatureEnabledForShell(rootProvider, shellId, descriptor.Id))
+                            {
+                                // Get the shell settings for this specific shell
+                                var shellSettings = GetShellSettings(rootProvider, shellId);
 
-                    // Configure the application pipeline for this web feature.
-                    // Note: environment may be null if IHostEnvironment is not registered;
-                    // features must handle null environments gracefully.
-                    feature.Configure(app, environment);
+                                // Instantiate feature with the specific shell's settings
+                                var feature = featureFactory.CreateFeature<IWebShellFeature>(descriptor.StartupType!, shellSettings);
+
+                                var p = string.IsNullOrEmpty(path) ? "" : "/" + path;
+                                app.Map(p, branch => feature.Configure(branch, environment));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // No path mappings configured - configure globally for each shell that has the feature enabled
+                        var shellHost = rootProvider.GetService<IShellHost>();
+                        if (shellHost != null)
+                        {
+                            foreach (var shell in shellHost.AllShells)
+                            {
+                                if (shell.Settings.EnabledFeatures.Contains(descriptor.Id, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    // Instantiate feature with the specific shell's settings
+                                    var feature = featureFactory.CreateFeature<IWebShellFeature>(descriptor.StartupType!, shell.Settings);
+                                    feature.Configure(app, environment);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Fallback: No shell host - instantiate without shell settings
+                            var feature = featureFactory.CreateFeature<IWebShellFeature>(descriptor.StartupType!, shellSettings: null);
+                            feature.Configure(app, environment);
+                        }
+                    }
 
                     logger.LogDebug("Configured web shell feature '{FeatureId}' from type '{FeatureType}'",
                         descriptor.Id, descriptor.StartupType!.FullName);
@@ -149,6 +191,45 @@ public static class ApplicationBuilderExtensions
                 }
             }
         }
+    }
+
+    private static Dictionary<string, ShellId> GetPathMappings(IServiceProvider serviceProvider)
+    {
+        var mappings = new Dictionary<string, ShellId>(StringComparer.OrdinalIgnoreCase);
+
+        // Get all registered resolver strategies
+        var strategies = serviceProvider.GetServices<IShellResolverStrategy>();
+
+        foreach (var strategy in strategies)
+        {
+            if (strategy is PathShellResolver pathResolver)
+            {
+                foreach (var (path, shellId) in pathResolver.PathMap)
+                {
+                    mappings[path] = shellId;
+                }
+            }
+        }
+
+        return mappings;
+    }
+
+    private static bool IsFeatureEnabledForShell(IServiceProvider rootProvider, ShellId shellId, string featureId)
+    {
+        var shellHost = rootProvider.GetService<IShellHost>();
+        if (shellHost is null) return true; // Safe fallback
+
+        var shell = shellHost.AllShells.FirstOrDefault(s => s.Id == shellId);
+        return shell?.Settings.EnabledFeatures.Contains(featureId, StringComparer.OrdinalIgnoreCase) ?? false;
+    }
+
+    private static ShellSettings? GetShellSettings(IServiceProvider rootProvider, ShellId shellId)
+    {
+        var shellHost = rootProvider.GetService<IShellHost>();
+        if (shellHost is null) return null;
+
+        var shell = shellHost.AllShells.FirstOrDefault(s => s.Id == shellId);
+        return shell?.Settings;
     }
 
     /// <summary>

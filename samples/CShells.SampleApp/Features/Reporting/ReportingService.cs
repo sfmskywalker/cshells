@@ -5,20 +5,11 @@ namespace CShells.SampleApp.Features.Reporting;
 /// <summary>
 /// Reporting service implementation.
 /// </summary>
-public class ReportingService : IReportingService
+public class ReportingService(IAuditLogger logger, ITenantInfo tenantInfo) : IReportingService
 {
-    private readonly IAuditLogger _logger;
-    private readonly ITenantInfo _tenantInfo;
-
-    public ReportingService(IAuditLogger logger, ITenantInfo tenantInfo)
-    {
-        _logger = logger;
-        _tenantInfo = tenantInfo;
-    }
-
     public TransactionReport GenerateTransactionReport(DateTime startDate, DateTime endDate)
     {
-        _logger.LogInfo($"Generating transaction report for {_tenantInfo.TenantName} from {startDate:d} to {endDate:d}");
+        logger.LogInfo($"Generating transaction report for {tenantInfo.TenantName} from {startDate:d} to {endDate:d}");
 
         // Simulate report generation with mock data
         var random = new Random();

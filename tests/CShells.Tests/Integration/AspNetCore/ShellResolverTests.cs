@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 namespace CShells.Tests.Integration.AspNetCore;
 
 /// <summary>
-/// Consolidated tests for all <see cref="IShellResolver"/> implementations.
+/// Consolidated tests for all <see cref="IShellResolverStrategy"/> implementations.
 /// </summary>
 public class ShellResolverTests
 {
@@ -16,7 +16,7 @@ public class ShellResolverTests
     private const string Tenant2Path = "tenant2";
     private const string Localhost = "localhost";
 
-    public static TheoryData<IShellResolver, ShellResolutionContext, ShellId?, string> ResolverTestCases => new()
+    public static TheoryData<IShellResolverStrategy, ShellResolutionContext, ShellId?, string> ResolverTestCases => new()
     {
         // HostShellResolver - matching hosts
         { CreateHostResolver(), CreateResolutionContext(Tenant1Host), new ShellId("Tenant1Shell"), "HostResolver with matching host" },
@@ -42,13 +42,13 @@ public class ShellResolverTests
     [Theory(DisplayName = "Resolve with various inputs returns expected result")]
     [MemberData(nameof(ResolverTestCases))]
     public void Resolve_WithVariousInputs_ReturnsExpectedResult(
-        IShellResolver resolver,
+        IShellResolverStrategy strategy,
         ShellResolutionContext context,
         ShellId? expectedShellId,
         string scenario)
     {
         // Act
-        var result = resolver.Resolve(context);
+        var result = strategy.Resolve(context);
 
         // Assert
         Assert.Equal(expectedShellId, result);
@@ -98,10 +98,10 @@ public class ShellResolverTests
         [Tenant2Path] = new("Tenant2Shell")
     });
 
-    private static IShellResolver CreateResolverInstance(Type resolverType)
+    private static IShellResolverStrategy CreateResolverInstance(Type resolverType)
     {
         var emptyMap = new Dictionary<string, ShellId>();
-        return (IShellResolver)Activator.CreateInstance(resolverType, emptyMap)!;
+        return (IShellResolverStrategy)Activator.CreateInstance(resolverType, emptyMap)!;
     }
 
     private static ShellResolutionContext CreateResolutionContext(string? host = null, string? path = null)

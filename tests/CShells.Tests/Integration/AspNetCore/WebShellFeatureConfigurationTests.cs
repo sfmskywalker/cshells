@@ -1,4 +1,3 @@
-using CShells.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -65,6 +64,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         // Create a shell that enables the TestWebShellFeature
         var shellSettings = new ShellSettings(new("Default"), ["TestWebShellFeature"]);
         services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
@@ -94,6 +94,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         // Create a shell that enables the TestWebShellFeature
         var shellSettings = new ShellSettings(new("Default"), ["TestWebShellFeature"]);
         services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
@@ -129,6 +130,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         // Create a shell that enables the ordered features
         var shellSettings = new ShellSettings(new("Default"),
             ["AAA_OrderedFeature", "BBB_OrderedFeature", "CCC_OrderedFeature"]);
@@ -163,6 +165,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         // Create a shell that enables only the NonWebShellFeature (which is not a web feature)
         var shellSettings = new ShellSettings(new("Default"), ["NonWebShellFeature"]);
         services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
@@ -189,6 +192,7 @@ public class WebShellFeatureConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         // Create a shell that does NOT enable TestWebShellFeature
         var shellSettings = new ShellSettings(new("Default"), ["SomeOtherFeature"]);
         services.AddSingleton<IShellHost>(new TestShellHost(shellSettings));
@@ -245,16 +249,11 @@ public class WebShellFeatureConfigurationTests : IDisposable
         public IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 
-    private class TestApplicationBuilder : IApplicationBuilder
+    private class TestApplicationBuilder(IServiceProvider serviceProvider) : IApplicationBuilder
     {
         private readonly List<Func<RequestDelegate, RequestDelegate>> _components = [];
 
-        public TestApplicationBuilder(IServiceProvider serviceProvider)
-        {
-            ApplicationServices = serviceProvider;
-        }
-
-        public IServiceProvider ApplicationServices { get; set; }
+        public IServiceProvider ApplicationServices { get; set; } = serviceProvider;
         public IDictionary<string, object?> Properties { get; } = new Dictionary<string, object?>();
         public IFeatureCollection ServerFeatures => new FeatureCollection();
 

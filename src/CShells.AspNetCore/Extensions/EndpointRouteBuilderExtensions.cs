@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
@@ -6,6 +7,7 @@ namespace CShells.AspNetCore.Extensions;
 /// <summary>
 /// Extension methods for <see cref="IEndpointRouteBuilder"/> to support shell-prefixed routing.
 /// </summary>
+[UsedImplicitly]
 public static class EndpointRouteBuilderExtensions
 {
     /// <param name="endpoints">The endpoint route builder.</param>

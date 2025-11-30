@@ -11,8 +11,8 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Adds CShells ASP.NET Core integration services to the service collection.
-    /// Registers a default <see cref="IShellResolver"/> that returns a shell with Id "Default"
-    /// if no custom resolver has been registered.
+    /// Registers the <see cref="IShellResolver"/> orchestrator and a default fallback strategy
+    /// if no custom strategies have been registered.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
@@ -20,17 +20,13 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // TryAddSingleton only adds if no IShellResolver is already registered
+        // Register the default orchestrator (only if not already registered)
         services.TryAddSingleton<IShellResolver, DefaultShellResolver>();
 
-        return services;
-    }
+        // Register default fallback strategy (only if no strategies are registered)
+        // This uses TryAddEnumerable to avoid duplicates
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellResolverStrategy, DefaultShellResolverStrategy>());
 
-    /// <summary>
-    /// Default shell resolver that always returns a shell with Id "Default".
-    /// </summary>
-    private sealed class DefaultShellResolver : IShellResolver
-    {
-        public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Default");
+        return services;
     }
 }

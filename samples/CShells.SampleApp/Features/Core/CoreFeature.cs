@@ -8,12 +8,18 @@ namespace CShells.SampleApp.Features.Core;
 /// Core feature that registers fundamental services and exposes tenant information endpoint.
 /// </summary>
 [ShellFeature("Core", DisplayName = "Core Services")]
-public class CoreFeature : IWebShellFeature
+public class CoreFeature(ShellSettings shellSettings) : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IAuditLogger, AuditLogger>();
         services.AddSingleton<ITimeService, TimeService>();
+        services.AddSingleton<ITenantInfo>(new TenantInfo
+        {
+            TenantId = shellSettings.Id.ToString(),
+            TenantName = shellSettings.Id.ToString(),
+            Tier = ""
+        });
     }
 
     public void Configure(IApplicationBuilder app, IHostEnvironment? environment)

@@ -5,18 +5,11 @@ namespace CShells.SampleApp.Features.FraudDetection;
 /// <summary>
 /// Fraud detection service implementation.
 /// </summary>
-public class FraudDetectionService : IFraudDetectionService
+public class FraudDetectionService(IAuditLogger logger) : IFraudDetectionService
 {
-    private readonly IAuditLogger _logger;
-
-    public FraudDetectionService(IAuditLogger logger)
-    {
-        _logger = logger;
-    }
-
     public FraudAnalysisResult AnalyzeTransaction(decimal amount, string currency, string ipAddress)
     {
-        _logger.LogInfo($"Analyzing transaction: ${amount} {currency} from {ipAddress}");
+        logger.LogInfo($"Analyzing transaction: ${amount} {currency} from {ipAddress}");
 
         // Simulate fraud detection logic
         var flags = new List<string>();

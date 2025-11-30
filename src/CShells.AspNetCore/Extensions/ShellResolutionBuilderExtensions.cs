@@ -107,7 +107,7 @@ public static class ShellResolutionBuilderExtensions
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentException.ThrowIfNullOrEmpty(shellId);
 
-            return builder.AddResolver(new FixedShellResolver(new(shellId)));
+            return builder.AddStrategy(new FixedShellResolver(new(shellId)));
         }
     }
 
@@ -126,22 +126,22 @@ public static class ShellResolutionBuilderExtensions
     }
 
     /// <summary>
-    /// Finalizes HTTP-specific mappings and adds them as resolvers.
-    /// This method is automatically called by Build() via the finalizer.
+    /// Finalizes HTTP-specific mappings and adds them as strategies.
+    /// This method is automatically called by GetStrategies() via the finalizer.
     /// </summary>
     private static void FinalizeHttpResolvers(ShellResolutionBuilder builder)
     {
         // Add host resolver if there are host mappings
         if (builder.TryGetProperty<Dictionary<string, ShellId>>(HostMappingsKey, out var hostMappings) && hostMappings is not null && hostMappings.Count > 0)
         {
-            builder.AddResolver(new HostShellResolver(hostMappings));
+            builder.AddStrategy(new HostShellResolver(hostMappings));
             builder.RemoveProperty(HostMappingsKey);
         }
 
         // Add path resolver if there are path mappings
         if (builder.TryGetProperty<Dictionary<string, ShellId>>(PathMappingsKey, out var pathMappings) && pathMappings is not null && pathMappings.Count > 0)
         {
-            builder.AddResolver(new PathShellResolver(pathMappings));
+            builder.AddStrategy(new PathShellResolver(pathMappings));
             builder.RemoveProperty(PathMappingsKey);
         }
     }

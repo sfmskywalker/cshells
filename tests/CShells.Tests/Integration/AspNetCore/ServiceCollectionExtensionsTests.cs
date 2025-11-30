@@ -81,8 +81,57 @@ public class ServiceCollectionExtensionsTests
         Assert.Same(services, result);
     }
 
+    [Fact(DisplayName = "AddCShellsAspNetCore registers multiple strategies")]
+    public void AddCShellsAspNetCore_RegistersMultipleStrategies()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddSingleton<IShellResolverStrategy, CustomStrategy>();
+
+        // Act
+        CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
+        var serviceProvider = services.BuildServiceProvider();
+        var strategies = serviceProvider.GetServices<IShellResolverStrategy>().ToList();
+
+        // Assert - should have both custom and default strategies
+        Assert.Equal(2, strategies.Count);
+        Assert.Contains(strategies, s => s is CustomStrategy);
+        Assert.Contains(strategies, s => s is DefaultShellResolverStrategy);
+    }
+
+    [Fact(DisplayName = "DefaultShellResolver orchestrates multiple strategies in order")]
+    public void DefaultShellResolver_OrchestatesStrategiesInOrder()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddSingleton<IShellResolverStrategy, NullStrategy>(); // Returns null
+        services.AddSingleton<IShellResolverStrategy, CustomStrategy>(); // Returns "Custom"
+        CShells.AspNetCore.Extensions.ServiceCollectionExtensions.AddCShellsAspNetCore(services);
+
+        var serviceProvider = services.BuildServiceProvider();
+        var resolver = serviceProvider.GetRequiredService<IShellResolver>();
+        var context = new ShellResolutionContext();
+
+        // Act
+        var result = resolver.Resolve(context);
+
+        // Assert - should resolve "Custom" since NullStrategy returns null first
+        Assert.NotNull(result);
+        Assert.Equal(new("Custom"), result.Value);
+    }
+
     private class CustomShellResolver : IShellResolver
     {
         public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Custom");
+    }
+
+    private class CustomStrategy : IShellResolverStrategy
+    {
+        public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Custom");
+    }
+
+    private class NullStrategy : IShellResolverStrategy
+    {
+        public ShellId? Resolve(ShellResolutionContext context) => null;
     }
 }

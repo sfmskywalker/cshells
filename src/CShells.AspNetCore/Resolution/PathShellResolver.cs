@@ -3,11 +3,16 @@ using CShells.Resolution;
 namespace CShells.AspNetCore.Resolution;
 
 /// <summary>
-/// A shell resolver that determines the shell based on the first segment of the request URL path.
+/// A shell resolver strategy that determines the shell based on the first segment of the request URL path.
 /// </summary>
-public class PathShellResolver : IShellResolver
+public class PathShellResolver : IShellResolverStrategy
 {
     private readonly Dictionary<string, ShellId> _pathMap;
+
+    /// <summary>
+    /// Gets the dictionary mapping path segment names to shell identifiers.
+    /// </summary>
+    public IReadOnlyDictionary<string, ShellId> PathMap => _pathMap;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PathShellResolver"/> class.

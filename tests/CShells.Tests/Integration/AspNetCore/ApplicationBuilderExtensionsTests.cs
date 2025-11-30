@@ -28,6 +28,7 @@ public class ApplicationBuilderExtensionsTests
         // Arrange
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<CShells.Features.IShellFeatureFactory, CShells.Features.DefaultShellFeatureFactory>();
         services.AddSingleton<IShellHost, EmptyShellHost>();
         var serviceProvider = services.BuildServiceProvider();
         var app = new TestApplicationBuilder(serviceProvider);
@@ -52,16 +53,11 @@ public class ApplicationBuilderExtensionsTests
         public ShellContext GetShell(ShellId id) => throw new KeyNotFoundException();
     }
 
-    private class TestApplicationBuilder : IApplicationBuilder
+    private class TestApplicationBuilder(IServiceProvider serviceProvider) : IApplicationBuilder
     {
         private readonly List<Func<RequestDelegate, RequestDelegate>> _components = [];
 
-        public TestApplicationBuilder(IServiceProvider serviceProvider)
-        {
-            ApplicationServices = serviceProvider;
-        }
-
-        public IServiceProvider ApplicationServices { get; set; }
+        public IServiceProvider ApplicationServices { get; set; } = serviceProvider;
         public IDictionary<string, object?> Properties { get; } = new Dictionary<string, object?>();
         public IFeatureCollection ServerFeatures => throw new NotImplementedException();
 

@@ -41,7 +41,8 @@ public class DefaultShellTests : IDisposable
         };
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var host = new Hosting.DefaultShellHost(shellSettings, [assembly], provider, accessor);
+        var factory = new CShells.Features.DefaultShellFeatureFactory(provider);
+        var host = new Hosting.DefaultShellHost(shellSettings, [assembly], provider, accessor, factory);
         _hostsToDispose.Add(host);
 
         // Act
