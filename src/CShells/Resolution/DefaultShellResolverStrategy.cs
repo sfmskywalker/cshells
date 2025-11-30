@@ -7,5 +7,5 @@ namespace CShells.Resolution;
 public class DefaultShellResolverStrategy : IShellResolverStrategy
 {
     /// <inheritdoc />
-    public ShellId? Resolve(ShellResolutionContext context) => new ShellId("Default");
+    public ShellId? Resolve(ShellResolutionContext context) => new ShellId(ShellConstants.DefaultShellName);
 }

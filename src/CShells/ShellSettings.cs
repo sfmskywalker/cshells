@@ -5,8 +5,6 @@ namespace CShells;
 /// </summary>
 public class ShellSettings
 {
-    private IReadOnlyList<string> _enabledFeatures = [];
-
     /// <summary>
     /// Initializes a new instance of the <see cref="ShellSettings"/> class.
     /// </summary>
@@ -47,9 +45,9 @@ public class ShellSettings
     /// </summary>
     public IReadOnlyList<string> EnabledFeatures
     {
-        get => _enabledFeatures;
-        set => _enabledFeatures = value.ToArray();
-    }
+        get;
+        set => field = value.ToArray();
+    } = [];
 
     /// <summary>
     /// Gets or sets arbitrary properties associated with this shell.

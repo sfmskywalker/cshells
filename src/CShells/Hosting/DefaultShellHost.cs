@@ -141,7 +141,7 @@ public class DefaultShellHost : IShellHost, IDisposable
             ThrowIfDisposed();
 
             // Try to find shell with Id "Default"
-            var defaultId = new ShellId("Default");
+            var defaultId = new ShellId(ShellConstants.DefaultShellName);
             if (_shellContexts.TryGetValue(defaultId, out var context))
             {
                 return context;
@@ -149,7 +149,7 @@ public class DefaultShellHost : IShellHost, IDisposable
 
             // Check if there's a settings entry for "Default"
             var defaultSettings = _shellSettings.FirstOrDefault(s =>
-                string.Equals(s.Id.Name, "Default", StringComparison.OrdinalIgnoreCase));
+                string.Equals(s.Id.Name, ShellConstants.DefaultShellName, StringComparison.OrdinalIgnoreCase));
 
             if (defaultSettings != null)
             {
