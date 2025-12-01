@@ -232,9 +232,33 @@ public static class ApplicationBuilderExtensions
     {
         var mappings = new Dictionary<string, ShellId>(StringComparer.OrdinalIgnoreCase);
 
-        // Get all registered resolver strategies
-        var strategies = serviceProvider.GetServices<IShellResolverStrategy>();
+        // First, check shell properties for path mappings
+        var shellHost = serviceProvider.GetService<IShellHost>();
+        if (shellHost != null)
+        {
+            foreach (var shell in shellHost.AllShells)
+            {
+                if (shell.Settings.Properties.TryGetValue(ShellPropertyKeys.Path, out var pathValue))
+                {
+                    // Handle both string and JsonElement values (from JSON deserialization)
+                    var path = pathValue switch
+                    {
+                        string s => s,
+                        System.Text.Json.JsonElement jsonElement when jsonElement.ValueKind == System.Text.Json.JsonValueKind.String => jsonElement.GetString(),
+                        _ => null
+                    };
 
+                    if (path != null)
+                    {
+                        mappings[path] = shell.Id;
+                    }
+                }
+            }
+        }
+
+        // Then, get path mappings from explicitly registered resolver strategies
+        // (these override property-based mappings if there are conflicts)
+        var strategies = serviceProvider.GetServices<IShellResolverStrategy>();
         foreach (var strategy in strategies)
         {
             if (strategy is PathShellResolver pathResolver)

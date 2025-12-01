@@ -127,40 +127,24 @@ public class ShellFeatureFactoryTests
         public void ConfigureServices(IServiceCollection services) { }
     }
 
-    private class FeatureWithShellSettings : IShellFeature
+    private class FeatureWithShellSettings(ShellSettings settings) : IShellFeature
     {
-        public ShellSettings Settings { get; }
-
-        public FeatureWithShellSettings(ShellSettings settings)
-        {
-            Settings = settings;
-        }
+        public ShellSettings Settings { get; } = settings;
 
         public void ConfigureServices(IServiceCollection services) { }
     }
 
-    private class FeatureWithDependencies : IShellFeature
+    private class FeatureWithDependencies(ILogger<FeatureWithDependencies> logger) : IShellFeature
     {
-        public ILogger<FeatureWithDependencies> Logger { get; }
-
-        public FeatureWithDependencies(ILogger<FeatureWithDependencies> logger)
-        {
-            Logger = logger;
-        }
+        public ILogger<FeatureWithDependencies> Logger { get; } = logger;
 
         public void ConfigureServices(IServiceCollection services) { }
     }
 
-    private class FeatureWithBoth : IShellFeature
+    private class FeatureWithBoth(ILogger<FeatureWithBoth> logger, ShellSettings settings) : IShellFeature
     {
-        public ShellSettings Settings { get; }
-        public ILogger<FeatureWithBoth> Logger { get; }
-
-        public FeatureWithBoth(ILogger<FeatureWithBoth> logger, ShellSettings settings)
-        {
-            Logger = logger;
-            Settings = settings;
-        }
+        public ShellSettings Settings { get; } = settings;
+        public ILogger<FeatureWithBoth> Logger { get; } = logger;
 
         public void ConfigureServices(IServiceCollection services) { }
     }

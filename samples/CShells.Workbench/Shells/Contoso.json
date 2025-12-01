@@ -6,5 +6,8 @@
     "MultiChannelNotification",
     "FraudDetection",
     "Reporting"
-  ]
+  ],
+  "properties": {
+    "CShells.AspNetCore.Path": "contoso"
+  }
 }

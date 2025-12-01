@@ -4,5 +4,8 @@
     "Core",
     "StripePayment",
     "EmailNotification"
-  ]
+  ],
+  "properties": {
+    "CShells.AspNetCore.Path": ""
+  }
 }

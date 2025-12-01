@@ -81,6 +81,30 @@ public static class ShellExtensions
         }
 
         /// <summary>
+        /// Adds CShells core services and ASP.NET Core integration with async configuration support.
+        /// Use this when you need to load shell settings from a provider and auto-configure resolvers.
+        /// </summary>
+        /// <param name="configureCShellsAsync">Async callback used to configure the CShells builder.</param>
+        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
+        /// <returns>A task that completes when configuration is done.</returns>
+        public async Task<WebApplicationBuilder> AddCShellsAsync(
+            Func<CShellsBuilder, Task> configureCShellsAsync,
+            IEnumerable<Assembly>? assemblies = null)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            ArgumentNullException.ThrowIfNull(configureCShellsAsync);
+
+            // Register CShells core services
+            var cshellsBuilder = builder.Services.AddCShells(assemblies);
+            await configureCShellsAsync(cshellsBuilder);
+
+            // Register ASP.NET Core integration for CShells
+            builder.Services.AddCShellsAspNetCore();
+
+            return builder;
+        }
+
+        /// <summary>
         /// Adds CShells core services and ASP.NET Core integration using the specified
         /// configuration section and optional feature assemblies, with a fluent API for shell resolution.
         /// </summary>
