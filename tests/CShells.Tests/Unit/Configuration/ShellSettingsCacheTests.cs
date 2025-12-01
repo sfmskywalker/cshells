@@ -13,7 +13,7 @@ public class ShellSettingsCacheTests
     public void GetAll_WhenCacheEmpty_ReturnsEmpty()
     {
         // Arrange
-        var cache = new ShellSettingsCache();
+        var cache = CreateCache();
 
         // Act
         var result = cache.GetAll();
@@ -22,40 +22,30 @@ public class ShellSettingsCacheTests
         Assert.Empty(result);
     }
 
-    [Fact(DisplayName = "GetById returns null when cache is empty")]
-    public void GetById_WhenCacheEmpty_ReturnsNull()
+    [Theory(DisplayName = "GetById returns null when shell is missing")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetById_WhenShellMissing_ReturnsNull(bool preloadDifferentShell)
     {
         // Arrange
-        var cache = new ShellSettingsCache();
+        var cache = preloadDifferentShell
+            ? CreateCache(CreateShell("Existing"))
+            : CreateCache();
 
         // Act
-        var result = cache.GetById(new ShellId("Shell1"));
+        var result = cache.GetById(new ShellId("Target"));
 
         // Assert
         Assert.Null(result);
-    }
-
-    [Fact(DisplayName = "Initializer loads shells from provider into cache")]
-    public async Task Initializer_LoadsShellsFromProvider()
-    {
-        // Arrange
-        var shellManager = new TestShellManager();
-        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
-
-        // Act
-        await initializer.StartAsync(CancellationToken.None);
-
-        // Assert
-        Assert.True(shellManager.ReloadAllShellsAsyncCalled);
     }
 
     [Fact(DisplayName = "Load populates cache with shells")]
     public void Load_PopulatesCacheWithShells()
     {
         // Arrange
-        var shells = new List<ShellSettings>
+        var shells = new[]
         {
-            new() { Id = new ShellId("Shell1"), EnabledFeatures = [] }
+            CreateShell("Shell1")
         };
         var cache = new ShellSettingsCache();
 
@@ -68,42 +58,11 @@ public class ShellSettingsCacheTests
         Assert.Equal(new ShellId("Shell1"), result.Id);
     }
 
-    [Fact(DisplayName = "GetById returns null when shell not found")]
-    public void GetById_WhenShellDoesNotExist_ReturnsNull()
-    {
-        // Arrange
-        var cache = new ShellSettingsCache();
-        cache.Load([]);
-
-        // Act
-        var result = cache.GetById(new ShellId("NonExistent"));
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    [Fact(DisplayName = "Initializer StopAsync completes successfully")]
-    public async Task Initializer_StopAsync_CompletesSuccessfully()
-    {
-        // Arrange
-        var shellManager = new TestShellManager();
-        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
-        await initializer.StartAsync(CancellationToken.None);
-
-        // Act & Assert - just verify it completes without throwing
-        await initializer.StopAsync(CancellationToken.None);
-    }
-
     [Fact(DisplayName = "Clear removes all shells from cache")]
     public void Clear_RemovesAllShells()
     {
         // Arrange
-        var shells = new List<ShellSettings>
-        {
-            new() { Id = new ShellId("Shell1"), EnabledFeatures = [] }
-        };
-        var cache = new ShellSettingsCache();
-        cache.Load(shells);
+        var cache = CreateCache(CreateShell("Shell1"));
 
         // Act
         cache.Clear();
@@ -111,6 +70,40 @@ public class ShellSettingsCacheTests
         // Assert
         var result = cache.GetAll();
         Assert.Empty(result);
+    }
+
+    private static ShellSettingsCache CreateCache(params ShellSettings[] shells)
+    {
+        var cache = new ShellSettingsCache();
+        if (shells.Length > 0)
+        {
+            cache.Load(shells);
+        }
+
+        return cache;
+    }
+
+    private static ShellSettings CreateShell(string id) => new()
+    {
+        Id = new ShellId(id),
+        EnabledFeatures = []
+    };
+}
+
+public class ShellSettingsCacheInitializerTests
+{
+    [Fact(DisplayName = "Initializer loads shells from provider into cache")]
+    public async Task Initializer_LoadsShellsFromProvider()
+    {
+        // Arrange
+        var shellManager = new TestShellManager();
+        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
+
+        // Act
+        await initializer.StartAsync(CancellationToken.None);
+
+        // Assert
+        Assert.True(shellManager.ReloadAllShellsAsyncCalled);
     }
 
     private class TestShellManager : IShellManager
