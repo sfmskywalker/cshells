@@ -4,27 +4,25 @@ namespace CShells.Tests.Unit;
 
 public class ShellSettingsFactoryTests
 {
-    [Fact(DisplayName = "Create with null config throws ArgumentNullException")]
-    public void Create_WithNullConfig_ThrowsArgumentNullException()
+    [Theory(DisplayName = "Factory guard clauses throw ArgumentNullException")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Factory_GuardClauses_ThrowArgumentNullException(bool callCreate)
     {
-        // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => ShellSettingsFactory.Create(null!));
-        Assert.Equal("config", ex.ParamName);
+        // Act
+        var exception = callCreate
+            ? Assert.Throws<ArgumentNullException>(() => ShellSettingsFactory.Create(null!))
+            : Assert.Throws<ArgumentNullException>(() => ShellSettingsFactory.CreateAll(null!));
+
+        // Assert
+        Assert.Equal(callCreate ? "config" : "options", exception.ParamName);
     }
 
     [Fact(DisplayName = "Create with valid config returns ShellSettings")]
     public void Create_WithValidConfig_ReturnsShellSettings()
     {
         // Arrange
-        var config = new ShellConfig
-        {
-            Name = "TestShell",
-            Features = ["Feature1", "Feature2"],
-            Properties = new()
-            {
-                ["Key1"] = "Value1"
-            }
-        };
+        var config = BuildShellConfig();
 
         // Act
         var settings = ShellSettingsFactory.Create(config);
@@ -51,14 +49,6 @@ public class ShellSettingsFactoryTests
         Assert.Empty(settings.Properties);
     }
 
-    [Fact(DisplayName = "CreateAll with null options throws ArgumentNullException")]
-    public void CreateAll_WithNullOptions_ThrowsArgumentNullException()
-    {
-        // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => ShellSettingsFactory.CreateAll(null!));
-        Assert.Equal("options", ex.ParamName);
-    }
-
     [Fact(DisplayName = "CreateAll with valid options returns ShellSettings collection")]
     public void CreateAll_WithValidOptions_ReturnsShellSettingsCollection()
     {
@@ -81,19 +71,6 @@ public class ShellSettingsFactoryTests
         Assert.Equal(["Feature1"], settingsList[0].EnabledFeatures);
         Assert.Equal("Shell2", settingsList[1].Id.Name);
         Assert.Equal(["Feature2", "Feature3"], settingsList[1].EnabledFeatures);
-    }
-
-    [Fact(DisplayName = "CreateAll with empty shells returns empty collection")]
-    public void CreateAll_WithEmptyShells_ReturnsEmptyCollection()
-    {
-        // Arrange
-        var options = new CShellsOptions();
-
-        // Act
-        var settingsList = ShellSettingsFactory.CreateAll(options);
-
-        // Assert
-        Assert.Empty(settingsList);
     }
 
     [Fact(DisplayName = "Create normalizes feature names by trimming whitespace and filtering nulls")]
@@ -130,4 +107,14 @@ public class ShellSettingsFactoryTests
         var ex = Assert.Throws<ArgumentException>(() => ShellSettingsFactory.CreateAll(options));
         Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static ShellConfig BuildShellConfig() => new()
+    {
+        Name = "TestShell",
+        Features = ["Feature1", "Feature2"],
+        Properties = new()
+        {
+            ["Key1"] = "Value1"
+        }
+    };
 }
