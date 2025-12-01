@@ -49,17 +49,11 @@ app.UseHttpsRedirection();
 // Enable endpoint routing
 app.UseRouting();
 
-// Enable shell resolution middleware - resolves tenant based on request path
+// Configure CShells middleware and endpoints - resolves tenant based on request path
 // and activates the appropriate features with their endpoints.
-app.UseCShells();
-
-// Map endpoints including shell endpoints
-app.UseEndpoints(endpoints =>
-{
-    endpoints.MapCShells();
-});
+app.MapCShells();
 
 app.Run();
 
 // Make Program class accessible for WebApplicationFactory
-public partial class Program { }
+public partial class Program;
