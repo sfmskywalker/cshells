@@ -1,4 +1,5 @@
 using CShells.Configuration;
+using CShells.Management;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Tests.Unit.Configuration;
@@ -38,23 +39,14 @@ public class ShellSettingsCacheTests
     public async Task Initializer_LoadsShellsFromProvider()
     {
         // Arrange
-        var shells = new List<ShellSettings>
-        {
-            new() { Id = new ShellId("Shell1"), EnabledFeatures = [] },
-            new() { Id = new ShellId("Shell2"), EnabledFeatures = [] }
-        };
-        var provider = new TestShellSettingsProvider(shells);
-        var cache = new ShellSettingsCache();
-        var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
+        var shellManager = new TestShellManager();
+        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
 
         // Act
         await initializer.StartAsync(CancellationToken.None);
 
         // Assert
-        var allShells = cache.GetAll();
-        Assert.Equal(2, allShells.Count);
-        Assert.Contains(allShells, s => s.Id == new ShellId("Shell1"));
-        Assert.Contains(allShells, s => s.Id == new ShellId("Shell2"));
+        Assert.True(shellManager.ReloadAllShellsAsyncCalled);
     }
 
     [Fact(DisplayName = "Load populates cache with shells")]
@@ -90,25 +82,16 @@ public class ShellSettingsCacheTests
         Assert.Null(result);
     }
 
-    [Fact(DisplayName = "Initializer StopAsync clears cache")]
-    public async Task Initializer_StopAsync_ClearsCache()
+    [Fact(DisplayName = "Initializer StopAsync completes successfully")]
+    public async Task Initializer_StopAsync_CompletesSuccessfully()
     {
         // Arrange
-        var shells = new List<ShellSettings>
-        {
-            new() { Id = new ShellId("Shell1"), EnabledFeatures = [] }
-        };
-        var provider = new TestShellSettingsProvider(shells);
-        var cache = new ShellSettingsCache();
-        var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
+        var shellManager = new TestShellManager();
+        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
         await initializer.StartAsync(CancellationToken.None);
 
-        // Act
+        // Act & Assert - just verify it completes without throwing
         await initializer.StopAsync(CancellationToken.None);
-
-        // Assert
-        var result = cache.GetAll();
-        Assert.Empty(result);
     }
 
     [Fact(DisplayName = "Clear removes all shells from cache")]
@@ -130,18 +113,29 @@ public class ShellSettingsCacheTests
         Assert.Empty(result);
     }
 
-    private class TestShellSettingsProvider : IShellSettingsProvider
+    private class TestShellManager : IShellManager
     {
-        private readonly List<ShellSettings> _shells;
+        public bool ReloadAllShellsAsyncCalled { get; private set; }
 
-        public TestShellSettingsProvider(List<ShellSettings> shells)
+        public Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
         {
-            _shells = shells;
+            ReloadAllShellsAsyncCalled = true;
+            return Task.CompletedTask;
         }
 
-        public Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default)
+        public Task AddShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IEnumerable<ShellSettings>>(_shells);
+            throw new NotImplementedException();
+        }
+
+        public Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task UpdateShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
     }
 }

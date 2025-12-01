@@ -52,8 +52,7 @@ public static class ShellExtensions
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentException.ThrowIfNullOrEmpty(sectionName);
 
-            ConfigureCoreAndAspNetCore(builder, sectionName, assemblies);
-            return builder;
+            return builder.AddCShells(shells => shells.WithConfigurationProvider(builder.Configuration, sectionName), assemblies);
         }
 
         /// <summary>
@@ -62,7 +61,7 @@ public static class ShellExtensions
         /// </summary>
         /// <param name="configureCShells">Callback used to configure the CShells builder (e.g., shell settings provider).</param>
         /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
-        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
+        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>        
         public WebApplicationBuilder AddCShells(
             Action<CShellsBuilder> configureCShells,
             IEnumerable<Assembly>? assemblies = null)
@@ -70,86 +69,10 @@ public static class ShellExtensions
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(configureCShells);
 
-            // Register CShells core services
-            var cshellsBuilder = builder.Services.AddCShells(assemblies);
-            configureCShells(cshellsBuilder);
-
             // Register ASP.NET Core integration for CShells
-            builder.Services.AddCShellsAspNetCore();
+            builder.Services.AddCShellsAspNetCore(configureCShells, assemblies);
 
             return builder;
         }
-
-        /// <summary>
-        /// Adds CShells core services and ASP.NET Core integration with async configuration support.
-        /// Use this when you need to load shell settings from a provider and auto-configure resolvers.
-        /// </summary>
-        /// <param name="configureCShellsAsync">Async callback used to configure the CShells builder.</param>
-        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
-        /// <returns>A task that completes when configuration is done.</returns>
-        public async Task<WebApplicationBuilder> AddCShellsAsync(
-            Func<CShellsBuilder, Task> configureCShellsAsync,
-            IEnumerable<Assembly>? assemblies = null)
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureCShellsAsync);
-
-            // Register CShells core services
-            var cshellsBuilder = builder.Services.AddCShells(assemblies);
-            await configureCShellsAsync(cshellsBuilder);
-
-            // Register ASP.NET Core integration for CShells
-            builder.Services.AddCShellsAspNetCore();
-
-            return builder;
-        }
-
-        /// <summary>
-        /// Adds CShells core services and ASP.NET Core integration using the specified
-        /// configuration section and optional feature assemblies, with a fluent API for shell resolution.
-        /// </summary>
-        /// <param name="configureResolvers">Callback used to configure shell resolution strategies.</param>
-        /// <param name="sectionName">The configuration section name to bind CShells options from. Defaults to "CShells".</param>
-        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
-        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddCShells(Action<ShellResolutionBuilder> configureResolvers,
-            string sectionName = CShellsOptions.SectionName,
-            IEnumerable<Assembly>? assemblies = null)
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureResolvers);
-            ArgumentException.ThrowIfNullOrEmpty(sectionName);
-
-            // Build the custom strategies
-            var resolutionBuilder = new ShellResolutionBuilder();
-            configureResolvers(resolutionBuilder);
-
-            // Register all strategies from the builder
-            var strategies = resolutionBuilder.GetStrategies();
-            foreach (var strategy in strategies)
-            {
-                builder.Services.AddSingleton<IShellResolverStrategy>(strategy);
-            }
-
-            ConfigureCoreAndAspNetCore(builder, sectionName, assemblies);
-
-            return builder;
-        }
-    }
-
-    private static void ConfigureCoreAndAspNetCore(
-        WebApplicationBuilder builder,
-        string sectionName,
-        IEnumerable<Assembly>? assemblies)
-    {
-        var configuration = builder.Configuration;
-
-        // Register CShells core services using configuration provider
-        builder.Services.AddCShells(assemblies)
-            .WithConfigurationProvider(configuration, sectionName);
-
-        // Register ASP.NET Core integration for CShells (includes default IShellResolver
-        // if none has been registered).
-        builder.Services.AddCShellsAspNetCore();
     }
 }

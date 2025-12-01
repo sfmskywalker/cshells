@@ -86,10 +86,6 @@ public static class ApplicationBuilderExtensions
         // This makes all shell endpoints available to the routing system
         endpoints.DataSources.Add(endpointDataSource);
 
-        // Register endpoints for any shells already in the cache
-        // This handles shells loaded synchronously from configuration at startup
-        RegisterEndpointsForCachedShells(endpoints.ServiceProvider, logger);
-
         logger.LogInformation("CShells endpoints mapped successfully");
 
         // Return a convention builder (even though we don't have specific conventions to apply)
@@ -97,105 +93,11 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Registers endpoints for shells by loading them from the provider if not already in cache.
-    /// This is called once during application startup to handle shells loaded from configuration.
-    /// </summary>
-    private static void RegisterEndpointsForCachedShells(IServiceProvider serviceProvider, ILogger logger)
-    {
-        logger.LogDebug("Loading shells for endpoint registration");
-
-        var cache = serviceProvider.GetRequiredService<IShellSettingsCache>();
-        var provider = serviceProvider.GetRequiredService<IShellSettingsProvider>();
-        var notificationPublisher = serviceProvider.GetRequiredService<CShells.Notifications.INotificationPublisher>();
-
-        // Check if cache is already populated
-        var allSettings = cache.GetAll().ToList();
-
-        // If cache is empty, load shells synchronously from the provider
-        // This ensures endpoints are registered before the application starts accepting requests
-        if (allSettings.Count == 0)
-        {
-            logger.LogDebug("Cache is empty, loading shells from provider");
-            var settingsTask = provider.GetShellSettingsAsync(CancellationToken.None);
-            settingsTask.Wait(); // Synchronous wait during startup is acceptable
-            allSettings = settingsTask.Result.ToList();
-
-            if (allSettings.Count > 0)
-            {
-                // Load shells into cache (cast to concrete type since IShellSettingsCache doesn't expose Load)
-                if (cache is ShellSettingsCache concreteCache)
-                {
-                    concreteCache.Load(allSettings);
-                    logger.LogInformation("Loaded {Count} shell(s) from provider into cache", allSettings.Count);
-                }
-                else
-                {
-                    logger.LogWarning("Unable to load shells into cache: cache is not ShellSettingsCache type");
-                    return;
-                }
-            }
-            else
-            {
-                logger.LogDebug("No shells available from provider. Endpoints will be registered when shells are added.");
-                return;
-            }
-        }
-        else
-        {
-            logger.LogDebug("Using {Count} shell(s) already in cache", allSettings.Count);
-        }
-
-        logger.LogInformation("Registering endpoints for {Count} shell(s)", allSettings.Count);
-
-        // Publish notification synchronously to register endpoints via the notification handler
-        // This uses the same code path as dynamic shell loading
-        var notification = new CShells.Notifications.ShellsReloadedNotification(allSettings);
-        notificationPublisher.PublishAsync(notification, strategy: null, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-
-        logger.LogInformation("Shell endpoint registration complete");
-    }
-
-    /// <summary>
-    /// Gets the path prefix for a shell from its properties.
-    /// </summary>
-    private static string? GetPathPrefix(ShellSettings settings)
-    {
-        if (!settings.Properties.TryGetValue(ShellPropertyKeys.Path, out var pathObj))
-            return null;
-
-        // Handle JsonElement (from JSON deserialization)
-        string? path = pathObj switch
-        {
-            string s => s,
-            System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString(),
-            _ => null
-        };
-
-        if (string.IsNullOrWhiteSpace(path))
-            return null;
-
-        var trimmedPath = path.Trim();
-        if (!trimmedPath.StartsWith('/'))
-            trimmedPath = "/" + trimmedPath;
-        if (trimmedPath.EndsWith('/') && trimmedPath.Length > 1)
-            trimmedPath = trimmedPath.TrimEnd('/');
-
-        return trimmedPath;
-    }
-
-    /// <summary>
     /// A simple endpoint convention builder for shell endpoints.
     /// </summary>
-    private class EndpointConventionBuilder : IEndpointConventionBuilder
+    private class EndpointConventionBuilder(DynamicShellEndpointDataSource dataSource) : IEndpointConventionBuilder
     {
-        private readonly DynamicShellEndpointDataSource _dataSource;
-
-        public EndpointConventionBuilder(DynamicShellEndpointDataSource dataSource)
-        {
-            _dataSource = dataSource;
-        }
+        private readonly DynamicShellEndpointDataSource _dataSource = dataSource;
 
         public void Add(Action<EndpointBuilder> convention)
         {

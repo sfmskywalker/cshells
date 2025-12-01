@@ -22,6 +22,7 @@ namespace CShells.DependencyInjection
         /// <returns>A CShells builder for further configuration.</returns>
         public static CShellsBuilder AddCShells(
             this IServiceCollection services,
+            Action<CShellsBuilder>? configure,
             IEnumerable<Assembly>? assemblies = null)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -72,27 +73,11 @@ namespace CShells.DependencyInjection
 
             // Register the shell manager for runtime shell lifecycle management
             services.TryAddSingleton<IShellManager, DefaultShellManager>();
-
-            return new CShellsBuilder(services);
-        }
-
-        /// <summary>
-        /// Registers CShells services with inline configuration and returns a builder for further configuration.
-        /// </summary>
-        /// <param name="services">The service collection.</param>
-        /// <param name="configure">Configuration action for the CShells builder.</param>
-        /// <param name="assemblies">Optional assemblies to scan for features. If null, scans all loaded assemblies.</param>
-        /// <returns>A CShells builder for further configuration.</returns>
-        public static CShellsBuilder AddCShells(
-            this IServiceCollection services,
-            Action<CShellsBuilder> configure,
-            IEnumerable<Assembly>? assemblies = null)
-        {
-            ArgumentNullException.ThrowIfNull(services);
-            ArgumentNullException.ThrowIfNull(configure);
-
-            var builder = services.AddCShells(assemblies);
-            configure(builder);
+            
+            var builder = new CShellsBuilder(services);
+            
+            configure?.Invoke(builder);
+            
             return builder;
         }
     }

@@ -1,11 +1,13 @@
+using CShells.AspNetCore.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.EndToEnd;
 
 /// <summary>
 /// Custom WebApplicationFactory that ensures the Workbench app's content root
-/// is properly configured for testing.
+/// is properly configured for testing and waits for shell initialization to complete.
 /// </summary>
 public class WorkbenchApplicationFactory : WebApplicationFactory<Program>
 {
@@ -24,6 +26,26 @@ public class WorkbenchApplicationFactory : WebApplicationFactory<Program>
         builder.UseContentRoot(projectDir);
 
         base.ConfigureWebHost(builder);
+    }
+
+    /// <summary>
+    /// Creates a client and waits for shell initialization to complete before returning.
+    /// This ensures endpoints are registered and the application is fully ready before tests run.
+    /// </summary>
+    public new HttpClient CreateClient()
+    {
+        var client = base.CreateClient();
+
+        // Wait for shell initialization to complete
+        var waiter = Services.GetRequiredService<ShellInitializationWaiter>();
+        var initializationCompleted = waiter.WaitForInitializationAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+
+        if (!initializationCompleted)
+        {
+            throw new TimeoutException("Shell initialization did not complete within the expected timeframe");
+        }
+
+        return client;
     }
 
     private static string GetProjectPath()
