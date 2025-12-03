@@ -28,7 +28,7 @@ public static class ShellSettingsFactory
         // Convert property values to JsonElement for consistent serialization
         foreach (var property in config.Properties)
         {
-            settings.Properties[property.Key] = ConvertToJsonElement(property.Value);
+            settings.Properties[property.Key] = ConvertToJsonElement(property.Value)!;
         }
 
         return settings;
@@ -143,7 +143,7 @@ public static class ShellSettingsFactory
             {
                 // Simple value
                 var value = propertySection.Value;
-                settings.Properties[key] = ConvertToJsonElement(value);
+                settings.Properties[key] = ConvertToJsonElement(value)!;
             }
         }
 
