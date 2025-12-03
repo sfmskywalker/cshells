@@ -40,8 +40,14 @@ public class SystemTextJsonShellPropertySerializer(JsonSerializerOptions? option
             if (targetType == typeof(string))
                 return stringValue;
 
-            try { return JsonSerializer.Deserialize(stringValue, targetType, _options); }
-            catch { return null; }
+            try
+            {
+                return JsonSerializer.Deserialize(stringValue, targetType, _options);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         try
