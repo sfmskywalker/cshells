@@ -26,7 +26,7 @@ CShells is a lightweight, extensible shell and feature system for .NET projects 
 
 ### C# Style
 
-- Use C# 13 features where appropriate (primary constructors, collection expressions, etc.)
+- Use C# 14 features where appropriate (primary constructors, collection expressions, etc.)
 - Enable nullable reference types (`<Nullable>enable</Nullable>`)
 - Use implicit usings (`<ImplicitUsings>enable</ImplicitUsings>`)
 - Prefer file-scoped namespaces
