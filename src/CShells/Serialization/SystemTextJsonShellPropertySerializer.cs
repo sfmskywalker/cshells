@@ -55,7 +55,10 @@ public class SystemTextJsonShellPropertySerializer(JsonSerializerOptions? option
             var json = JsonSerializer.Serialize(value, _options);
             return JsonSerializer.Deserialize(json, targetType, _options);
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />
