@@ -32,7 +32,7 @@ public class ConfigurationShellSettingsProvider : IShellSettingsProvider
             throw new InvalidOperationException($"No shells configured in the configuration section '{_sectionName}'.");
         }
 
-        var shells = shellConfigurations.Select(section => ShellSettingsFactory.CreateFromConfiguration(section));
+        var shells = shellConfigurations.Select(ShellSettingsFactory.CreateFromConfiguration);
         return Task.FromResult(shells);
     }
 }
