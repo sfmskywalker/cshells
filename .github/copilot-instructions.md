@@ -30,7 +30,7 @@ CShells is a lightweight, extensible shell and feature system for .NET projects 
 - Enable nullable reference types (`<Nullable>enable</Nullable>`)
 - Use implicit usings (`<ImplicitUsings>enable</ImplicitUsings>`)
 - Prefer file-scoped namespaces
-- Use `var` when the type is obvious from the right side
+- Always `var` when possible.
 - Use expression-bodied members for single-line methods and properties
 
 ### Naming Conventions
