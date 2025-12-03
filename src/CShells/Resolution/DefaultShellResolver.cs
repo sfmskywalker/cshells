@@ -7,11 +7,16 @@ public class DefaultShellResolver(IEnumerable<IShellResolverStrategy> strategies
 {
     private const int DefaultOrder = 100;
 
-    private readonly IShellResolverStrategy[] _orderedStrategies = (strategies ?? throw new ArgumentNullException(nameof(strategies)))
-        .OrderBy(s => GetOrderForStrategy(s, options))
-        .ToArray();
+    private readonly IShellResolverStrategy[] _orderedStrategies;
 
-    private static int GetOrderForStrategy(IShellResolverStrategy strategy, ShellResolverOptions? options)
+    public DefaultShellResolver(IEnumerable<IShellResolverStrategy> strategies, ShellResolverOptions? options = null)
+    {
+        if (strategies is null)
+            throw new ArgumentNullException(nameof(strategies));
+        _orderedStrategies = strategies
+            .OrderBy(s => GetOrderForStrategy(s, options))
+            .ToArray();
+    }
     {
         var strategyType = strategy.GetType();
 
