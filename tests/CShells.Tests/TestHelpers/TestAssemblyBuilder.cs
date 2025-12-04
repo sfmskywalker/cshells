@@ -128,6 +128,36 @@ public static class TestAssemblyBuilder
     }
 
     /// <summary>
+    /// Creates a dynamic assembly with feature types that do not have ShellFeatureAttribute.
+    /// Used for testing feature name derivation from class names.
+    /// </summary>
+    public static Assembly CreateTestAssemblyWithoutAttribute(params string[] classNames)
+    {
+        var assemblyName = new AssemblyName($"TestAssembly_{Guid.NewGuid():N}");
+        var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+        var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
+
+        foreach (var className in classNames)
+        {
+            var typeBuilder = moduleBuilder.DefineType(className, TypeAttributes.Public | TypeAttributes.Class);
+            typeBuilder.AddInterfaceImplementation(typeof(IShellFeature));
+
+            // Implement ConfigureServices method with signature (IServiceCollection)
+            var configureServicesMethod = typeBuilder.DefineMethod(
+                "ConfigureServices",
+                MethodAttributes.Public | MethodAttributes.Virtual,
+                typeof(void),
+                [typeof(IServiceCollection)]);
+            var ilConfigureServices = configureServicesMethod.GetILGenerator();
+            ilConfigureServices.Emit(OpCodes.Ret);
+
+            typeBuilder.CreateType();
+        }
+
+        return assemblyBuilder;
+    }
+
+    /// <summary>
     /// Defines a ConfigureServices method that registers a service as a singleton.
     /// </summary>
     public static void DefineConfigureServicesWithService(TypeBuilder typeBuilder, Type serviceInterface, Type serviceImplementation)

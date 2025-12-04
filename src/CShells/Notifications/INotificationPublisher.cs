@@ -17,5 +17,5 @@ public interface INotificationPublisher
         TNotification notification,
         INotificationStrategy? strategy = null,
         CancellationToken cancellationToken = default)
-        where TNotification : INotification;
+        where TNotification : class, INotification;
 }

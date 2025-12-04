@@ -1,9 +1,11 @@
 using CShells.AspNetCore.Extensions;
 using CShells.AspNetCore.Resolution;
 using CShells.Workbench.Background;
+using CShells.Workbench.Features.Core;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.AddShells();
+
+builder.AddShells([typeof(CoreFeature)]);
 
 // Configure header-based routing after the fact by replacing the options
 var services = builder.Services;

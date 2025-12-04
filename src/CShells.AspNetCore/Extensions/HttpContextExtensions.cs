@@ -15,7 +15,7 @@ public static class HttpContextExtensions
     /// <returns>A <see cref="ShellResolutionContext"/> populated with HTTP request data.</returns>
     public static ShellResolutionContext ToShellResolutionContext(this HttpContext httpContext)
     {
-        ArgumentNullException.ThrowIfNull(httpContext);
+        Guard.Against.Null(httpContext);
 
         var context = new ShellResolutionContext();
         

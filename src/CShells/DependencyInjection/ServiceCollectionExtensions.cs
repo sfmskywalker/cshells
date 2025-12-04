@@ -25,7 +25,7 @@ namespace CShells.DependencyInjection
             Action<CShellsBuilder>? configure,
             IEnumerable<Assembly>? assemblies = null)
         {
-            ArgumentNullException.ThrowIfNull(services);
+            Guard.Against.Null(services);
 
             // Register the root service collection accessor as early as possible.
             // This allows the shell host to copy root service registrations into each shell's service collection.

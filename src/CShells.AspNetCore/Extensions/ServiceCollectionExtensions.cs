@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
         Action<CShellsBuilder>? configure = null,
         IEnumerable<Assembly>? assemblies = null)
     {
-        ArgumentNullException.ThrowIfNull(services);
+        Guard.Against.Null(services);
 
         // Register core CShells services first (will scan all loaded assemblies)
         var builder = services.AddCShells(configure, assemblies);

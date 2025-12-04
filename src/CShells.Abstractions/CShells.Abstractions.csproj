@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <RootNamespace>CShells</RootNamespace>
     <Authors>Sipke Schoorstra</Authors>
     <Description>Core abstractions for CShells. Contains interfaces and models for building shell features without dependencies on the full CShells framework. Reference this package in your feature libraries.</Description>
     <PackageTags>multi-tenancy;tenancy;shell;tenant;isolation;saas;abstractions;interfaces</PackageTags>

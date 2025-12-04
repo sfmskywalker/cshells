@@ -11,7 +11,7 @@ public class ShellSettings
 
     public ShellSettings(ShellId id, IReadOnlyList<string> enabledFeatures)
     {
-        ArgumentNullException.ThrowIfNull(enabledFeatures);
+        Guard.Against.Null(enabledFeatures);
         Id = id;
         EnabledFeatures = enabledFeatures;
     }

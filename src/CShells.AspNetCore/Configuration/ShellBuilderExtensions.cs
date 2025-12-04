@@ -1,4 +1,3 @@
-using CShells.AspNetCore.Resolution;
 using CShells.Configuration;
 
 namespace CShells.AspNetCore.Configuration;
@@ -16,8 +15,8 @@ public static class ShellBuilderExtensions
     /// <returns>The builder for method chaining.</returns>
     public static ShellBuilder WithPath(this ShellBuilder builder, string path)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(path);
+        Guard.Against.Null(builder);
+        Guard.Against.Null(path);
 
         var options = new WebRoutingShellOptions { Path = path };
         return builder.WithProperty(ShellPropertyKeys.WebRouting, options);
@@ -31,8 +30,8 @@ public static class ShellBuilderExtensions
     /// <returns>The builder for method chaining.</returns>
     public static ShellBuilder WithHost(this ShellBuilder builder, string host)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(host);
+        Guard.Against.Null(builder);
+        Guard.Against.Null(host);
 
         var options = new WebRoutingShellOptions { Host = host };
         return builder.WithProperty(ShellPropertyKeys.WebRouting, options);
@@ -46,8 +45,8 @@ public static class ShellBuilderExtensions
     /// <returns>The builder for method chaining.</returns>
     public static ShellBuilder WithWebRouting(this ShellBuilder builder, WebRoutingShellOptions options)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(options);
+        Guard.Against.Null(builder);
+        Guard.Against.Null(options);
 
         return builder.WithProperty(ShellPropertyKeys.WebRouting, options);
     }

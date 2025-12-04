@@ -10,13 +10,13 @@ namespace CShells.AspNetCore.Resolution;
 [ResolverOrder(0)]
 public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellResolverOptions options) : IShellResolverStrategy
 {
-    private readonly IShellSettingsCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly WebRoutingShellResolverOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IShellSettingsCache _cache = Guard.Against.Null(cache);
+    private readonly WebRoutingShellResolverOptions _options = Guard.Against.Null(options);
 
     /// <inheritdoc />
     public ShellId? Resolve(ShellResolutionContext context)
     {
-        ArgumentNullException.ThrowIfNull(context);
+        Guard.Against.Null(context);
         return TryResolveByPath(context)
             ?? TryResolveByHost(context)
             ?? TryResolveByHeader(context)

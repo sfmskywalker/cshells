@@ -39,7 +39,7 @@ public class DefaultShellManager : IShellManager
     /// <inheritdoc />
     public async Task AddShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        Guard.Against.Null(settings);
 
         lock (_lock)
         {
@@ -80,7 +80,7 @@ public class DefaultShellManager : IShellManager
     /// <inheritdoc />
     public async Task UpdateShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        Guard.Against.Null(settings);
 
         _logger.LogInformation("Updating shell '{ShellId}'", settings.Id);
 

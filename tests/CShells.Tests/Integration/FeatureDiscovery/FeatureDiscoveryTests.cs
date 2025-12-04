@@ -94,17 +94,76 @@ public class FeatureDiscoveryTests
         Assert.Equal("value2", feature.Metadata["key2"]);
     }
 
-    [Fact(DisplayName = "DiscoverFeatures with type missing IShellStartup throws InvalidOperationException")]
-    public void DiscoverFeatures_WithTypeMissingIShellStartup_ThrowsInvalidOperationException()
+    [Fact(DisplayName = "DiscoverFeatures without attribute derives name from class name with Feature suffix")]
+    public void DiscoverFeatures_WithoutAttribute_DerivesNameFromClassNameWithFeatureSuffix()
     {
-        // Arrange - create assembly with a type that has ShellFeature but doesn't implement IShellStartup
+        // Arrange - create assembly with feature class named "PaymentFeature" without attribute
+        var assembly = TestAssemblyBuilder.CreateTestAssemblyWithoutAttribute("PaymentFeature");
+
+        // Act
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+
+        // Assert
+        Assert.Single(features);
+        Assert.Equal("Payment", features[0].Id);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures without attribute and no Feature suffix uses full class name")]
+    public void DiscoverFeatures_WithoutAttributeAndNoFeatureSuffix_UsesFullClassName()
+    {
+        // Arrange - create assembly with feature class named "Payment" without attribute
+        var assembly = TestAssemblyBuilder.CreateTestAssemblyWithoutAttribute("Payment");
+
+        // Act
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+
+        // Assert
+        Assert.Single(features);
+        Assert.Equal("Payment", features[0].Id);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures with attribute name overrides derived name")]
+    public void DiscoverFeatures_WithAttributeName_OverridesDerivedName()
+    {
+        // Arrange - create assembly with feature that has attribute with explicit name
         var assembly = TestAssemblyBuilder.CreateTestAssembly(
-            ("InvalidFeature", null, [], [])
+            ("ExplicitName", typeof(IShellFeature), [], [])
         );
+
+        // Act
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+
+        // Assert
+        Assert.Single(features);
+        Assert.Equal("ExplicitName", features[0].Id);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures without attribute for multiple features returns all with derived names")]
+    public void DiscoverFeatures_WithoutAttributeForMultipleFeatures_ReturnsAllWithDerivedNames()
+    {
+        // Arrange - create assembly with multiple features without attributes
+        var assembly = TestAssemblyBuilder.CreateTestAssemblyWithoutAttribute("PaymentFeature", "ShippingFeature", "Inventory");
+
+        // Act
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+
+        // Assert
+        Assert.Equal(3, features.Count);
+        Assert.Contains(features, f => f.Id == "Payment");
+        Assert.Contains(features, f => f.Id == "Shipping");
+        Assert.Contains(features, f => f.Id == "Inventory");
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures with derived name collision throws InvalidOperationException")]
+    public void DiscoverFeatures_WithDerivedNameCollision_ThrowsInvalidOperationException()
+    {
+        // Arrange - create assembly where two classes derive to same name (Payment and PaymentFeature)
+        var assembly = TestAssemblyBuilder.CreateTestAssemblyWithoutAttribute("Payment", "PaymentFeature");
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
-        Assert.Contains("does not implement IShellStartup", ex.Message);
+        Assert.Contains("Duplicate feature name", ex.Message);
+        Assert.Contains("Payment", ex.Message);
     }
 
     [Fact(DisplayName = "DiscoverFeatures with duplicate feature names throws InvalidOperationException")]

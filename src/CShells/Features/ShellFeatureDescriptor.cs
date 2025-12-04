@@ -19,7 +19,7 @@ public class ShellFeatureDescriptor
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
     public ShellFeatureDescriptor(string id)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        Guard.Against.Null(id);
         Id = id;
     }
 
@@ -35,7 +35,7 @@ public class ShellFeatureDescriptor
     public IReadOnlyList<string> Dependencies
     {
         get => _dependencies;
-        set => _dependencies = value ?? throw new ArgumentNullException(nameof(Dependencies), "Dependencies cannot be set to null.");
+        set => _dependencies = Guard.Against.Null(value);
     }
 
     /// <summary>
@@ -45,12 +45,7 @@ public class ShellFeatureDescriptor
     public IDictionary<string, object> Metadata
     {
         get => _metadata;
-        set
-        {
-            if (value == null)
-                throw new ArgumentNullException(nameof(Metadata), "Metadata cannot be set to null.");
-            _metadata = value;
-        }
+        set => _metadata = Guard.Against.Null(value);
     }
 
     /// <summary>

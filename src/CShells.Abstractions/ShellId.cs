@@ -7,7 +7,7 @@ public readonly record struct ShellId
 {
     public ShellId(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Guard.Against.NullOrWhiteSpace(name);
         Name = name;
     }
 

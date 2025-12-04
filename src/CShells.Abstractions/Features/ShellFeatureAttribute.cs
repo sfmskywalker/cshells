@@ -4,12 +4,12 @@ namespace CShells.Features;
 /// An attribute that defines a feature's metadata for shell startup classes.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-public sealed class ShellFeatureAttribute(string name) : Attribute
+public sealed class ShellFeatureAttribute(string? name = null) : Attribute
 {
     /// <summary>
-    /// Gets the name of the feature.
+    /// Gets the name of the feature. If null, the name will be derived from the class name.
     /// </summary>
-    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
+    public string? Name { get; } = name;
 
     /// <summary>
     /// Gets or sets the display name for this feature. If not set, the <see cref="Name"/> is used.
