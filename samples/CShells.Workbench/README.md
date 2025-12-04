@@ -127,32 +127,50 @@ The `CShells.AspNetCore.Path` property determines the URL path prefix for the sh
 
 ## Project Structure
 
-```
-Features/
-├── Core/                              # Shared services & tenant info endpoint
-│   ├── CoreFeature.cs                 # IWebShellFeature - exposes / endpoint
-│   ├── *TenantFeature.cs              # Tenant-specific info registration
-│   ├── IAuditLogger.cs                # Audit logging interface
-│   └── ITenantInfo.cs                 # Tenant information interface
-├── PaymentProcessing/                 # Payment processor implementations
-│   ├── PaymentProcessingFeatureBase.cs # Base class - exposes /payments endpoint
-│   ├── StripePaymentFeature.cs        # Inherits base, registers Stripe
-│   ├── PayPalPaymentFeature.cs        # Inherits base, registers PayPal
-│   └── IPaymentProcessor.cs
-├── Notifications/                     # Notification channel implementations
-│   ├── NotificationFeatureBase.cs     # Base class - exposes /notifications endpoint
-│   ├── EmailNotificationFeature.cs    # Inherits base, registers Email
-│   ├── SmsNotificationFeature.cs      # Inherits base, registers SMS
-│   ├── MultiChannelNotificationFeature.cs # Inherits base, registers both
-│   └── INotificationService.cs
-├── FraudDetection/                    # Premium fraud detection
-│   ├── FraudDetectionFeature.cs       # IWebShellFeature - exposes /fraud-check
-│   └── IFraudDetectionService.cs
-└── Reporting/                         # Enterprise reporting
-    ├── ReportingFeature.cs            # IWebShellFeature - exposes /reports
-    └── IReportingService.cs
+This sample demonstrates the **recommended approach** for organizing CShells applications with separate feature libraries:
 
-Program.cs                              # Only 47 lines - just shell config!
+```
+samples/
+├── CShells.Workbench/                       # Main ASP.NET Core application
+│   ├── CShells.Workbench.csproj             # References: CShells, CShells.AspNetCore, CShells.Workbench.Features
+│   ├── Program.cs                           # Ultra-clean - only shell configuration
+│   ├── Shells/                              # Shell configuration files
+│   │   ├── Default.json
+│   │   ├── Acme.json
+│   │   └── Contoso.json
+│   └── Features/                            # Additional features defined in main project
+│       ├── PaymentProcessing/
+│       ├── Notifications/
+│       ├── FraudDetection/
+│       └── Reporting/
+└── CShells.Workbench.Features/              # Feature library (separate project)
+    ├── CShells.Workbench.Features.csproj    # References: CShells.AspNetCore.Abstractions only
+    └── Core/                                # Shared services & tenant info endpoint
+        ├── CoreFeature.cs                   # IWebShellFeature - exposes / endpoint
+        ├── ITenantInfo.cs                   # Tenant information interface
+        ├── IAuditLogger.cs                  # Audit logging interface
+        └── ITimeService.cs                  # Time service interface
+```
+
+### Key Architecture Points
+
+**CShells.Workbench.Features** - The feature library:
+- References **only** `CShells.AspNetCore.Abstractions` (lightweight, no implementation dependencies)
+- Contains the `CoreFeature` that all shells depend on
+- Demonstrates how to build reusable features that can be shared across projects
+- Shows the recommended pattern: feature definitions in a separate class library
+
+**CShells.Workbench** - The main application:
+- References the full `CShells` and `CShells.AspNetCore` packages
+- References the `CShells.Workbench.Features` library
+- Contains additional features for demonstration purposes (in the Features/ folder)
+- Ultra-clean `Program.cs` with only shell configuration
+
+This separation allows you to:
+- Build feature libraries with minimal dependencies
+- Share features across multiple applications
+- Keep feature code independent of framework implementation details
+- Maintain clean boundaries between abstractions and implementations
 ```
 
 ## Program.cs Configuration

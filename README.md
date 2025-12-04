@@ -54,6 +54,31 @@ Use shells to represent different API surfaces (mobile, web, partner, admin) wit
 
 Introduce CShells into an existing application and start moving functionality into features and shells incrementally. This allows you to modularize and isolate areas of a legacy system over time without a big-bang rewrite.
 
+## Packages
+
+CShells provides multiple NuGet packages for different use cases:
+
+| Package | Description | When to Use |
+|---------|-------------|-------------|
+| **CShells.Abstractions** | Core interfaces and models (`IShellFeature`, `ShellSettings`, `ShellId`) | Reference this in **feature class libraries** to avoid depending on the full framework |
+| **CShells.AspNetCore.Abstractions** | ASP.NET Core interfaces (`IWebShellFeature`) | Reference this in **ASP.NET Core feature class libraries** for web endpoint support |
+| **CShells** | Core framework implementation | Reference this in your **main application project** |
+| **CShells.AspNetCore** | ASP.NET Core integration (middleware, routing, resolvers) | Reference this in your **ASP.NET Core application project** |
+| **CShells.Providers.FluentStorage** | FluentStorage-based shell configuration provider | Use when loading shell configurations from disk, cloud storage, etc. |
+
+### Recommended Project Structure
+
+```
+YourSolution/
+├── src/
+│   ├── YourApp/                          # Main ASP.NET Core application
+│   │   └── YourApp.csproj                # References: CShells, CShells.AspNetCore, YourApp.Features
+│   └── YourApp.Features/                 # Feature definitions library
+│       └── YourApp.Features.csproj       # References: CShells.AspNetCore.Abstractions only
+```
+
+This structure allows your feature library to remain lightweight with minimal dependencies, while your main application references the full CShells implementation.
+
 ## Quick Start
 
 ### 1. Create a Feature
@@ -92,6 +117,8 @@ public class ApiFeature : IWebShellFeature
     }
 }
 ```
+
+**Best Practice:** Define your features in a separate class library that only references `CShells.Abstractions` (or `CShells.AspNetCore.Abstractions` for web features). This keeps your feature definitions lightweight and independent of the full framework implementation.
 
 **The `[ShellFeature]` attribute is optional.** Use it only when you need to:
 - Specify an explicit feature name (otherwise class name is used)
