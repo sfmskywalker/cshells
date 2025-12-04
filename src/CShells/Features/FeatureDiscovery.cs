@@ -29,16 +29,12 @@ public static class FeatureDiscovery
             if (assembly == null!)
                 continue;
 
-            foreach (var type in GetExportedTypes(assembly))
+            var featureTypes = GetExportedTypes(assembly)
+                .Where(type => type.IsClass && !type.IsAbstract)
+                .Where(type => typeof(IShellFeature).IsAssignableFrom(type));
+
+            foreach (var type in featureTypes)
             {
-                // Skip non-class types
-                if (!type.IsClass || type.IsAbstract)
-                    continue;
-
-                // Check if type implements IShellFeature
-                if (!typeof(IShellFeature).IsAssignableFrom(type))
-                    continue;
-
                 var attribute = type.GetCustomAttribute<ShellFeatureAttribute>();
                 var featureName = GetFeatureName(type, attribute);
 
