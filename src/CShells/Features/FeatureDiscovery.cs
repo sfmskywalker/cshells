@@ -30,8 +30,7 @@ public static class FeatureDiscovery
                 continue;
 
             var featureTypes = GetExportedTypes(assembly)
-                .Where(type => type.IsClass && !type.IsAbstract)
-                .Where(type => typeof(IShellFeature).IsAssignableFrom(type));
+                .Where(type => type.IsClass && !type.IsAbstract && typeof(IShellFeature).IsAssignableFrom(type));
 
             foreach (var type in featureTypes)
             {
