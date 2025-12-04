@@ -4,7 +4,9 @@ This guide explains how to safely integrate CShells into existing ASP.NET Core a
 
 ## Overview
 
-CShells uses **endpoint routing** to register shell-specific endpoints dynamically. When integrating CShells into an existing application, you need to ensure that shell routes don't conflict with your host application's routes.
+CShells uses **endpoint routing** to register shell-specific endpoints dynamically via the `IWebShellFeature` interface. When integrating CShells into an existing application, you need to ensure that shell routes don't conflict with your host application's routes.
+
+**Note:** Only implement `IWebShellFeature` if your features need to configure HTTP endpoints. For features that only register services, implement `IShellFeature` instead.
 
 ## Safe Integration Patterns
 
@@ -59,10 +61,12 @@ Use host-based routing to isolate shells by subdomain:
 
 ```csharp
 // Program.cs
+var blobStorage = StorageFactory.Blobs.DirectoryFiles("./Shells");
+
 builder.AddShells(cshells =>
 {
     cshells.WithFluentStorageProvider(blobStorage);
-    // WithStandardResolvers() is registered by default and includes host-based routing
+    // Standard resolvers (path and host-based) are registered by default
 });
 ```
 
@@ -273,6 +277,48 @@ app.MapHealthChecks("/health");
 app.MapShells();
 
 app.Run();
+```
+
+### Example Feature Implementations
+
+**Service-only feature (IShellFeature):**
+
+```csharp
+using CShells.Features;
+using Microsoft.Extensions.DependencyInjection;
+
+// No [ShellFeature] attribute needed - feature name will be "PaymentFeature"
+public class PaymentFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
+    }
+}
+```
+
+**Web feature with endpoints (IWebShellFeature):**
+
+```csharp
+using CShells.AspNetCore.Features;
+using CShells.Features;
+using Microsoft.Extensions.DependencyInjection;
+
+// Using [ShellFeature] to specify explicit name and dependencies
+[ShellFeature("Payment", DisplayName = "Payment API", DependsOn = ["Core"])]
+public class PaymentFeature : IWebShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
+    }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    {
+        endpoints.MapPost("payment/process", (PaymentRequest request, IPaymentProcessor processor) =>
+            processor.Process(request));
+    }
+}
 ```
 
 ## Best Practices Summary

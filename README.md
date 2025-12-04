@@ -58,43 +58,90 @@ Introduce CShells into an existing application and start moving functionality in
 
 ### 1. Create a Feature
 
-Features implement `IShellFeature` (for service registration) or `IWebShellFeature` (for services + endpoints):
+Features implement `IShellFeature` for service registration:
 
 ```csharp
-using CShells.AspNetCore.Features;
 using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 
-[ShellFeature("Core", DisplayName = "Core Services")]
-public class CoreFeature : IWebShellFeature
+public class CoreFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<ITimeService, TimeService>();
     }
+}
+```
+
+For ASP.NET Core applications with HTTP endpoints, implement `IWebShellFeature`:
+
+```csharp
+using CShells.AspNetCore.Features;
+using Microsoft.Extensions.DependencyInjection;
+
+public class ApiFeature : IWebShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IApiService, ApiService>();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapGet("", () => new { Message = "Hello from Core feature" });
+        endpoints.MapGet("api/status", () => new { Status = "OK" });
     }
 }
 ```
 
-Features can depend on other features and access `ShellSettings` via constructor:
+**The `[ShellFeature]` attribute is optional.** Use it only when you need to:
+- Specify an explicit feature name (otherwise class name is used)
+- Provide a display name
+- Declare feature dependencies
+- Set metadata
 
 ```csharp
-[ShellFeature("Weather", DependsOn = ["Core"], DisplayName = "Weather Feature")]
-public class WeatherFeature(ShellSettings shellSettings) : IWebShellFeature
+using CShells.Features;
+
+// Without attribute - feature name is "WeatherFeature" (derived from class name)
+public class WeatherFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IWeatherService, WeatherService>();
     }
+}
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+// With attribute - explicit name "Weather", display name, and dependencies
+[ShellFeature("Weather", DisplayName = "Weather API", DependsOn = ["Core"])]
+public class WeatherFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
     {
-        endpoints.MapGet("weather", (IWeatherService weatherService) =>
-            weatherService.GetForecast());
+        services.AddSingleton<IWeatherService, WeatherService>();
+    }
+}
+```
+
+Features can access `ShellSettings` via constructor injection:
+
+```csharp
+using CShells;
+using CShells.Features;
+
+public class WeatherFeature : IShellFeature
+{
+    private readonly ShellSettings _shellSettings;
+
+    public WeatherFeature(ShellSettings shellSettings)
+    {
+        _shellSettings = shellSettings;
+    }
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Access shell configuration
+        var apiKey = _shellSettings.Properties.GetValue<string>("WeatherApiKey");
+        services.AddSingleton<IWeatherService>(new WeatherService(apiKey));
     }
 }
 ```
@@ -249,7 +296,9 @@ app.Run();
 
 ### Key Capabilities
 
-- **IWebShellFeature** - Features can expose their own endpoints using `MapEndpoints()`, keeping all logic self-contained
+- **IShellFeature** - Basic interface for service registration in features
+- **IWebShellFeature** - Extends `IShellFeature` to add HTTP endpoint registration via `MapEndpoints()`
+- **Optional `[ShellFeature]` attribute** - Use only when you need explicit names, display names, dependencies, or metadata
 - **Automatic endpoint routing** - `MapShells()` handles middleware and endpoint registration in one call
 - **Shell path prefixes** - Routes are automatically prefixed based on the `WebRouting.Path` property
 - **Per-shell DI containers** - Each shell has its own isolated service provider with shell-specific services
