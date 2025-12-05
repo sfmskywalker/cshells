@@ -14,7 +14,7 @@ internal sealed class RootServiceCollectionAccessor : IRootServiceCollectionAcce
     /// <param name="services">The root <see cref="IServiceCollection"/> to provide access to.</param>
     public RootServiceCollectionAccessor(IServiceCollection services)
     {
-        Services = services ?? throw new ArgumentNullException(nameof(services));
+        Services = Guard.Against.Null(services);
     }
 
     /// <inheritdoc />

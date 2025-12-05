@@ -11,8 +11,7 @@ public class DefaultShellResolver : IShellResolver
 
     public DefaultShellResolver(IEnumerable<IShellResolverStrategy> strategies, ShellResolverOptions? options = null)
     {
-        if (strategies is null)
-            throw new ArgumentNullException(nameof(strategies));
+        Guard.Against.Null(strategies);
         _orderedStrategies = strategies
             .OrderBy(s => GetOrderForStrategy(s, options))
             .ToArray();
@@ -21,7 +20,7 @@ public class DefaultShellResolver : IShellResolver
     /// <inheritdoc />
     public ShellId? Resolve(ShellResolutionContext context)
     {
-        ArgumentNullException.ThrowIfNull(context);
+        Guard.Against.Null(context);
 
         foreach (var strategy in _orderedStrategies)
         {

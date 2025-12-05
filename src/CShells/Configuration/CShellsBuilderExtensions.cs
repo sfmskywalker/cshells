@@ -16,7 +16,7 @@ public static class CShellsBuilderExtensions
     /// <returns>The builder for method chaining.</returns>
     public static DependencyInjection.CShellsBuilder WithInMemoryShells(this DependencyInjection.CShellsBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(builder);
+        Guard.Against.Null(builder);
 
         var shells = builder.GetShells();
         if (shells.Count == 0)

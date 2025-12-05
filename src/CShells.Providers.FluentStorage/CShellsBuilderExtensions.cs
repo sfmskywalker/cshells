@@ -23,8 +23,8 @@ public static class CShellsBuilderExtensions
             string? path = null,
             JsonSerializerOptions? jsonOptions = null)
         {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(blobStorage);
+            Guard.Against.Null(builder);
+            Guard.Against.Null(blobStorage);
 
             var provider = new FluentStorageShellSettingsProvider(blobStorage, path, jsonOptions);
             return builder.WithProvider(provider);
@@ -41,8 +41,8 @@ public static class CShellsBuilderExtensions
             string? path = null,
             JsonSerializerOptions? jsonOptions = null)
         {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureBlobStorage);
+            Guard.Against.Null(builder);
+            Guard.Against.Null(configureBlobStorage);
 
             var blobStorage = configureBlobStorage();
             return builder.WithFluentStorageProvider(blobStorage, path, jsonOptions);

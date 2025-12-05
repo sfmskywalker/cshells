@@ -1,9 +1,7 @@
 using System.Reflection;
 using CShells.Configuration;
 using CShells.DependencyInjection;
-using CShells.Resolution;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.AspNetCore.Extensions;
 
@@ -22,9 +20,22 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells()
         {
-            ArgumentNullException.ThrowIfNull(builder);
+            Guard.Against.Null(builder);
 
             return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: null);
+        }
+
+        /// <summary>
+        /// Adds CShells core services and ASP.NET Core integration using the default
+        /// configuration section "CShells" and the default shell resolver.
+        /// </summary>
+        /// <param name="featureAssemblyMarkerTypes"> The types used to locate feature assemblies to scan for CShells features.</param>
+        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
+        public WebApplicationBuilder AddShells(IEnumerable<Type> featureAssemblyMarkerTypes)
+        {
+            Guard.Against.Null(featureAssemblyMarkerTypes);
+            
+            return builder.AddShells(featureAssemblyMarkerTypes.Select(t => t.Assembly));
         }
 
         /// <summary>
@@ -35,7 +46,7 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells(IEnumerable<Assembly> assemblies)
         {
-            ArgumentNullException.ThrowIfNull(builder);
+            Guard.Against.Null(builder);
 
             return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: assemblies);
         }
@@ -49,8 +60,8 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells(string sectionName, IEnumerable<Assembly>? assemblies = null)
         {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentException.ThrowIfNullOrEmpty(sectionName);
+            Guard.Against.Null(builder);
+            Guard.Against.NullOrEmpty(sectionName);
 
             return builder.AddShells(shells => shells.WithConfigurationProvider(builder.Configuration, sectionName), assemblies);
         }
@@ -66,8 +77,8 @@ public static class ShellExtensions
             Action<CShellsBuilder> configureCShells,
             IEnumerable<Assembly>? assemblies = null)
         {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureCShells);
+            Guard.Against.Null(builder);
+            Guard.Against.Null(configureCShells);
 
             // Register ASP.NET Core integration for CShells
             builder.Services.AddCShellsAspNetCore(configureCShells, assemblies);

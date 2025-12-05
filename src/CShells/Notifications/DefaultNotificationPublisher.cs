@@ -9,7 +9,6 @@ namespace CShells.Notifications;
 /// </summary>
 public class DefaultNotificationPublisher(IServiceProvider serviceProvider, ILogger<DefaultNotificationPublisher>? logger = null) : INotificationPublisher
 {
-    private readonly IServiceProvider _serviceProvider = serviceProvider;
     private readonly ILogger<DefaultNotificationPublisher> _logger = logger ?? NullLogger<DefaultNotificationPublisher>.Instance;
     private readonly INotificationStrategy _defaultStrategy = new ParallelNotificationStrategy();
 
@@ -17,17 +16,16 @@ public class DefaultNotificationPublisher(IServiceProvider serviceProvider, ILog
     public async Task PublishAsync<TNotification>(
         TNotification notification,
         INotificationStrategy? strategy = null,
-        CancellationToken cancellationToken = default)
-        where TNotification : INotification
+        CancellationToken cancellationToken = default) where TNotification : class, INotification
     {
-        ArgumentNullException.ThrowIfNull(notification);
+        Guard.Against.Null(notification);
 
         var executionStrategy = strategy ?? _defaultStrategy;
 
         _logger.LogDebug("Publishing notification of type {NotificationType} using {StrategyType}",
             typeof(TNotification).Name, executionStrategy.GetType().Name);
 
-        var handlers = _serviceProvider.GetServices<INotificationHandler<TNotification>>().ToList();
+        var handlers = serviceProvider.GetServices<INotificationHandler<TNotification>>().ToList();
 
         if (handlers.Count == 0)
         {

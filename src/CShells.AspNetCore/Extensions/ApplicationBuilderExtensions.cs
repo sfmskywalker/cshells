@@ -1,6 +1,5 @@
 using CShells.AspNetCore.Middleware;
 using CShells.AspNetCore.Routing;
-using CShells.Configuration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +36,7 @@ public static class ApplicationBuilderExtensions
     /// </remarks>
     public static IEndpointConventionBuilder MapShells(this IApplicationBuilder app)
     {
-        ArgumentNullException.ThrowIfNull(app);
+        Guard.Against.Null(app);
 
         var logger = app.ApplicationServices.GetService<ILoggerFactory>()
             ?.CreateLogger(typeof(ApplicationBuilderExtensions))

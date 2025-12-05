@@ -1,8 +1,6 @@
-using CShells.AspNetCore.Testing;
-using CShells.Workbench;
+using JetBrains.Annotations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.EndToEnd;
 
@@ -10,15 +8,9 @@ namespace CShells.Tests.EndToEnd;
 /// Custom WebApplicationFactory that ensures the Workbench app's content root
 /// is properly configured for testing and waits for shell initialization to complete.
 /// </summary>
+[UsedImplicitly]
 public class WorkbenchApplicationFactory : WebApplicationFactory<Program>
 {
-    public WorkbenchApplicationFactory()
-    {
-        // Force load the Workbench assembly to ensure feature discovery works
-        // AppDomain.CurrentDomain.GetAssemblies() needs to see this assembly
-        _ = typeof(Program).Assembly;
-    }
-
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Set the content root to the Workbench project directory

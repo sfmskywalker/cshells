@@ -5,7 +5,6 @@ using CShells.Notifications;
 using CShells.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 
 namespace CShells.AspNetCore.Configuration;
 
@@ -103,7 +102,7 @@ public static class CShellsBuilderExtensions
     public static CShellsBuilder WithResolverStrategy<TStrategy>(this CShellsBuilder builder, int? order = null)
         where TStrategy : class, IShellResolverStrategy
     {
-        ArgumentNullException.ThrowIfNull(builder);
+        Guard.Against.Null(builder);
 
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellResolverStrategy, TStrategy>());
 
@@ -138,8 +137,8 @@ public static class CShellsBuilderExtensions
     /// </example>
     public static CShellsBuilder WithResolverStrategy(this CShellsBuilder builder, IShellResolverStrategy strategy, int? order = null)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(strategy);
+        Guard.Against.Null(builder);
+        Guard.Against.Null(strategy);
 
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellResolverStrategy>(strategy));
 
@@ -167,7 +166,7 @@ public static class CShellsBuilderExtensions
     /// </remarks>
     public static CShellsBuilder WithEndpointRouting(this CShellsBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(builder);
+        Guard.Against.Null(builder);
 
         // Register the dynamic endpoint data source as a singleton
         builder.Services.TryAddSingleton<DynamicShellEndpointDataSource>();

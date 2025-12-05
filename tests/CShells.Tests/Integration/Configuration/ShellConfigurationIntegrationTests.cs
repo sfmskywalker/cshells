@@ -1,5 +1,4 @@
 using CShells.Configuration;
-using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Tests.Integration.ShellHost;
 using Microsoft.Extensions.Configuration;

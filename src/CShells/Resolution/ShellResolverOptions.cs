@@ -14,7 +14,7 @@ public class ShellResolverOptions
     /// <param name="order">The execution order. Lower values execute first.</param>
     public void SetOrder(Type strategyType, int order)
     {
-        ArgumentNullException.ThrowIfNull(strategyType);
+        Guard.Against.Null(strategyType);
         _strategyOrders[strategyType] = order;
     }
 
@@ -35,7 +35,7 @@ public class ShellResolverOptions
     /// <returns>The configured order, or null if no order was configured for this type.</returns>
     public int? GetOrder(Type strategyType)
     {
-        ArgumentNullException.ThrowIfNull(strategyType);
+        Guard.Against.Null(strategyType);
         return _strategyOrders.TryGetValue(strategyType, out var order) ? order : null;
     }
 }

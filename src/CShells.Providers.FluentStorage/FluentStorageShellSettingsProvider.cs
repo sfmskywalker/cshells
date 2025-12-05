@@ -25,7 +25,7 @@ public class FluentStorageShellSettingsProvider : IShellSettingsProvider
         string? path = null,
         JsonSerializerOptions? jsonOptions = null)
     {
-        ArgumentNullException.ThrowIfNull(blobStorage);
+        Guard.Against.Null(blobStorage);
 
         _blobStorage = blobStorage;
         _path = path ?? string.Empty;

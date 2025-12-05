@@ -8,38 +8,39 @@ namespace CShells.Features;
 public static class FeatureDiscovery
 {
     /// <summary>
-    /// Discovers all features from the specified assemblies by scanning for types decorated with <see cref="ShellFeatureAttribute"/>.
+    /// Discovers all features from the specified assemblies by scanning for types that implement <see cref="IShellFeature"/> or <see cref="IWebShellFeature"/>.
     /// </summary>
     /// <param name="assemblies">The assemblies to scan for features.</param>
     /// <returns>A collection of feature descriptors for all valid features found.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="assemblies"/> is null.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a type decorated with <see cref="ShellFeatureAttribute"/> does not implement <see cref="IShellFeature"/>,
-    /// or when duplicate feature names are found.
+    /// Thrown when duplicate feature names are found.
     /// </exception>
     public static IEnumerable<ShellFeatureDescriptor> DiscoverFeatures(IEnumerable<Assembly> assemblies)
     {
-        ArgumentNullException.ThrowIfNull(assemblies);
+        var assembliesList = assemblies.ToList();
+        Guard.Against.Null(assembliesList);
 
         var features = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var assembly in assemblies)
+        foreach (var assembly in assembliesList)
         {
             // Skip null assemblies
-            if (assembly == null)
+            if (assembly == null!)
                 continue;
 
-            foreach (var type in GetExportedTypes(assembly))
+            var featureTypes = GetExportedTypes(assembly)
+                .Where(type => type.IsClass && !type.IsAbstract && typeof(IShellFeature).IsAssignableFrom(type));
+
+            foreach (var type in featureTypes)
             {
                 var attribute = type.GetCustomAttribute<ShellFeatureAttribute>();
-                if (attribute == null)
-                    continue;
+                var featureName = GetFeatureName(type, attribute);
 
-                ValidateFeatureType(type, attribute);
-                EnsureUniqueFeatureName(attribute.Name, type, features);
+                EnsureUniqueFeatureName(featureName, type, features);
 
-                var descriptor = CreateFeatureDescriptor(type, attribute);
-                features[attribute.Name] = descriptor;
+                var descriptor = CreateFeatureDescriptor(type, attribute, featureName);
+                features[featureName] = descriptor;
             }
         }
 
@@ -47,15 +48,22 @@ public static class FeatureDiscovery
     }
 
     /// <summary>
-    /// Validates that a type decorated with ShellFeatureAttribute implements IShellFeature.
+    /// Gets the feature name from the attribute or derives it from the class name.
     /// </summary>
-    private static void ValidateFeatureType(Type type, ShellFeatureAttribute attribute)
+    private static string GetFeatureName(Type type, ShellFeatureAttribute? attribute)
     {
-        if (!typeof(IShellFeature).IsAssignableFrom(type))
-        {
-            throw new InvalidOperationException(
-                $"Type '{type.FullName}' is decorated with [ShellFeature(\"{attribute.Name}\")] but does not implement IShellStartup.");
-        }
+        // Use attribute name if provided
+        if (attribute?.Name != null)
+            return attribute.Name;
+
+        // Derive from class name
+        var className = type.Name;
+
+        // Remove "Feature" suffix if present
+        if (className.EndsWith("Feature", StringComparison.Ordinal) && className.Length > "Feature".Length)
+            return className[..^"Feature".Length];
+
+        return className;
     }
 
     /// <summary>
@@ -73,17 +81,17 @@ public static class FeatureDiscovery
     /// <summary>
     /// Creates a feature descriptor from a type and its ShellFeatureAttribute.
     /// </summary>
-    private static ShellFeatureDescriptor CreateFeatureDescriptor(Type type, ShellFeatureAttribute attribute)
+    private static ShellFeatureDescriptor CreateFeatureDescriptor(Type type, ShellFeatureAttribute? attribute, string featureName)
     {
-        var descriptor = new ShellFeatureDescriptor(attribute.Name)
+        var descriptor = new ShellFeatureDescriptor(featureName)
         {
             StartupType = type,
-            Dependencies = attribute.DependsOn
+            Dependencies = attribute?.DependsOn ?? []
         };
 
-        if (attribute.Metadata.Length > 0)
+        if (attribute?.Metadata is { Length: > 0 })
         {
-            descriptor.Metadata = ParseMetadata(attribute.Name, attribute.Metadata);
+            descriptor.Metadata = ParseMetadata(featureName, attribute.Metadata);
         }
 
         return descriptor;

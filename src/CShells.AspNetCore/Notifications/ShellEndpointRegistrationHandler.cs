@@ -1,10 +1,8 @@
 using CShells.AspNetCore.Features;
-using CShells.AspNetCore.Resolution;
 using CShells.AspNetCore.Routing;
 using CShells.Features;
 using CShells.Hosting;
 using CShells.Notifications;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

@@ -5,7 +5,7 @@ namespace CShells.Configuration;
 /// </summary>
 public class InMemoryShellSettingsProvider(IReadOnlyList<ShellSettings> shells) : IShellSettingsProvider
 {
-    private readonly IReadOnlyList<ShellSettings> _shells = shells ?? throw new ArgumentNullException(nameof(shells));
+    private readonly IReadOnlyList<ShellSettings> _shells = Guard.Against.Null(shells);
 
     /// <inheritdoc />
     public Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default) =>
