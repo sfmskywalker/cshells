@@ -78,17 +78,24 @@ jobs:
 
       - name: Pack packages
         run: |
-          dotnet pack src/CShells/CShells.csproj \
-            --configuration Release \
-            --no-build \
-            -o ./artifacts \
-            /p:Version=${{ env.PACKAGE_VERSION }}
+          set -euo pipefail
+          mkdir -p ./artifacts
 
-          dotnet pack src/CShells.AspNetCore/CShells.AspNetCore.csproj \
-            --configuration Release \
-            --no-build \
-            -o ./artifacts \
-            /p:Version=${{ env.PACKAGE_VERSION }}
+          projects=(
+            "src/CShells/CShells.csproj"
+            "src/CShells.AspNetCore/CShells.AspNetCore.csproj"
+            "src/CShells.Abstractions/CShells.Abstractions.csproj"
+            "src/CShells.AspNetCore.Abstractions/CShells.AspNetCore.Abstractions.csproj"
+          )
+
+          for proj in "${projects[@]}"; do
+            echo "Packing $proj..."
+            dotnet pack "$proj" \
+              --configuration Release \
+              --no-build \
+              -o ./artifacts \
+              /p:Version=${{ env.PACKAGE_VERSION }}
+          done
 
       - name: Upload packages as artifacts
         uses: actions/upload-artifact@v4
