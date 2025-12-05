@@ -26,7 +26,7 @@ dotnet add package CShells.AspNetCore.Abstractions
 ## Example Usage
 
 ```csharp
-using CShells.AspNetCore.Abstractions.Features;
+using CShells.AspNetCore.Features;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
