@@ -1,7 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.AspNetCore.Routing;
 using CShells.Features;
-using CShells.Hosting;
 using CShells.Notifications;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
@@ -20,7 +19,6 @@ public class ShellEndpointRegistrationHandler :
 {
     private readonly DynamicShellEndpointDataSource _endpointDataSource;
     private readonly EndpointRouteBuilderAccessor _endpointRouteBuilderAccessor;
-    private readonly IShellHost _shellHost;
     private readonly IShellFeatureFactory _featureFactory;
     private readonly IHostEnvironment? _environment;
     private readonly ILogger<ShellEndpointRegistrationHandler> _logger;
@@ -30,7 +28,6 @@ public class ShellEndpointRegistrationHandler :
     /// </summary>
     public ShellEndpointRegistrationHandler(
         DynamicShellEndpointDataSource endpointDataSource,
-        IShellHost shellHost,
         IShellFeatureFactory featureFactory,
         EndpointRouteBuilderAccessor endpointRouteBuilderAccessor,
         IHostEnvironment? environment = null,
@@ -38,7 +35,6 @@ public class ShellEndpointRegistrationHandler :
     {
         _endpointDataSource = endpointDataSource;
         _endpointRouteBuilderAccessor = endpointRouteBuilderAccessor;
-        _shellHost = shellHost;
         _featureFactory = featureFactory;
         _environment = environment;
         _logger = logger ?? NullLogger<ShellEndpointRegistrationHandler>.Instance;
@@ -50,7 +46,7 @@ public class ShellEndpointRegistrationHandler :
         if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
         {
             _logger.LogWarning("Cannot register endpoints for shell '{ShellId}': IEndpointRouteBuilder not available. " +
-                              "Endpoints will be registered on next application start.", notification.Settings.Id);
+                               "Endpoints will be registered on next application start.", notification.Settings.Id);
             return Task.CompletedTask;
         }
 
@@ -73,7 +69,7 @@ public class ShellEndpointRegistrationHandler :
         if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
         {
             _logger.LogWarning("Cannot register endpoints: IEndpointRouteBuilder not available. " +
-                              "This typically means the application hasn't been fully configured yet.");
+                               "This typically means the application hasn't been fully configured yet.");
             return Task.CompletedTask;
         }
 
@@ -103,17 +99,15 @@ public class ShellEndpointRegistrationHandler :
         _logger.LogDebug("Registering endpoints for shell '{ShellId}'", settings.Id);
 
         // Get path prefix from shell properties
-        _logger.LogInformation("Shell '{ShellId}' has {PropertyCount} properties",
-            settings.Id, settings.Properties.Count);
+        _logger.LogInformation("Shell '{ShellId}' has {PropertyCount} properties", settings.Id, settings.Properties.Count);
 
         if (settings.Properties.TryGetValue(ShellPropertyKeys.WebRouting, out var pathValue))
         {
-            _logger.LogInformation("Shell '{ShellId}' WebRouting property type: {TypeName}, value: {Value}",
-                settings.Id, pathValue?.GetType().Name ?? "null", pathValue);
+            _logger.LogInformation("Shell '{ShellId}' WebRouting property type: {TypeName}, value: {Value}", settings.Id, pathValue.GetType().Name, pathValue);
         }
         else
         {
-            _logger.LogWarning("Shell '{ShellId}' does not have property '{PropertyKey}'",
+            _logger.LogInformation("Shell '{ShellId}' does not have property '{PropertyKey}'",
                 settings.Id, ShellPropertyKeys.WebRouting);
         }
 
@@ -127,9 +121,6 @@ public class ShellEndpointRegistrationHandler :
             settings.Id,
             settings,
             pathPrefix);
-
-        // Get shell context
-        var shellContext = _shellHost.GetShell(settings.Id);
 
         // Discover web features
         var webFeatures = DiscoverWebFeatures(settings);
@@ -168,8 +159,7 @@ public class ShellEndpointRegistrationHandler :
 
         _endpointDataSource.AddEndpoints(shellEndpoints);
 
-        _logger.LogDebug("Registered {Count} endpoint(s) for shell '{ShellId}'",
-            shellEndpoints.Count, settings.Id);
+        _logger.LogDebug("Registered {Count} endpoint(s) for shell '{ShellId}'", shellEndpoints.Count, settings.Id);
     }
 
     /// <summary>
@@ -193,10 +183,7 @@ public class ShellEndpointRegistrationHandler :
     private static string? GetPathPrefix(ShellSettings settings)
     {
         var routingOptions = settings.GetProperty<WebRoutingShellOptions>(ShellPropertyKeys.WebRouting);
-        if (routingOptions == null)
-            return null;
-
-        var path = routingOptions.Path;
+        var path = routingOptions?.Path;
 
         // Null means no path routing configured for this shell
         if (path == null)
@@ -207,10 +194,8 @@ public class ShellEndpointRegistrationHandler :
             return null; // Return null for empty path to indicate no prefix
 
         var trimmedPath = path.Trim();
-        if (!trimmedPath.StartsWith('/'))
-            trimmedPath = "/" + trimmedPath;
-        if (trimmedPath.EndsWith('/') && trimmedPath.Length > 1)
-            trimmedPath = trimmedPath.TrimEnd('/');
+        if (!trimmedPath.StartsWith('/')) trimmedPath = "/" + trimmedPath;
+        if (trimmedPath.EndsWith('/') && trimmedPath.Length > 1) trimmedPath = trimmedPath.TrimEnd('/');
 
         return trimmedPath;
     }

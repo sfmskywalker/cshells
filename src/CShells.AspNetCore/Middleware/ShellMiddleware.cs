@@ -28,7 +28,15 @@ public class ShellMiddleware(
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
-        var resolutionContext = context.ToShellResolutionContext();
+        var resolutionContext = context.ToShellResolutionContext(_host);
+        var shellHost = resolutionContext.ShellHost;
+        if(shellHost.AllShells.Count == 0)
+        {
+            _logger.LogDebug("No shells registered, continuing without shell scope");
+            await _next(context);
+            return;
+        }
+
         var shellId = _resolver.Resolve(resolutionContext);
 
         if (shellId is null)

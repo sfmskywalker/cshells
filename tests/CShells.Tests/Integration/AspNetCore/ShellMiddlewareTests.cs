@@ -16,13 +16,50 @@ public class ShellMiddlewareTests
         return new(next, resolver ?? new NullShellResolver(), host ?? new TestShellHost());
     }
 
+    [Fact(DisplayName = "InvokeAsync with no shells registered continues without setting scope")]
+    public async Task InvokeAsync_WithNoShellsRegistered_ContinuesWithoutSettingScope()
+    {
+        // Arrange
+        var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
+        var resolver = new NullShellResolver();
+        var host = new TestShellHost(); // Empty host with no shells
+        var nextCalled = false;
+
+        var middleware = CreateMiddleware(
+            ctx =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            resolver,
+            host);
+
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = originalServiceProvider
+        };
+
+        // Act
+        await middleware.InvokeAsync(httpContext);
+
+        // Assert
+        Assert.True(nextCalled);
+        Assert.Same(originalServiceProvider, httpContext.RequestServices);
+    }
+
     [Fact(DisplayName = "InvokeAsync with null ShellId continues without setting scope")]
     public async Task InvokeAsync_WithNullShellId_ContinuesWithoutSettingScope()
     {
         // Arrange
         var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
+        var shellServices = new ServiceCollection();
+        var shellServiceProvider = shellServices.BuildServiceProvider();
+
+        var settings = new ShellSettings(new("TestShell"));
+        var shellContext = new ShellContext(settings, shellServiceProvider);
+
         var resolver = new NullShellResolver();
-        var host = new TestShellHost();
+        var host = new TestShellHost(shellContext); // Host with a shell, but resolver returns null
         var nextCalled = false;
 
         var middleware = CreateMiddleware(
@@ -157,19 +194,6 @@ public class ShellMiddlewareTests
 
         var exception = Assert.Throws<ArgumentNullException>(() => new ShellMiddleware(next!, resolver!, host!));
         Assert.Equal(expectedParam, exception.ParamName);
-    }
-
-    [Fact(DisplayName = "InvokeAsync with non-existent ShellId throws KeyNotFoundException")]
-    public async Task InvokeAsync_WithNonExistentShellId_ThrowsKeyNotFoundException()
-    {
-        // Arrange
-        var resolver = new FixedShellResolver(new("NonExistent"));
-        var host = new TestShellHost(); // Empty host with no shells
-        var middleware = CreateMiddleware(ctx => Task.CompletedTask, resolver, host);
-        var httpContext = new DefaultHttpContext();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => middleware.InvokeAsync(httpContext));
     }
 
     // Test helpers
