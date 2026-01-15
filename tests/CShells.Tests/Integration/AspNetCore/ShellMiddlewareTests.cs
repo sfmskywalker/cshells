@@ -65,7 +65,7 @@ public class ShellMiddlewareTests
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
         var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider);
+        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
 
         var resolver = new NullShellResolver();
         var host = new TestShellHost(shellContext); // Host with a shell, but resolver returns null
@@ -103,7 +103,7 @@ public class ShellMiddlewareTests
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
         var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider);
+        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
 
         var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
@@ -146,7 +146,7 @@ public class ShellMiddlewareTests
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
         var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider);
+        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
 
         var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
@@ -174,7 +174,7 @@ public class ShellMiddlewareTests
         var shellServiceProvider = shellServices.BuildServiceProvider();
 
         var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider);
+        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
 
         var resolver = new FixedShellResolver(new("TestShell"));
         var host = new TestShellHost(shellContext);
