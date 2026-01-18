@@ -23,7 +23,6 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
     <!-- Others -->
     <PackageVersion Include="FastEndpoints" Version="7.0.0"/>
-
     <!-- Microsoft Extensions -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="9.0.11" />
