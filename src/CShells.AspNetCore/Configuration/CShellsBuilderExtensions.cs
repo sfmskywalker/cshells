@@ -221,13 +221,6 @@ public static class CShellsBuilderExtensions
         /// Each shell can configure its own authentication schemes (e.g., JWT, API Key, Cookies) that work independently.
         /// </para>
         /// <para>
-        /// <strong>Prerequisites:</strong>
-        /// <list type="bullet">
-        /// <item>You must call <c>services.AddAuthentication()</c> BEFORE calling <c>AddCShellsAspNetCore()</c></item>
-        /// <item>You must call <c>app.UseAuthentication()</c> BEFORE <c>app.MapShells()</c> in your middleware pipeline</item>
-        /// </list>
-        /// </para>
-        /// <para>
         /// <strong>How it works:</strong>
         /// The authentication middleware runs at the root level and uses the registered <see cref="IAuthenticationSchemeProvider"/>.
         /// <see cref="ShellAuthenticationSchemeProvider"/> intercepts scheme lookups and resolves them from the current shell's
@@ -244,11 +237,11 @@ public static class CShellsBuilderExtensions
         ///
         /// // In middleware pipeline
         /// app.UseRouting();
-        /// app.UseAuthentication(); // Call BEFORE MapShells
+        /// app.UseAuthentication();
         /// app.MapShells();
         /// </code>
         /// </example>
-        public CShellsBuilder WithShellAuthentication()
+        public CShellsBuilder WithAuthentication()
         {
             Guard.Against.Null(builder);
 
@@ -268,13 +261,6 @@ public static class CShellsBuilderExtensions
         /// Each shell can configure its own authorization policies that work independently from other shells.
         /// </para>
         /// <para>
-        /// <strong>Prerequisites:</strong>
-        /// <list type="bullet">
-        /// <item>You must call <c>services.AddAuthorization()</c> BEFORE calling <c>AddCShellsAspNetCore()</c></item>
-        /// <item>You must call <c>app.UseAuthorization()</c> BEFORE <c>app.MapShells()</c> in your middleware pipeline</item>
-        /// </list>
-        /// </para>
-        /// <para>
         /// <strong>How it works:</strong>
         /// The authorization middleware runs at the root level and uses the registered <see cref="IAuthorizationPolicyProvider"/>.
         /// <see cref="ShellAuthorizationPolicyProvider"/> intercepts policy lookups and resolves them from the current shell's
@@ -284,7 +270,7 @@ public static class CShellsBuilderExtensions
         /// <example>
         /// <code>
         /// // In Program.cs or Startup.cs
-        /// services.AddAuthorization(); // Call FIRST
+        /// services.AddAuthorization();
         /// services.AddCShellsAspNetCore(cshells => cshells
         ///     .WithShellAuthorization()
         /// );
@@ -295,12 +281,47 @@ public static class CShellsBuilderExtensions
         /// app.MapShells();
         /// </code>
         /// </example>
-        public CShellsBuilder WithShellAuthorization()
+        public CShellsBuilder WithAuthorization()
         {
             Guard.Against.Null(builder);
 
             // Register the shell-aware authorization policy provider
             builder.Services.TryAddSingleton<IAuthorizationPolicyProvider, ShellAuthorizationPolicyProvider>();
+
+            return builder;
+        }
+
+        /// <summary>
+        /// Enables both shell-aware authentication and authorization that allows each shell to have its own authentication schemes and authorization policies.
+        /// </summary>
+        /// <returns>The builder for method chaining.</returns>
+        /// <remarks>
+        /// <para>
+        /// This is a convenience method that combines <see cref="WithAuthentication"/> and <see cref="WithAuthorization"/>.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // In Program.cs or Startup.cs
+        /// services.AddAuthentication();
+        /// services.AddAuthorization();
+        /// services.AddCShellsAspNetCore(cshells => cshells
+        ///     .WithAuthenticationAndAuthorization()
+        /// );
+        ///
+        /// // In middleware pipeline
+        /// app.UseRouting();
+        /// app.UseAuthentication();
+        /// app.UseAuthorization();
+        /// app.MapShells();
+        /// </code>
+        /// </example>
+        public CShellsBuilder WithAuthenticationAndAuthorization()
+        {
+            Guard.Against.Null(builder);
+
+            builder.WithAuthentication();
+            builder.WithAuthorization();
 
             return builder;
         }
