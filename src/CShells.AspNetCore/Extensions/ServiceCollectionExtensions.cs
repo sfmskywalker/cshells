@@ -92,8 +92,20 @@ public static class ServiceCollectionExtensions
         var pipelineWasConfigured = services.Any(d => d.ServiceType == typeof(ResolverPipelineConfigurationMarker));
         if (!pipelineWasConfigured)
         {
-            // Default for ASP.NET Core: WebRoutingShellResolver
-            builder.WithWebRouting();
+            // Default for ASP.NET Core: WebRoutingShellResolver with DefaultShellResolverStrategy fallback
+            // Register WebRoutingShellResolverOptions first (required by WebRoutingShellResolver)
+            services.TryAddSingleton(new Resolution.WebRoutingShellResolverOptions());
+
+            // Register strategies
+            services.AddSingleton<IShellResolverStrategy, Resolution.WebRoutingShellResolver>();
+            services.AddSingleton<IShellResolverStrategy, DefaultShellResolverStrategy>();
+
+            // Configure their execution order
+            services.Configure<ShellResolverOptions>(opt =>
+            {
+                opt.SetOrder<Resolution.WebRoutingShellResolver>(0);
+                opt.SetOrder<DefaultShellResolverStrategy>(1000);
+            });
         }
 
         // Register endpoint routing by default
