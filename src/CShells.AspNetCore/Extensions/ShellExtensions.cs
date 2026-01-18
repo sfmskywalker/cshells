@@ -91,7 +91,7 @@ public static class ShellExtensions
                 configureCShells(cshells);
 
                 // If no IShellSettingsProvider was registered, add the default configuration provider
-                if (!cshells.Services.Any(d => d.ServiceType == typeof(IShellSettingsProvider)))
+                if (cshells.Services.All(d => d.ServiceType != typeof(IShellSettingsProvider)))
                 {
                     cshells.WithConfigurationProvider(builder.Configuration);
                 }
