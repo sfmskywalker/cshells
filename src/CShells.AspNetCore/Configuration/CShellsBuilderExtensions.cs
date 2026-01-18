@@ -1,8 +1,12 @@
+using CShells.AspNetCore.Authentication;
+using CShells.AspNetCore.Authorization;
 using CShells.AspNetCore.Resolution;
 using CShells.AspNetCore.Routing;
 using CShells.DependencyInjection;
 using CShells.Notifications;
 using CShells.Resolution;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -203,6 +207,99 @@ public static class CShellsBuilderExtensions
             builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellAddedNotification>, Notifications.ShellEndpointRegistrationHandler>());
             builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellRemovedNotification>, Notifications.ShellEndpointRegistrationHandler>());
             builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellsReloadedNotification>, Notifications.ShellEndpointRegistrationHandler>());
+            return builder;
+        }
+
+        /// <summary>
+        /// Enables shell-aware authentication that allows each shell to have its own authentication schemes.
+        /// </summary>
+        /// <returns>The builder for method chaining.</returns>
+        /// <remarks>
+        /// <para>
+        /// This method registers <see cref="ShellAuthenticationSchemeProvider"/> which enables per-shell authentication schemes.
+        /// Each shell can configure its own authentication schemes (e.g., JWT, API Key, Cookies) that work independently.
+        /// </para>
+        /// <para>
+        /// <strong>Prerequisites:</strong>
+        /// <list type="bullet">
+        /// <item>You must call <c>services.AddAuthentication()</c> BEFORE calling <c>AddCShellsAspNetCore()</c></item>
+        /// <item>You must call <c>app.UseAuthentication()</c> BEFORE <c>app.MapShells()</c> in your middleware pipeline</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// <strong>How it works:</strong>
+        /// The authentication middleware runs at the root level and uses the registered <see cref="IAuthenticationSchemeProvider"/>.
+        /// <see cref="ShellAuthenticationSchemeProvider"/> intercepts scheme lookups and resolves them from the current shell's
+        /// service provider, allowing each shell to have isolated authentication configurations.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // In Program.cs or Startup.cs
+        /// services.AddAuthentication(); // Call FIRST
+        /// services.AddCShellsAspNetCore(cshells => cshells
+        ///     .WithShellAuthentication()
+        /// );
+        ///
+        /// // In middleware pipeline
+        /// app.UseRouting();
+        /// app.UseAuthentication(); // Call BEFORE MapShells
+        /// app.MapShells();
+        /// </code>
+        /// </example>
+        public CShellsBuilder WithShellAuthentication()
+        {
+            Guard.Against.Null(builder);
+
+            // Register the shell-aware authentication scheme provider
+            builder.Services.TryAddSingleton<IAuthenticationSchemeProvider, ShellAuthenticationSchemeProvider>();
+
+            return builder;
+        }
+
+        /// <summary>
+        /// Enables shell-aware authorization that allows each shell to have its own authorization policies.
+        /// </summary>
+        /// <returns>The builder for method chaining.</returns>
+        /// <remarks>
+        /// <para>
+        /// This method registers <see cref="ShellAuthorizationPolicyProvider"/> which enables per-shell authorization policies.
+        /// Each shell can configure its own authorization policies that work independently from other shells.
+        /// </para>
+        /// <para>
+        /// <strong>Prerequisites:</strong>
+        /// <list type="bullet">
+        /// <item>You must call <c>services.AddAuthorization()</c> BEFORE calling <c>AddCShellsAspNetCore()</c></item>
+        /// <item>You must call <c>app.UseAuthorization()</c> BEFORE <c>app.MapShells()</c> in your middleware pipeline</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// <strong>How it works:</strong>
+        /// The authorization middleware runs at the root level and uses the registered <see cref="IAuthorizationPolicyProvider"/>.
+        /// <see cref="ShellAuthorizationPolicyProvider"/> intercepts policy lookups and resolves them from the current shell's
+        /// service provider, allowing each shell to have isolated authorization policy configurations.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // In Program.cs or Startup.cs
+        /// services.AddAuthorization(); // Call FIRST
+        /// services.AddCShellsAspNetCore(cshells => cshells
+        ///     .WithShellAuthorization()
+        /// );
+        ///
+        /// // In middleware pipeline
+        /// app.UseRouting();
+        /// app.UseAuthorization(); // Call BEFORE MapShells
+        /// app.MapShells();
+        /// </code>
+        /// </example>
+        public CShellsBuilder WithShellAuthorization()
+        {
+            Guard.Against.Null(builder);
+
+            // Register the shell-aware authorization policy provider
+            builder.Services.TryAddSingleton<IAuthorizationPolicyProvider, ShellAuthorizationPolicyProvider>();
 
             return builder;
         }

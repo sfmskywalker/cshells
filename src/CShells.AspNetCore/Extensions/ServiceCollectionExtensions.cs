@@ -25,11 +25,10 @@ public static class ServiceCollectionExtensions
     /// <item>Web routing resolver (path and host-based routing)</item>
     /// <item>Endpoint routing support</item>
     /// <item>Shell resolver orchestrator</item>
-    /// <item>Shell-aware authentication scheme provider (enables per-shell auth configurations)</item>
-    /// <item>Shell-aware authorization policy provider (enables per-shell authz policies)</item>
-    /// <item>HTTP context accessor (required by shell-aware providers)</item>
+    /// <item>HTTP context accessor</item>
     /// </list>
     /// The default resolver strategy can be customized using configuration actions.
+    /// For shell-aware authentication and authorization, use <c>WithShellAuthentication()</c> and <c>WithShellAuthorization()</c> extension methods.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action to customize the CShells builder.</param>
@@ -40,24 +39,30 @@ public static class ServiceCollectionExtensions
     /// // Use defaults (web routing + endpoint routing)
     /// services.AddCShellsAspNetCore();
     ///
+    /// // With authentication and authorization
+    /// services.AddAuthentication();
+    /// services.AddAuthorization();
+    /// services.AddCShellsAspNetCore(cshells => cshells
+    ///     .WithShellAuthentication()
+    ///     .WithShellAuthorization()
+    /// );
+    ///
     /// // Customize resolver pipeline
-    /// services.AddCShellsAspNetCore(cshells =>
-    /// {
-    ///     cshells.WithWebRouting(options =>
+    /// services.AddCShellsAspNetCore(cshells => cshells
+    ///     .WithWebRouting(options =>
     ///     {
     ///         options.HeaderName = "X-Tenant-Id";
     ///         options.ExcludePaths = new[] { "/api", "/admin" };
-    ///     });
-    /// });
+    ///     })
+    /// );
     ///
     /// // Use a custom pipeline
-    /// services.AddCShellsAspNetCore(cshells =>
-    /// {
-    ///     cshells.ConfigureResolverPipeline(pipeline => pipeline
+    /// services.AddCShellsAspNetCore(cshells => cshells
+    ///     .ConfigureResolverPipeline(pipeline => pipeline
     ///         .Use&lt;CustomResolver&gt;()
     ///         .UseFallback&lt;DefaultShellResolverStrategy&gt;()
-    ///     );
-    /// });
+    ///     )
+    /// );
     /// </code>
     /// </example>
     public static CShellsBuilder AddCShellsAspNetCore(
@@ -98,14 +103,8 @@ public static class ServiceCollectionExtensions
         // This provides types like IAuthorizationPolicyProvider that should not be copied to shells
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellServiceExclusionProvider, CShells.AspNetCore.Hosting.AspNetCoreShellServiceExclusionProvider>());
 
-        // Register HTTP context accessor (required by shell-aware authentication and authorization providers)
+        // Register HTTP context accessor (required by shell-aware authentication and authorization providers if used)
         services.AddHttpContextAccessor();
-
-        // Register shell-aware authentication and authorization providers
-        // These enable per-shell authentication schemes and authorization policies
-        // They bridge the root middleware to shell-specific configurations
-        services.TryAddSingleton<IAuthenticationSchemeProvider, ShellAuthenticationSchemeProvider>();
-        services.TryAddSingleton<IAuthorizationPolicyProvider, ShellAuthorizationPolicyProvider>();
 
         return builder;
     }
