@@ -55,18 +55,15 @@ public class ShellMiddleware(
         _logger.LogInformation("Resolved shell '{ShellId}' for request path '{Path}'", shellId.Value, context.Request.Path);
 
         var shellContext = _host.GetShell(shellId.Value);
-        var originalRequestServices = context.RequestServices;
 
-        using var scope = shellContext.ServiceProvider.CreateScope();
-        try
-        {
-            context.RequestServices = scope.ServiceProvider;
-            await _next(context);
-        }
-        finally
-        {
-            context.RequestServices = originalRequestServices;
-        }
+        var scope = shellContext.ServiceProvider.CreateScope();
+        context.RequestServices = scope.ServiceProvider;
+
+        // Register the scope for disposal when the request completes
+        // This ensures the scope lives for the entire request, including endpoint execution
+        context.Response.RegisterForDispose(scope);
+
+        await _next(context);
     }
 
     private ShellId? ResolveShellWithCache(HttpContext context, ShellResolutionContext resolutionContext)
