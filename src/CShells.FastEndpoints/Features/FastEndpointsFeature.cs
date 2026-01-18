@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using CShells.AspNetCore.Features;
+using CShells.FastEndpoints.Contracts;
 using CShells.FastEndpoints.Options;
 using CShells.Features;
 using FastEndpoints;
@@ -59,7 +60,19 @@ public class FastEndpointsFeature(
 
         // Map FastEndpoints - the ShellEndpointRouteBuilder will automatically apply both
         // the shell's path prefix and the global route prefix (if configured)
-        endpoints.MapFastEndpoints();
+        endpoints.MapFastEndpoints(config =>
+        {
+            // Discover and invoke all registered configurators
+            var serviceProvider = endpoints.ServiceProvider;
+            var configurators = serviceProvider.GetServices<IFastEndpointsConfigurator>();
+
+            foreach (var configurator in configurators)
+            {
+                _logger.LogInformation("Applying FastEndpoints configurator '{ConfiguratorType}' for shell '{ShellId}'",
+                    configurator.GetType().Name, _shellSettings.Id);
+                configurator.Configure(config);
+            }
+        });
     }
 
     /// <summary>
