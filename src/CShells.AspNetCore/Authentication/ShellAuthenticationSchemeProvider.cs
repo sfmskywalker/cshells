@@ -28,27 +28,13 @@ namespace CShells.AspNetCore.Authentication;
 /// - Falls back to the default scheme provider for app-level schemes
 /// </para>
 /// </remarks>
-public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
+public class ShellAuthenticationSchemeProvider(
+    IOptions<AuthenticationOptions> options,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<ShellAuthenticationSchemeProvider>? logger = null) : IAuthenticationSchemeProvider
 {
-    private readonly IAuthenticationSchemeProvider _fallbackProvider;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ILogger<ShellAuthenticationSchemeProvider> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ShellAuthenticationSchemeProvider"/> class.
-    /// </summary>
-    /// <param name="options">The root application's authentication options (for fallback).</param>
-    /// <param name="httpContextAccessor">HTTP context accessor to get the current request context.</param>
-    /// <param name="logger">Optional logger.</param>
-    public ShellAuthenticationSchemeProvider(
-        IOptions<AuthenticationOptions> options,
-        IHttpContextAccessor httpContextAccessor,
-        ILogger<ShellAuthenticationSchemeProvider>? logger = null)
-    {
-        _fallbackProvider = new AuthenticationSchemeProvider(options);
-        _httpContextAccessor = httpContextAccessor;
-        _logger = logger ?? NullLogger<ShellAuthenticationSchemeProvider>.Instance;
-    }
+    private readonly IAuthenticationSchemeProvider _fallbackProvider = new AuthenticationSchemeProvider(options);
+    private readonly ILogger<ShellAuthenticationSchemeProvider> _logger = logger ?? NullLogger<ShellAuthenticationSchemeProvider>.Instance;
 
     /// <inheritdoc />
     public Task<AuthenticationScheme?> GetSchemeAsync(string name)
@@ -70,12 +56,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultAuthenticateSchemeAsync();
-        }
-
-        return _fallbackProvider.GetDefaultAuthenticateSchemeAsync();
+        return shellProvider != null ? shellProvider.GetDefaultAuthenticateSchemeAsync() : _fallbackProvider.GetDefaultAuthenticateSchemeAsync();
     }
 
     /// <inheritdoc />
@@ -83,12 +64,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultChallengeSchemeAsync();
-        }
-
-        return _fallbackProvider.GetDefaultChallengeSchemeAsync();
+        return shellProvider != null ? shellProvider.GetDefaultChallengeSchemeAsync() : _fallbackProvider.GetDefaultChallengeSchemeAsync();
     }
 
     /// <inheritdoc />
@@ -96,12 +72,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultForbidSchemeAsync();
-        }
-
-        return _fallbackProvider.GetDefaultForbidSchemeAsync();
+        return shellProvider != null ? shellProvider.GetDefaultForbidSchemeAsync() : _fallbackProvider.GetDefaultForbidSchemeAsync();
     }
 
     /// <inheritdoc />
@@ -109,12 +80,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultSignInSchemeAsync();
-        }
-
-        return _fallbackProvider.GetDefaultSignInSchemeAsync();
+        return shellProvider != null ? shellProvider.GetDefaultSignInSchemeAsync() : _fallbackProvider.GetDefaultSignInSchemeAsync();
     }
 
     /// <inheritdoc />
@@ -122,12 +88,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultSignOutSchemeAsync();
-        }
-
-        return _fallbackProvider.GetDefaultSignOutSchemeAsync();
+        return shellProvider != null ? shellProvider.GetDefaultSignOutSchemeAsync() : _fallbackProvider.GetDefaultSignOutSchemeAsync();
     }
 
     /// <inheritdoc />
@@ -135,12 +96,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetAllSchemesAsync();
-        }
-
-        return _fallbackProvider.GetAllSchemesAsync();
+        return shellProvider != null ? shellProvider.GetAllSchemesAsync() : _fallbackProvider.GetAllSchemesAsync();
     }
 
     /// <inheritdoc />
@@ -148,12 +104,7 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellSchemeProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetRequestHandlerSchemesAsync();
-        }
-
-        return _fallbackProvider.GetRequestHandlerSchemesAsync();
+        return shellProvider != null ? shellProvider.GetRequestHandlerSchemesAsync() : _fallbackProvider.GetRequestHandlerSchemesAsync();
     }
 
     /// <inheritdoc />
@@ -186,29 +137,15 @@ public class ShellAuthenticationSchemeProvider : IAuthenticationSchemeProvider
     /// <returns>The shell's scheme provider, or null if not in a shell context.</returns>
     private IAuthenticationSchemeProvider? GetShellSchemeProvider()
     {
-        try
-        {
-            var httpContext = _httpContextAccessor.HttpContext;
-            if (httpContext == null)
-            {
-                return null;
-            }
+        var httpContext = httpContextAccessor.HttpContext;
 
-            // HttpContext.RequestServices is set by ShellMiddleware to the shell's scoped service provider
-            var shellProvider = httpContext.RequestServices.GetService<IAuthenticationSchemeProvider>();
+        // HttpContext.RequestServices is set by ShellMiddleware to the shell's scoped service provider
+        var shellProvider = httpContext?.RequestServices.GetService<IAuthenticationSchemeProvider>();
 
-            // Make sure we don't get ourselves in an infinite loop
-            if (shellProvider != null && shellProvider.GetType() != typeof(ShellAuthenticationSchemeProvider))
-            {
-                return shellProvider;
-            }
+        // Make sure we don't get ourselves in an infinite loop
+        if (shellProvider != null && shellProvider.GetType() != typeof(ShellAuthenticationSchemeProvider))
+            return shellProvider;
 
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error getting authentication scheme provider from shell context");
-            return null;
-        }
+        return null;
     }
 }

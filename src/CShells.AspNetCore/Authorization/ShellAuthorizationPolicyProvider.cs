@@ -1,4 +1,3 @@
-using CShells.Hosting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,39 +28,20 @@ namespace CShells.AspNetCore.Authorization;
 /// - Falls back to the default policy provider for app-level policies
 /// </para>
 /// </remarks>
-public class ShellAuthorizationPolicyProvider : IAuthorizationPolicyProvider
+public class ShellAuthorizationPolicyProvider(
+    IOptions<AuthorizationOptions> options,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<ShellAuthorizationPolicyProvider>? logger = null) : IAuthorizationPolicyProvider
 {
-    private readonly IAuthorizationPolicyProvider _fallbackProvider;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ILogger<ShellAuthorizationPolicyProvider> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ShellAuthorizationPolicyProvider"/> class.
-    /// </summary>
-    /// <param name="options">The root application's authorization options (for fallback).</param>
-    /// <param name="httpContextAccessor">HTTP context accessor to get the current request context.</param>
-    /// <param name="logger">Optional logger.</param>
-    public ShellAuthorizationPolicyProvider(
-        IOptions<AuthorizationOptions> options,
-        IHttpContextAccessor httpContextAccessor,
-        ILogger<ShellAuthorizationPolicyProvider>? logger = null)
-    {
-        _fallbackProvider = new DefaultAuthorizationPolicyProvider(options);
-        _httpContextAccessor = httpContextAccessor;
-        _logger = logger ?? NullLogger<ShellAuthorizationPolicyProvider>.Instance;
-    }
+    private readonly IAuthorizationPolicyProvider _fallbackProvider = new DefaultAuthorizationPolicyProvider(options);
+    private readonly ILogger<ShellAuthorizationPolicyProvider> _logger = logger ?? NullLogger<ShellAuthorizationPolicyProvider>.Instance;
 
     /// <inheritdoc />
     public Task<AuthorizationPolicy> GetDefaultPolicyAsync()
     {
         // Try to get from shell provider first
         var shellProvider = GetShellPolicyProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetDefaultPolicyAsync();
-        }
-
-        return _fallbackProvider.GetDefaultPolicyAsync();
+        return shellProvider != null ? shellProvider.GetDefaultPolicyAsync() : _fallbackProvider.GetDefaultPolicyAsync();
     }
 
     /// <inheritdoc />
@@ -69,12 +49,7 @@ public class ShellAuthorizationPolicyProvider : IAuthorizationPolicyProvider
     {
         // Try to get from shell provider first
         var shellProvider = GetShellPolicyProvider();
-        if (shellProvider != null)
-        {
-            return shellProvider.GetFallbackPolicyAsync();
-        }
-
-        return _fallbackProvider.GetFallbackPolicyAsync();
+        return shellProvider != null ? shellProvider.GetFallbackPolicyAsync() : _fallbackProvider.GetFallbackPolicyAsync();
     }
 
     /// <inheritdoc />
@@ -110,29 +85,17 @@ public class ShellAuthorizationPolicyProvider : IAuthorizationPolicyProvider
     /// <returns>The shell's policy provider, or null if not in a shell context.</returns>
     private IAuthorizationPolicyProvider? GetShellPolicyProvider()
     {
-        try
+        var httpContext = httpContextAccessor.HttpContext;
+
+        // HttpContext.RequestServices is set by ShellMiddleware to the shell's scoped service provider
+        var shellProvider = httpContext?.RequestServices.GetService<IAuthorizationPolicyProvider>();
+
+        // Make sure we don't get ourselves in an infinite loop
+        if (shellProvider != null && shellProvider.GetType() != typeof(ShellAuthorizationPolicyProvider))
         {
-            var httpContext = _httpContextAccessor.HttpContext;
-            if (httpContext == null)
-            {
-                return null;
-            }
-
-            // HttpContext.RequestServices is set by ShellMiddleware to the shell's scoped service provider
-            var shellProvider = httpContext.RequestServices.GetService<IAuthorizationPolicyProvider>();
-
-            // Make sure we don't get ourselves in an infinite loop
-            if (shellProvider != null && shellProvider.GetType() != typeof(ShellAuthorizationPolicyProvider))
-            {
-                return shellProvider;
-            }
-
-            return null;
+            return shellProvider;
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error getting authorization policy provider from shell context");
-            return null;
-        }
+
+        return null;
     }
 }

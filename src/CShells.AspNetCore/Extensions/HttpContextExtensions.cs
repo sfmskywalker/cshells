@@ -1,7 +1,6 @@
 using CShells.Hosting;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.AspNetCore.Extensions;
 
@@ -32,31 +31,25 @@ public static class HttpContextExtensions
         
         // Convert headers to a dictionary
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var header in httpContext.Request.Headers)
-        {
+        foreach (var header in httpContext.Request.Headers) 
             headers[header.Key] = header.Value.ToString();
-        }
+        
         context.Set(ShellResolutionContextKeys.Headers, headers);
         
         // Convert query parameters to a dictionary
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var param in httpContext.Request.Query)
-        {
+        foreach (var param in httpContext.Request.Query) 
             parameters[param.Key] = param.Value.ToString();
-        }
+        
         context.Set(ShellResolutionContextKeys.Parameters, parameters);
         
         // Set user if authenticated
-        if (httpContext.User?.Identity?.IsAuthenticated == true)
-        {
+        if (httpContext.User?.Identity?.IsAuthenticated == true) 
             context.Set(ShellResolutionContextKeys.User, httpContext.User);
-        }
         
         // Set IP address
-        if (httpContext.Connection.RemoteIpAddress != null)
-        {
+        if (httpContext.Connection.RemoteIpAddress != null) 
             context.Set(ShellResolutionContextKeys.IpAddress, httpContext.Connection.RemoteIpAddress.ToString());
-        }
         
         // Store the raw HttpContext for protocol-specific resolvers
         context.Set(ShellResolutionContextKeys.ProtocolContext, httpContext);

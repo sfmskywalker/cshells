@@ -1,13 +1,9 @@
 using System.Reflection;
-using CShells.AspNetCore.Authentication;
-using CShells.AspNetCore.Authorization;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Middleware;
 using CShells.DependencyInjection;
 using CShells.Hosting;
 using CShells.Resolution;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

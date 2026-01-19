@@ -20,8 +20,6 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells()
         {
-            Guard.Against.Null(builder);
-
             return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: null);
         }
 
@@ -46,8 +44,6 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells(IEnumerable<Assembly> assemblies)
         {
-            Guard.Against.Null(builder);
-
             return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: assemblies);
         }
 
@@ -60,7 +56,6 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells(string sectionName, IEnumerable<Assembly>? assemblies = null)
         {
-            Guard.Against.Null(builder);
             Guard.Against.NullOrEmpty(sectionName);
 
             return builder.AddShells(shells => shells.WithConfigurationProvider(builder.Configuration, sectionName), assemblies);
@@ -81,7 +76,6 @@ public static class ShellExtensions
             Action<CShellsBuilder> configureCShells,
             IEnumerable<Assembly>? assemblies = null)
         {
-            Guard.Against.Null(builder);
             Guard.Against.Null(configureCShells);
 
             // Register ASP.NET Core integration for CShells
@@ -91,10 +85,8 @@ public static class ShellExtensions
                 configureCShells(cshells);
 
                 // If no IShellSettingsProvider was registered, add the default configuration provider
-                if (cshells.Services.All(d => d.ServiceType != typeof(IShellSettingsProvider)))
-                {
+                if (cshells.Services.All(d => d.ServiceType != typeof(IShellSettingsProvider))) 
                     cshells.WithConfigurationProvider(builder.Configuration);
-                }
             }, assemblies);
 
             return builder;
