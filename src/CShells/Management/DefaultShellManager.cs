@@ -41,6 +41,8 @@ public class DefaultShellManager : IShellManager
     {
         Guard.Against.Null(settings);
 
+        ShellContext shellContext;
+
         lock (_lock)
         {
             _logger.LogInformation("Adding shell '{ShellId}'", settings.Id);
@@ -49,18 +51,38 @@ public class DefaultShellManager : IShellManager
             _cache.Load(_cache.GetAll().Append(settings));
 
             // Build shell context (this triggers feature service registration)
-            _ = _shellHost.GetShell(settings.Id);
+            shellContext = _shellHost.GetShell(settings.Id);
 
             _logger.LogInformation("Shell '{ShellId}' added successfully", settings.Id);
         }
 
-        // Publish notification (outside lock to avoid deadlocks)
-        await _notificationPublisher.PublishAsync(new ShellAddedNotification(settings), strategy: null, cancellationToken);
+        // Publish notifications (outside lock to avoid deadlocks)
+        // Activate shell first, then notify that it was added
+        await _notificationPublisher.PublishAsync(new ShellActivated(shellContext), strategy: null, cancellationToken);
+        await _notificationPublisher.PublishAsync(new ShellAdded(settings), strategy: null, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
     {
+        ShellContext? shellContext = null;
+
+        // Get shell context BEFORE removing from cache so handlers can access it during deactivation
+        try
+        {
+            shellContext = _shellHost.GetShell(shellId);
+        }
+        catch (KeyNotFoundException)
+        {
+            _logger.LogWarning("Shell '{ShellId}' not found, skipping deactivation", shellId);
+        }
+
+        // Publish deactivation notification BEFORE removal (outside lock to avoid deadlocks)
+        if (shellContext != null)
+        {
+            await _notificationPublisher.PublishAsync(new ShellDeactivating(shellContext), strategy: null, cancellationToken);
+        }
+
         lock (_lock)
         {
             _logger.LogInformation("Removing shell '{ShellId}'", shellId);
@@ -73,8 +95,8 @@ public class DefaultShellManager : IShellManager
             _logger.LogInformation("Shell '{ShellId}' removed successfully", shellId);
         }
 
-        // Publish notification (outside lock to avoid deadlocks)
-        await _notificationPublisher.PublishAsync(new ShellRemovedNotification(shellId), strategy: null, cancellationToken);
+        // Publish removal notification AFTER removal (outside lock to avoid deadlocks)
+        await _notificationPublisher.PublishAsync(new ShellRemoved(shellId), strategy: null, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -112,6 +134,6 @@ public class DefaultShellManager : IShellManager
         _logger.LogInformation("Reloaded {Count} shell(s)", settingsList.Count);
 
         // Publish notification (outside lock to avoid deadlocks)
-        await _notificationPublisher.PublishAsync(new ShellsReloadedNotification(settingsList), strategy: null, cancellationToken);
+        await _notificationPublisher.PublishAsync(new ShellsReloaded(settingsList), strategy: null, cancellationToken);
     }
 }

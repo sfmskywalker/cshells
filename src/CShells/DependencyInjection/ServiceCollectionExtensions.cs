@@ -49,6 +49,10 @@ public static class ServiceCollectionExtensions
         // Register the notification publisher for shell lifecycle events
         services.TryAddSingleton<Notifications.INotificationPublisher, Notifications.DefaultNotificationPublisher>();
 
+        // Register notification handlers for shell lifecycle events
+        services.TryAddSingleton<Notifications.INotificationHandler<Notifications.ShellActivated>, Notifications.ShellActivationHandler>();
+        services.TryAddSingleton<Notifications.INotificationHandler<Notifications.ShellDeactivating>, Notifications.ShellDeactivationHandler>();
+
         // Register the shell settings cache
         var cache = new ShellSettingsCache();
         services.TryAddSingleton<ShellSettingsCache>(cache);
@@ -57,6 +61,9 @@ public static class ServiceCollectionExtensions
         // Register a hosted service that will populate the cache at startup
         // This ensures the cache is loaded when the application starts normally (via IHost.Run)
         services.AddHostedService<ShellSettingsCacheInitializer>();
+
+        // Register hosted service for shell lifecycle coordination with app lifecycle
+        services.AddHostedService<ShellStartupHostedService>();
 
         // Register IShellHost using the DefaultShellHost.
         // The root IServiceProvider is passed to allow IShellFeature constructors to resolve root-level services.

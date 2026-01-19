@@ -15,9 +15,9 @@ namespace CShells.AspNetCore.Notifications;
 /// Handles shell lifecycle notifications by registering/removing endpoints in the dynamic endpoint data source.
 /// </summary>
 public class ShellEndpointRegistrationHandler :
-    INotificationHandler<ShellAddedNotification>,
-    INotificationHandler<ShellRemovedNotification>,
-    INotificationHandler<ShellsReloadedNotification>
+    INotificationHandler<ShellAdded>,
+    INotificationHandler<ShellRemoved>,
+    INotificationHandler<ShellsReloaded>
 {
     private readonly DynamicShellEndpointDataSource _endpointDataSource;
     private readonly EndpointRouteBuilderAccessor _endpointRouteBuilderAccessor;
@@ -46,7 +46,7 @@ public class ShellEndpointRegistrationHandler :
     }
 
     /// <inheritdoc />
-    public Task HandleAsync(ShellAddedNotification notification, CancellationToken cancellationToken = default)
+    public Task HandleAsync(ShellAdded notification, CancellationToken cancellationToken = default)
     {
         if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
         {
@@ -61,7 +61,7 @@ public class ShellEndpointRegistrationHandler :
     }
 
     /// <inheritdoc />
-    public Task HandleAsync(ShellRemovedNotification notification, CancellationToken cancellationToken = default)
+    public Task HandleAsync(ShellRemoved notification, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Removing endpoints for shell '{ShellId}'", notification.ShellId);
         _endpointDataSource.RemoveEndpoints(notification.ShellId);
@@ -69,7 +69,7 @@ public class ShellEndpointRegistrationHandler :
     }
 
     /// <inheritdoc />
-    public Task HandleAsync(ShellsReloadedNotification notification, CancellationToken cancellationToken = default)
+    public Task HandleAsync(ShellsReloaded notification, CancellationToken cancellationToken = default)
     {
         if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
         {

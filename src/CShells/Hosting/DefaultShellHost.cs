@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace CShells.Hosting;
 
@@ -33,7 +32,7 @@ namespace CShells.Hosting;
 ///   </item>
 /// </list>
 /// </remarks>
-public class DefaultShellHost : IShellHost, IDisposable
+public class DefaultShellHost : IShellHost, IAsyncDisposable
 {
     private readonly IReadOnlyDictionary<string, ShellFeatureDescriptor> _featureMap;
     private readonly IShellSettingsCache _shellSettingsCache;
@@ -480,31 +479,28 @@ public class DefaultShellHost : IShellHost, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Disposes resources used by this instance.
-    /// </summary>
-    /// <param name="disposing">True if disposing managed resources.</param>
-    protected virtual void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (_disposed)
         {
             return;
         }
 
-        if (disposing)
+        // Dispose all service providers asynchronously
+        foreach (var context in _shellContexts.Values)
         {
-            // Dispose all service providers
-            var disposableProviders = _shellContexts.Values
-                .Select(c => c.ServiceProvider)
-                .OfType<IDisposable>();
-
-            foreach (var disposable in disposableProviders)
+            if (context.ServiceProvider is IAsyncDisposable asyncDisposable)
+            {
+                try
+                {
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing service provider");
+                }
+            }
+            else if (context.ServiceProvider is IDisposable disposable)
             {
                 try
                 {
@@ -515,10 +511,11 @@ public class DefaultShellHost : IShellHost, IDisposable
                     _logger.LogWarning(ex, "Error disposing service provider");
                 }
             }
-
-            _shellContexts.Clear();
         }
 
+        _shellContexts.Clear();
         _disposed = true;
+
+        GC.SuppressFinalize(this);
     }
 }
