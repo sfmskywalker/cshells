@@ -5,16 +5,14 @@ namespace CShells.Tests.Integration.ShellHost;
 /// <summary>
 /// Integration tests for service resolution with real feature startup classes.
 /// </summary>
-public class ServiceResolutionIntegrationTests : IDisposable
+public class ServiceResolutionIntegrationTests : IAsyncDisposable
 {
     private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        foreach (var host in _hostsToDispose)
-        {
-            host.Dispose();
-        }
+        foreach (var host in _hostsToDispose) 
+            await host.DisposeAsync();
     }
 
     [Theory(DisplayName = "GetShell with Weather feature resolves expected services")]

@@ -6,15 +6,15 @@ namespace CShells.Tests.Integration.ShellHost;
 /// <summary>
 /// Tests for DefaultShell property behavior with real feature startup classes.
 /// </summary>
-public class DefaultShellTests : IDisposable
+public class DefaultShellTests : IAsyncDisposable
 {
     private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         foreach (var host in _hostsToDispose)
         {
-            host.Dispose();
+            await host.DisposeAsync();
         }
     }
 

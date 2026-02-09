@@ -12,15 +12,15 @@ namespace CShells.Tests.Integration.DefaultShellHost;
 /// <summary>
 /// Tests for <see cref="DefaultShellHost"/> service resolution and dependency injection.
 /// </summary>
-public class ServiceResolutionTests : IDisposable
+public class ServiceResolutionTests : IAsyncDisposable
 {
     private readonly List<Hosting.DefaultShellHost> _hostsToDispose = [];
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         foreach (var host in _hostsToDispose)
         {
-            host.Dispose();
+            await host.DisposeAsync();
         }
     }
 

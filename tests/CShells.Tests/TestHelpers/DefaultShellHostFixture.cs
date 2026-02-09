@@ -10,7 +10,7 @@ namespace CShells.Tests.TestHelpers;
 /// <summary>
 /// Shared helper for creating and reusing <see cref="DefaultShellHost"/> instances.
 /// </summary>
-public sealed class DefaultShellHostFixture : IDisposable
+public sealed class DefaultShellHostFixture : IAsyncDisposable
 {
     private readonly List<Hosting.DefaultShellHost> _hosts = [];
     private readonly IServiceProvider _rootProvider;
@@ -58,11 +58,11 @@ public sealed class DefaultShellHostFixture : IDisposable
         return BuildCache(shells);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         foreach (var host in _hosts)
         {
-            host.Dispose();
+            await host.DisposeAsync();
         }
         _hosts.Clear();
     }

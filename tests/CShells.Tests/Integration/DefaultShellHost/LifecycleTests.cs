@@ -11,14 +11,14 @@ namespace CShells.Tests.Integration.DefaultShellHost;
 public class LifecycleTests(DefaultShellHostFixture fixture)
 {
     [Fact(DisplayName = "Dispose disposes all service providers")]
-    public void Dispose_DisposesServiceProviders()
+    public async Task Dispose_DisposesServiceProviders()
     {
         // Arrange
         var host = fixture.CreateHost([new(new("TestShell"))], typeof(TestFixtures).Assembly);
         _ = host.GetShell(new("TestShell")); // Ensure the shell is built
 
         // Act
-        host.Dispose();
+        await host.DisposeAsync();
 
         // Assert - After dispose, accessing shells should throw
         Assert.Throws<ObjectDisposedException>(() => host.DefaultShell);

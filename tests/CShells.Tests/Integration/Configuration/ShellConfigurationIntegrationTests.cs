@@ -10,7 +10,7 @@ namespace CShells.Tests.Integration.Configuration;
 public class ShellConfigurationIntegrationTests
 {
     [Fact(DisplayName = "Shell-scoped IConfiguration is available in shell service provider")]
-    public void ShellScopedConfiguration_IsAvailableInShellServiceProvider()
+    public async Task ShellScopedConfiguration_IsAvailableInShellServiceProvider()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -51,12 +51,12 @@ public class ShellConfigurationIntegrationTests
         Assert.Equal("50", shellConfig["MaxUploadSizeMB"]);
 
         // Clean up
-        shellHost.Dispose();
+        await shellHost.DisposeAsync();
         rootProvider.Dispose();
     }
 
     [Fact(DisplayName = "Different shells can have different configuration values")]
-    public void DifferentShells_CanHaveDifferentConfigurationValues()
+    public async Task DifferentShells_CanHaveDifferentConfigurationValues()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -99,12 +99,12 @@ public class ShellConfigurationIntegrationTests
         Assert.Equal("Blue", config2["Theme"]);
 
         // Clean up
-        shellHost.Dispose();
+        await shellHost.DisposeAsync();
         rootProvider.Dispose();
     }
 
     [Fact(DisplayName = "Shell without custom settings inherits root configuration")]
-    public void ShellWithoutCustomSettings_InheritsRootConfiguration()
+    public async Task ShellWithoutCustomSettings_InheritsRootConfiguration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -141,7 +141,7 @@ public class ShellConfigurationIntegrationTests
         Assert.Equal("10", shellConfig["MaxUploadSizeMB"]);
 
         // Clean up
-        shellHost.Dispose();
+        await shellHost.DisposeAsync();
         rootProvider.Dispose();
     }
 }
