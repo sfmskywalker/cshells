@@ -77,16 +77,11 @@ internal static class ConfigurationHelper
 
         foreach (var child in section.GetChildren())
         {
-            if (child.GetChildren().Any())
-            {
-                // Nested object
-                dict[child.Key] = JsonSerializer.Deserialize<JsonElement>(SerializeConfigurationSection(child));
-            }
-            else
-            {
-                // Simple value
-                dict[child.Key] = child.Value;
-            }
+            var value = child.GetChildren().Any()
+                ? (object?)JsonSerializer.Deserialize<JsonElement>(SerializeConfigurationSection(child))
+                : child.Value;
+
+            dict[child.Key] = value;
         }
 
         return JsonSerializer.Serialize(dict);
