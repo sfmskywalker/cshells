@@ -385,8 +385,6 @@ builder.AddShells(cshells =>
         .WithFeatures("Core", "Weather")
         .WithConfiguration("WebRouting:Path", "")
         .WithConfiguration("Theme", "Dark"));
-
-    cshells.WithInMemoryShells();
 });
 ```
 
