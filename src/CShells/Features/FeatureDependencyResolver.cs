@@ -106,19 +106,12 @@ public class FeatureDependencyResolver
         // Currently being processed in this call stack - circular dependency!
         if (visiting.Contains(featureName))
         {
-            throw new InvalidOperationException(
-                $"Circular dependency detected involving feature '{featureName}'.");
+            throw new InvalidOperationException($"Circular dependency detected involving feature '{featureName}'.");
         }
 
         // Validate feature exists
         if (!features.TryGetValue(featureName, out var descriptor))
-        {
-            var errorMessage = dependentFeature != null
-                ? $"Feature '{featureName}' not found in the feature dictionary. Required by feature '{dependentFeature.Id}'."
-                : $"Feature '{featureName}' not found in the feature dictionary.";
-
-            throw new InvalidOperationException(errorMessage);
-        }
+            throw dependentFeature != null ? new(featureName, dependentFeature.Id) : new FeatureNotFoundException(featureName);
 
         // Mark as being processed (gray)
         visiting.Add(featureName);

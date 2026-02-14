@@ -18,22 +18,14 @@ public static class ShellSettingsFactory
         Guard.Against.Null(config);
 
         var shellId = new ShellId(config.Name);
-        var normalizedFeatures = ConfigurationHelper.NormalizeFeatures(config.Features);
-        var settings = new ShellSettings(shellId, normalizedFeatures);
+        var featureNames = ConfigurationHelper.ExtractFeatureNames(config.Features);
+        var settings = new ShellSettings(shellId, featureNames);
 
-        // Convert property values to JsonElement for consistent serialization
-        foreach (var property in config.Properties)
-        {
-            var converted = ConfigurationHelper.ConvertToJsonElement(property.Value);
-            if (converted != null)
-                settings.Properties[property.Key] = converted;
-        }
+        // Populate shell-level configuration into ConfigurationData
+        ConfigurationHelper.PopulateShellConfiguration(config.Configuration, settings.ConfigurationData);
 
-        // Populate configuration data from settings
-        foreach (var setting in config.Settings.Where(s => s.Value != null))
-        {
-            settings.ConfigurationData[setting.Key] = setting.Value!;
-        }
+        // Populate feature-specific settings into ConfigurationData
+        ConfigurationHelper.PopulateFeatureSettings(config.Features, settings.ConfigurationData);
 
         return settings;
     }
@@ -72,7 +64,7 @@ public static class ShellSettingsFactory
 
     /// <summary>
     /// Creates a <see cref="ShellSettings"/> instance directly from an IConfigurationSection.
-    /// This method properly handles nested property sections like WebRoutingShellOptions.
+    /// This method properly handles nested configuration sections.
     /// </summary>
     /// <param name="section">The configuration section representing a shell.</param>
     /// <returns>A new <see cref="ShellSettings"/> instance.</returns>
@@ -81,18 +73,21 @@ public static class ShellSettingsFactory
         Guard.Against.Null(section);
 
         var name = section.GetValue<string>("Name") ?? throw new InvalidOperationException("Shell name is required");
-        var normalizedFeatures = ConfigurationHelper.GetNormalizedFeatures(section);
+        
+        // Parse features from configuration (handles mixed string/object array)
+        var featuresSection = section.GetSection("Features");
+        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection);
+        var featureNames = ConfigurationHelper.ExtractFeatureNames(features);
 
         var shellId = new ShellId(name);
-        var settings = new ShellSettings(shellId, normalizedFeatures);
+        var settings = new ShellSettings(shellId, featureNames);
 
-        // Load properties from configuration
-        var propertiesSection = section.GetSection("Properties");
-        ConfigurationHelper.LoadPropertiesFromConfiguration(propertiesSection, settings.Properties);
+        // Load shell-level configuration into ConfigurationData
+        var configurationSection = section.GetSection("Configuration");
+        ConfigurationHelper.LoadConfigurationFromSection(configurationSection, settings.ConfigurationData);
 
-        // Load shell-specific settings (configuration data)
-        var settingsSection = section.GetSection("Settings");
-        ConfigurationHelper.LoadSettingsFromConfiguration(settingsSection, settings.ConfigurationData);
+        // Populate feature-specific settings into ConfigurationData
+        ConfigurationHelper.PopulateFeatureSettings(features, settings.ConfigurationData);
 
         return settings;
     }

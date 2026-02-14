@@ -1,7 +1,7 @@
 namespace CShells;
 
 /// <summary>
-/// Holds shell configuration including shell ID, enabled features, and arbitrary properties.
+/// Holds shell configuration including shell ID, enabled features, and shell-specific configuration.
 /// </summary>
 public class ShellSettings
 {
@@ -31,12 +31,8 @@ public class ShellSettings
     } = [];
 
     /// <summary>
-    /// Gets or sets arbitrary properties associated with this shell.
-    /// </summary>
-    public IDictionary<string, object> Properties { get; set; } = new Dictionary<string, object>();
-
-    /// <summary>
-    /// Gets or sets shell-specific configuration data.
+    /// Gets or sets shell-specific configuration data as a dictionary.
+    /// Keys use colon-separated format for hierarchical data (e.g., "WebRouting:Path").
     /// </summary>
     public IDictionary<string, object> ConfigurationData { get; set; } = new Dictionary<string, object>();
 }

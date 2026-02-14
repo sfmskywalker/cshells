@@ -49,32 +49,53 @@ public class ShellBuilder
     }
 
     /// <summary>
-    /// Adds a property to the shell settings.
+    /// Adds a feature with settings to the shell.
     /// </summary>
-    public ShellBuilder WithProperty(string key, object value)
+    /// <param name="featureId">The feature identifier.</param>
+    /// <param name="configure">Action to configure the feature settings.</param>
+    /// <returns>This builder for method chaining.</returns>
+    public ShellBuilder WithFeature(string featureId, Action<FeatureSettingsBuilder> configure)
     {
-        Guard.Against.Null(key);
-        Guard.Against.Null(value);
-        _settings.Properties[key] = value;
+        Guard.Against.Null(featureId);
+        Guard.Against.Null(configure);
+
+        // Add the feature to enabled features
+        var currentFeatures = _settings.EnabledFeatures.ToList();
+        if (!currentFeatures.Contains(featureId))
+            currentFeatures.Add(featureId);
+        _settings.EnabledFeatures = [..currentFeatures];
+
+        // Build the settings
+        var settingsBuilder = new FeatureSettingsBuilder(featureId);
+        configure(settingsBuilder);
+        settingsBuilder.ApplyTo(_settings.ConfigurationData);
+
         return this;
     }
 
     /// <summary>
-    /// Adds multiple properties to the shell settings.
+    /// Adds a feature entry (with optional settings) to the shell.
     /// </summary>
-    public ShellBuilder WithProperties(IDictionary<string, object> properties)
+    public ShellBuilder WithFeature(FeatureEntry feature)
     {
-        Guard.Against.Null(properties);
-        foreach (var (key, value) in properties)
-            _settings.Properties[key] = value;
+        Guard.Against.Null(feature);
+
+        var currentFeatures = _settings.EnabledFeatures.ToList();
+        if (!currentFeatures.Contains(feature.Name))
+            currentFeatures.Add(feature.Name);
+        _settings.EnabledFeatures = [..currentFeatures];
+
+        // Apply feature settings to configuration data
+        ConfigurationHelper.PopulateFeatureSettings([feature], _settings.ConfigurationData);
+
         return this;
     }
 
     /// <summary>
-    /// Adds a configuration data entry to the shell settings.
+    /// Adds a configuration entry to the shell settings.
     /// Configuration data is used to populate the shell-scoped IConfiguration.
     /// </summary>
-    public ShellBuilder WithConfigurationData(string key, object value)
+    public ShellBuilder WithConfiguration(string key, object value)
     {
         Guard.Against.Null(key);
         Guard.Against.Null(value);
@@ -83,20 +104,20 @@ public class ShellBuilder
     }
 
     /// <summary>
-    /// Adds multiple configuration data entries to the shell settings.
+    /// Adds multiple configuration entries to the shell settings.
     /// Configuration data is used to populate the shell-scoped IConfiguration.
     /// </summary>
-    public ShellBuilder WithConfigurationData(IDictionary<string, object> configurationData)
+    public ShellBuilder WithConfiguration(IDictionary<string, object> configuration)
     {
-        Guard.Against.Null(configurationData);
-        foreach (var (key, value) in configurationData)
+        Guard.Against.Null(configuration);
+        foreach (var (key, value) in configuration)
             _settings.ConfigurationData[key] = value;
         return this;
     }
 
     /// <summary>
     /// Loads configuration from an <see cref="IConfigurationSection"/> and merges it with existing settings.
-    /// Features are merged (combined), while Properties and ConfigurationData from configuration take precedence.
+    /// Features are merged (combined), while Configuration from the section takes precedence.
     /// </summary>
     /// <param name="section">The configuration section representing a shell.</param>
     /// <returns>The builder for method chaining.</returns>
@@ -104,30 +125,31 @@ public class ShellBuilder
     {
         Guard.Against.Null(section);
 
-        // Load features and merge with existing
-        var normalizedFeatures = ConfigurationHelper.GetNormalizedFeatures(section);
+        // Parse features from configuration (handles mixed string/object array)
+        var featuresSection = section.GetSection("Features");
+        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection);
 
-        if (normalizedFeatures.Length > 0)
+        if (features.Count > 0)
         {
             var existingFeatures = _settings.EnabledFeatures.ToList();
-            existingFeatures.AddRange(normalizedFeatures);
+            var newFeatureNames = ConfigurationHelper.ExtractFeatureNames(features);
+            existingFeatures.AddRange(newFeatureNames);
             _settings.EnabledFeatures = existingFeatures.Distinct().ToArray();
+
+            // Apply feature settings
+            ConfigurationHelper.PopulateFeatureSettings(features, _settings.ConfigurationData);
         }
 
-        // Load properties from configuration
-        var propertiesSection = section.GetSection("Properties");
-        ConfigurationHelper.LoadPropertiesFromConfiguration(propertiesSection, _settings.Properties);
-
-        // Load shell-specific settings (configuration data)
-        var settingsSection = section.GetSection("Settings");
-        ConfigurationHelper.LoadSettingsFromConfiguration(settingsSection, _settings.ConfigurationData);
+        // Load shell-level configuration
+        var configurationSection = section.GetSection("Configuration");
+        ConfigurationHelper.LoadConfigurationFromSection(configurationSection, _settings.ConfigurationData);
 
         return this;
     }
 
     /// <summary>
     /// Loads configuration from a <see cref="ShellConfig"/> and merges it with existing settings.
-    /// Features are merged (combined), while Properties and ConfigurationData from configuration take precedence.
+    /// Features are merged (combined), while Configuration takes precedence.
     /// </summary>
     /// <param name="config">The shell configuration.</param>
     /// <returns>The builder for method chaining.</returns>
@@ -136,28 +158,20 @@ public class ShellBuilder
         Guard.Against.Null(config);
 
         // Merge features
-        var normalizedFeatures = ConfigurationHelper.NormalizeFeatures(config.Features);
+        var featureNames = ConfigurationHelper.ExtractFeatureNames(config.Features);
 
-        if (normalizedFeatures.Length > 0)
+        if (featureNames.Length > 0)
         {
             var existingFeatures = _settings.EnabledFeatures.ToList();
-            existingFeatures.AddRange(normalizedFeatures);
+            existingFeatures.AddRange(featureNames);
             _settings.EnabledFeatures = existingFeatures.Distinct().ToArray();
         }
 
-        // Convert and merge properties
-        foreach (var property in config.Properties)
-        {
-            var converted = ConfigurationHelper.ConvertToJsonElement(property.Value);
-            if (converted != null)
-                _settings.Properties[property.Key] = converted;
-        }
+        // Apply feature settings
+        ConfigurationHelper.PopulateFeatureSettings(config.Features, _settings.ConfigurationData);
 
-        // Merge settings (configuration data)
-        foreach (var setting in config.Settings.Where(s => s.Value != null))
-        {
-            _settings.ConfigurationData[setting.Key] = setting.Value!;
-        }
+        // Apply shell-level configuration
+        ConfigurationHelper.PopulateShellConfiguration(config.Configuration, _settings.ConfigurationData);
 
         return this;
     }
@@ -172,3 +186,48 @@ public class ShellBuilder
     /// </summary>
     public static implicit operator ShellSettings(ShellBuilder builder) => builder.Build();
 }
+
+/// <summary>
+/// Builder for feature-specific settings.
+/// </summary>
+public class FeatureSettingsBuilder
+{
+    private readonly string _featureName;
+    private readonly Dictionary<string, object> _settings = new();
+
+    internal FeatureSettingsBuilder(string featureName)
+    {
+        _featureName = featureName;
+    }
+
+    /// <summary>
+    /// Adds a setting for the feature.
+    /// </summary>
+    public FeatureSettingsBuilder WithSetting(string key, object value)
+    {
+        Guard.Against.Null(key);
+        Guard.Against.Null(value);
+        _settings[key] = value;
+        return this;
+    }
+
+    /// <summary>
+    /// Adds multiple settings for the feature.
+    /// </summary>
+    public FeatureSettingsBuilder WithSettings(IDictionary<string, object> settings)
+    {
+        Guard.Against.Null(settings);
+        foreach (var (key, value) in settings)
+            _settings[key] = value;
+        return this;
+    }
+
+    internal void ApplyTo(IDictionary<string, object> configurationData)
+    {
+        foreach (var (key, value) in _settings)
+        {
+            configurationData[$"{_featureName}:{key}"] = value;
+        }
+    }
+}
+

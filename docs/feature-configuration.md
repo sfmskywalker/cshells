@@ -6,35 +6,15 @@ CShells provides an elegant, convention-based configuration system that allows f
 
 Features can be configured in three ways:
 
-1. **Auto-Configuration** - Public settable properties are automatically bound from configuration
+1. **Inline Configuration** - Settings are defined directly with the feature in the Features array
 2. **Explicit Configuration** - Implement `IConfigurableFeature<TOptions>` for strongly-typed options
 3. **Manual Configuration** - Use `IConfiguration` or `IOptions<T>` directly in `ConfigureServices`
 
-## Auto-Configuration
+## Inline Configuration (Recommended)
 
-The simplest way to configure a feature is through auto-configuration. Any public settable property on a feature class will be automatically bound from the configuration section matching the feature name.
-
-### Example
-
-```csharp
-[ShellFeature(
-    DisplayName = "SQLite Workflow Persistence",
-    Description = "Provides SQLite persistence for workflows")]
-public class SqliteWorkflowPersistenceFeature : IShellFeature
-{
-    // These properties are automatically bound from configuration
-    public string ConnectionString { get; set; } = "Data Source=workflows.db";
-    public bool EnableSensitiveDataLogging { get; set; }
-    public int CommandTimeout { get; set; } = 30;
-
-    public void ConfigureServices(IServiceCollection services)
-    {
-        // Properties are already configured before this method is called
-        services.AddDbContext<WorkflowDbContext>(options =>
-            options.UseSqlite(ConnectionString));
-    }
-}
-```
+The most elegant way to configure a feature is inline, where the feature name and settings are colocated in the Features array. Each feature can be either:
+- A simple string (feature name only)
+- An object with `Name` and any settings as properties
 
 ### Configuration (appsettings.json)
 
@@ -44,17 +24,52 @@ public class SqliteWorkflowPersistenceFeature : IShellFeature
     "Shells": [
       {
         "Name": "Default",
-        "Settings": {
-          "SqliteWorkflowPersistence": {
+        "Features": [
+          "Core",
+          {
+            "Name": "SqliteWorkflowPersistence",
             "ConnectionString": "Data Source=production.db;Cache=Shared",
             "EnableSensitiveDataLogging": false,
             "CommandTimeout": 60
-          }
-        },
-        "Features": ["SqliteWorkflowPersistence"]
+          },
+          "Logging"
+        ]
       }
     ]
   }
+}
+```
+
+### Feature Implementation
+
+```csharp
+[ShellFeature(
+    DisplayName = "SQLite Workflow Persistence",
+    Description = "Provides SQLite persistence for workflows")]
+public class SqliteWorkflowPersistenceFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Bind settings from the feature's configuration section
+        services.AddOptions<SqliteWorkflowPersistenceOptions>()
+            .Configure<IConfiguration>((options, config) =>
+            {
+                config.GetSection("SqliteWorkflowPersistence").Bind(options);
+            });
+
+        services.AddDbContext<WorkflowDbContext>((sp, options) =>
+        {
+            var persistenceOptions = sp.GetRequiredService<IOptions<SqliteWorkflowPersistenceOptions>>().Value;
+            options.UseSqlite(persistenceOptions.ConnectionString);
+        });
+    }
+}
+
+public class SqliteWorkflowPersistenceOptions
+{
+    public string ConnectionString { get; set; } = "Data Source=workflows.db";
+    public bool EnableSensitiveDataLogging { get; set; }
+    public int CommandTimeout { get; set; } = 30;
 }
 ```
 
@@ -64,7 +79,7 @@ Environment variables override configuration file settings using hierarchical na
 
 ```bash
 # Override connection string for specific shell and feature
-Shells__Default__Settings__SqliteWorkflowPersistence__ConnectionString="Data Source=prod.db"
+Shells__Default__Features__1__ConnectionString="Data Source=prod.db"
 
 # Or use environment-specific secrets
 ConnectionStrings__Workflows="Server=prod;Database=Workflows;..."
@@ -122,7 +137,26 @@ public class DatabaseFeature : IShellFeature, IConfigurableFeature<DatabaseOptio
     "Shells": [
       {
         "Name": "Default",
-        "Settings": {
+        "Features": [
+          "Core",
+          { "Name": "Database", "ConnectionString": "Server=localhost;Database=App;...", "CommandTimeout": 60, "EnableRetryOnFailure": true }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Alternatively, use the shell's `Configuration` section for shared settings:
+
+```json
+{
+  "CShells": {
+    "Shells": [
+      {
+        "Name": "Default",
+        "Features": ["Core", "Database"],
+        "Configuration": {
           "Database": {
             "ConnectionString": "Server=localhost;Database=App;...",
             "CommandTimeout": 60,
@@ -276,10 +310,11 @@ builder.Services.AddCustomFeatureValidation<CustomValidator>();
 
 Configuration follows a precedence order (highest to lowest):
 
-1. **Environment Variables** - `Shells__Default__Settings__FeatureName__PropertyName`
-2. **Shell Settings** - `CShells:Shells[].Settings.FeatureName`
-3. **Root Configuration** - `FeatureName:PropertyName`
-4. **Feature Defaults** - Property default values
+1. **Environment Variables** - `Shells__Default__Configuration__FeatureName__PropertyName`
+2. **Inline Feature Configuration** - Settings defined with the feature in the Features array
+3. **Shell Configuration** - `CShells:Shells[].Configuration.FeatureName`
+4. **Root Configuration** - `FeatureName:PropertyName`
+5. **Feature Defaults** - Property default values
 
 ### Example
 
@@ -292,7 +327,8 @@ Configuration follows a precedence order (highest to lowest):
     "Shells": [
       {
         "Name": "Default",
-        "Settings": {
+        "Features": ["Core", "Database"],
+        "Configuration": {
           "Database": {
             "ConnectionString": "ShellSpecificConnection"
           }
@@ -305,7 +341,7 @@ Configuration follows a precedence order (highest to lowest):
 
 With environment variable:
 ```bash
-Shells__Default__Settings__Database__ConnectionString="EnvironmentConnection"
+Shells__Default__Configuration__Database__ConnectionString="EnvironmentConnection"
 ```
 
 The feature will use `"EnvironmentConnection"` (environment variables win).
@@ -317,14 +353,14 @@ Never store secrets in `appsettings.json`. Use environment variables or secret m
 ### Development (User Secrets)
 
 ```bash
-dotnet user-secrets set "Shells:Default:Settings:Database:ConnectionString" "Server=localhost;..."
+dotnet user-secrets set "Shells:Default:Configuration:Database:ConnectionString" "Server=localhost;..."
 ```
 
 ### Production (Environment Variables)
 
 ```bash
 # Docker
-docker run -e Shells__Default__Settings__Database__ConnectionString="Server=prod;..." myapp
+docker run -e Shells__Default__Configuration__Database__ConnectionString="Server=prod;..." myapp
 
 # Kubernetes
 apiVersion: v1
@@ -346,7 +382,7 @@ builder.Configuration.AddAzureKeyVault(
 ```
 
 Configuration keys in Key Vault:
-- `Shells--Default--Settings--Database--ConnectionString`
+- `Shells--Default--Configuration--Database--ConnectionString`
 
 ## Best Practices
 
@@ -417,7 +453,7 @@ public class NewFeature : IShellFeature
 
 1. **Check feature name matches configuration section**
    - Feature name from `[ShellFeature]` attribute or class name
-   - Configuration section in `Settings.{FeatureName}`
+   - Configuration section in `Configuration.{FeatureName}` or inline in Features array
 
 2. **Check property is public and settable**
    ```csharp

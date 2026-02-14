@@ -149,26 +149,23 @@ public class WeatherFeature : IShellFeature
 }
 ```
 
-Features can access `ShellSettings` via constructor injection:
+Features can access shell configuration via `IConfiguration` (resolved from the shell's service provider):
 
 ```csharp
 using CShells;
 using CShells.Features;
+using Microsoft.Extensions.Configuration;
 
 public class WeatherFeature : IShellFeature
 {
-    private readonly ShellSettings _shellSettings;
-
-    public WeatherFeature(ShellSettings shellSettings)
-    {
-        _shellSettings = shellSettings;
-    }
-
     public void ConfigureServices(IServiceCollection services)
     {
-        // Access shell configuration
-        var apiKey = _shellSettings.Properties.GetValue<string>("WeatherApiKey");
-        services.AddSingleton<IWeatherService>(new WeatherService(apiKey));
+        services.AddSingleton<IWeatherService>(sp =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var apiKey = config["Weather:ApiKey"];
+            return new WeatherService(apiKey);
+        });
     }
 }
 ```
@@ -183,8 +180,8 @@ public class WeatherFeature : IShellFeature
     "Shells": [
       {
         "Name": "Default",
-        "Features": [ "Core", "Weather" ],
-        "Properties": {
+        "Features": ["Core", "Weather"],
+        "Configuration": {
           "WebRouting": {
             "Path": ""
           }
@@ -192,10 +189,14 @@ public class WeatherFeature : IShellFeature
       },
       {
         "Name": "Admin",
-        "Features": [ "Core", "Admin" ],
-        "Properties": {
+        "Features": [
+          "Core",
+          { "Name": "Admin", "MaxUsers": 100, "EnableAuditLog": true }
+        ],
+        "Configuration": {
           "WebRouting": {
-            "Path": "admin"
+            "Path": "admin",
+            "RoutePrefix": "api/v1"
           }
         }
       }
@@ -213,8 +214,8 @@ Create JSON files in a `Shells` folder (e.g., `Default.json`, `Admin.json`):
 ```json
 {
   "Name": "Default",
-  "Features": [ "Core", "Weather" ],
-  "Properties": {
+  "Features": ["Core", "Weather"],
+  "Configuration": {
     "WebRouting": {
       "Path": ""
     }
@@ -245,13 +246,15 @@ builder.AddShells(cshells =>
 {
     cshells.AddShell("Default", shell => shell
         .WithFeatures("Core", "Weather")
-        .WithPath(""));
+        .WithConfiguration("WebRouting:Path", ""));
 
     cshells.AddShell("Admin", shell => shell
-        .WithFeatures("Core", "Admin")
-        .WithPath("admin"));
-
-    cshells.WithInMemoryShells();
+        .WithFeature("Core")
+        .WithFeature("Admin", settings => settings
+            .WithSetting("MaxUsers", 100)
+            .WithSetting("EnableAuditLog", true))
+        .WithConfiguration("WebRouting:Path", "admin")
+        .WithConfiguration("WebRouting:RoutePrefix", "api/v1"));
 });
 ```
 
@@ -327,8 +330,10 @@ app.Run();
 - **IWebShellFeature** - Extends `IShellFeature` to add HTTP endpoint registration via `MapEndpoints()`
 - **Optional `[ShellFeature]` attribute** - Use only when you need explicit names, display names, dependencies, or metadata
 - **Automatic endpoint routing** - `MapShells()` handles middleware and endpoint registration in one call
-- **Shell path prefixes** - Routes are automatically prefixed based on the `WebRouting.Path` property
+- **Shell path prefixes** - Routes are automatically prefixed based on `WebRouting:Path`
+- **Route prefixes** - Apply additional route prefixes to all endpoints via `WebRouting:RoutePrefix`
 - **Per-shell DI containers** - Each shell has its own isolated service provider with shell-specific services
+- **Shell-scoped IConfiguration** - Each shell gets its own `IConfiguration` built from its `Configuration` section
 - **Multiple configuration sources** - Configure shells via appsettings.json, external JSON files, or code
 - **Flexible shell resolution** - Built-in path and host resolvers, plus extensibility for custom strategies
 - **Feature dependencies** - Features can depend on other features with automatic topological ordering
@@ -374,10 +379,8 @@ builder.AddShells(cshells =>
 {
     cshells.AddShell("Default", shell => shell
         .WithFeatures("Core", "Weather")
-        .WithPath("")
-        .WithProperty("Title", "Default Site"));
-
-    cshells.WithInMemoryShells();
+        .WithConfiguration("WebRouting:Path", "")
+        .WithConfiguration("Theme", "Dark"));
 });
 ```
 

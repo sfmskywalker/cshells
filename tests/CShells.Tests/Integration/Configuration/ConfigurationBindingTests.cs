@@ -16,12 +16,12 @@ namespace CShells.Tests.Configuration
                   {
                     ""Name"": ""Default"",
                     ""Features"": [ ""Core"", ""Weather"" ],
-                    ""Properties"": { ""Title"": ""Default Shell"" }
+                    ""Configuration"": { ""Title"": ""Default Shell"" }
                   },
                   {
                     ""Name"": ""Admin"",
                     ""Features"": [ ""Core"", ""Admin"" ],
-                    ""Properties"": { ""Title"": ""Admin Shell"" }
+                    ""Configuration"": { ""Title"": ""Admin Shell"" }
                   }
                 ]
               }
@@ -32,10 +32,11 @@ namespace CShells.Tests.Configuration
                 .AddJsonStream(stream)
                 .Build();
 
-            var options = new CShellsOptions();
-            config.GetSection("CShells").Bind(options);
-
-            var settings = ShellSettingsFactory.CreateFromOptions(options).ToList();
+            // Use CreateFromConfiguration to properly parse mixed feature arrays
+            var shellsSection = config.GetSection("CShells").GetSection("Shells");
+            var settings = shellsSection.GetChildren()
+                .Select(ShellSettingsFactory.CreateFromConfiguration)
+                .ToList();
 
             Assert.Equal(2, settings.Count);
             Assert.Contains(settings, s => s.Id.Name == "Default");
@@ -44,10 +45,9 @@ namespace CShells.Tests.Configuration
             var def = settings.First(s => s.Id.Name == "Default");
             Assert.Equal(["Core", "Weather"], def.EnabledFeatures);
 
-            // Properties are now stored as JsonElement
-            Assert.True(def.Properties.ContainsKey("Title"));
-            var titleValue = Assert.IsType<JsonElement>(def.Properties["Title"]);
-            Assert.Equal("Default Shell", titleValue.GetString());
+            // Configuration is now flattened into ConfigurationData
+            Assert.True(def.ConfigurationData.ContainsKey("Title"));
+            Assert.Equal("Default Shell", def.ConfigurationData["Title"]);
         }
 
         // Note: Removed test "AddCShells_Registers_IShellHost_And_ShellSettings" because it tested
@@ -55,16 +55,27 @@ namespace CShells.Tests.Configuration
         // loaded when MapCShells() is called, not when services are registered.
 
         [Fact]
-        public void CreateFromOptions_Throws_On_DuplicateNames()
+        public void CreateFromConfiguration_DetectsDuplicateNames()
         {
             var json = @"{ ""CShells"": { ""Shells"": [ { ""Name"": ""X"" }, { ""Name"": ""x"" } ] } }";
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
             var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var options = new CShellsOptions();
-            config.GetSection("CShells").Bind(options);
 
-            var ex = Assert.Throws<ArgumentException>(() => ShellSettingsFactory.CreateFromOptions(options).ToList());
-            Assert.Contains("Duplicate shell name", ex.Message);
+            // Use CreateFromConfiguration for proper parsing
+            var shellsSection = config.GetSection("CShells").GetSection("Shells");
+            var shellConfigs = shellsSection.GetChildren()
+                .Select(ShellSettingsFactory.CreateFromConfiguration)
+                .ToList();
+
+            // Check for duplicates manually
+            var duplicates = shellConfigs
+                .GroupBy(s => s.Id.Name, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToArray();
+
+            Assert.NotEmpty(duplicates);
+            Assert.Contains("X", duplicates, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

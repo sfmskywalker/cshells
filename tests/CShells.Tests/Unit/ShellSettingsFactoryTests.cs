@@ -31,11 +31,8 @@ public class ShellSettingsFactoryTests
         // Assert
         Assert.Equal("TestShell", settings.Id.Name);
         Assert.Equal(["Feature1", "Feature2"], settings.EnabledFeatures);
-        Assert.Single(settings.Properties);
-
-        // Properties are stored as JsonElement now
-        var propertyValue = Assert.IsType<JsonElement>(settings.Properties["Key1"]);
-        Assert.Equal("Value1", propertyValue.GetString());
+        Assert.Single(settings.ConfigurationData);
+        Assert.Equal("Value1", settings.ConfigurationData["Key1"]);
     }
 
     [Fact(DisplayName = "Create with empty config returns ShellSettings with empty collections")]
@@ -50,7 +47,7 @@ public class ShellSettingsFactoryTests
         // Assert
         Assert.Equal("EmptyShell", settings.Id.Name);
         Assert.Empty(settings.EnabledFeatures);
-        Assert.Empty(settings.Properties);
+        Assert.Empty(settings.ConfigurationData);
     }
 
     [Fact(DisplayName = "CreateAll with valid options returns ShellSettings collection")]
@@ -61,8 +58,8 @@ public class ShellSettingsFactoryTests
         {
             Shells =
             [
-                new() { Name = "Shell1", Features = ["Feature1"] },
-                new() { Name = "Shell2", Features = ["Feature2", "Feature3"] }
+                new() { Name = "Shell1", Features = [FeatureEntry.FromName("Feature1")] },
+                new() { Name = "Shell2", Features = [FeatureEntry.FromName("Feature2"), FeatureEntry.FromName("Feature3")] }
             ]
         };
 
@@ -77,14 +74,20 @@ public class ShellSettingsFactoryTests
         Assert.Equal(["Feature2", "Feature3"], settingsList[1].EnabledFeatures);
     }
 
-    [Fact(DisplayName = "Create normalizes feature names by trimming whitespace and filtering nulls")]
+    [Fact(DisplayName = "Create normalizes feature names by trimming whitespace and filtering empty")]
     public void Create_NormalizesFeatureNames()
     {
         // Arrange
         var config = new ShellConfig
         {
             Name = "TestShell",
-            Features = [" Feature1 ", "Feature2", "  ", null, "Feature3  "]
+            Features =
+            [
+                FeatureEntry.FromName(" Feature1 "),
+                FeatureEntry.FromName("Feature2"),
+                FeatureEntry.FromName("  "),
+                FeatureEntry.FromName("Feature3  ")
+            ]
         };
 
         // Act
@@ -112,20 +115,22 @@ public class ShellSettingsFactoryTests
         Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(DisplayName = "Create with config.Settings populates ConfigurationData")]
-    public void Create_WithConfigSettings_PopulatesConfigurationData()
+    [Fact(DisplayName = "Create with feature settings populates ConfigurationData")]
+    public void Create_WithFeatureSettings_PopulatesConfigurationData()
     {
         // Arrange
         var config = new ShellConfig
         {
             Name = "TestShell",
-            Features = ["Feature1"],
-            Properties = new() { ["Prop1"] = "PropValue1" },
-            Settings = new()
-            {
-                ["Setting1"] = "SettingValue1",
-                ["Setting2"] = "SettingValue2"
-            }
+            Features =
+            [
+                new FeatureEntry
+                {
+                    Name = "FraudDetection",
+                    Settings = new() { ["Threshold"] = 0.85, ["MaxAmount"] = 5000 }
+                }
+            ],
+            Configuration = new() { ["Prop1"] = "PropValue1" }
         };
 
         // Act
@@ -133,25 +138,60 @@ public class ShellSettingsFactoryTests
 
         // Assert
         Assert.Equal("TestShell", settings.Id.Name);
-        Assert.Single(settings.Properties);
-        Assert.Equal(2, settings.ConfigurationData.Count);
-        Assert.Equal("SettingValue1", settings.ConfigurationData["Setting1"]);
-        Assert.Equal("SettingValue2", settings.ConfigurationData["Setting2"]);
+        Assert.Equal(3, settings.ConfigurationData.Count); // Prop1 + 2 feature settings
+        Assert.Equal("PropValue1", settings.ConfigurationData["Prop1"]);
+        Assert.Equal(0.85, settings.ConfigurationData["FraudDetection:Threshold"]);
+        Assert.Equal(5000, settings.ConfigurationData["FraudDetection:MaxAmount"]);
     }
 
-    [Fact(DisplayName = "Create ignores null settings values")]
+    [Fact(DisplayName = "Create with mixed string and object features works correctly")]
+    public void Create_WithMixedFeatures_WorksCorrectly()
+    {
+        // Arrange
+        var config = new ShellConfig
+        {
+            Name = "TestShell",
+            Features =
+            [
+                FeatureEntry.FromName("Core"),
+                new FeatureEntry
+                {
+                    Name = "Database",
+                    Settings = new() { ["ConnectionString"] = "Server=localhost" }
+                },
+                FeatureEntry.FromName("Logging")
+            ]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert
+        Assert.Equal(["Core", "Database", "Logging"], settings.EnabledFeatures);
+        Assert.Single(settings.ConfigurationData);
+        Assert.Equal("Server=localhost", settings.ConfigurationData["Database:ConnectionString"]);
+    }
+
+    [Fact(DisplayName = "Create ignores null settings values in feature entries")]
     public void Create_IgnoresNullSettingsValues()
     {
         // Arrange
         var config = new ShellConfig
         {
             Name = "TestShell",
-            Settings = new()
-            {
-                ["Setting1"] = "Value1",
-                ["Setting2"] = null,
-                ["Setting3"] = "Value3"
-            }
+            Features =
+            [
+                new FeatureEntry
+                {
+                    Name = "Feature1",
+                    Settings = new()
+                    {
+                        ["Setting1"] = "Value1",
+                        ["Setting2"] = null,
+                        ["Setting3"] = "Value3"
+                    }
+                }
+            ]
         };
 
         // Act
@@ -159,16 +199,16 @@ public class ShellSettingsFactoryTests
 
         // Assert
         Assert.Equal(2, settings.ConfigurationData.Count);
-        Assert.Equal("Value1", settings.ConfigurationData["Setting1"]);
-        Assert.Equal("Value3", settings.ConfigurationData["Setting3"]);
-        Assert.False(settings.ConfigurationData.ContainsKey("Setting2"));
+        Assert.Equal("Value1", settings.ConfigurationData["Feature1:Setting1"]);
+        Assert.Equal("Value3", settings.ConfigurationData["Feature1:Setting3"]);
+        Assert.False(settings.ConfigurationData.ContainsKey("Feature1:Setting2"));
     }
 
     private static ShellConfig BuildShellConfig() => new()
     {
         Name = "TestShell",
-        Features = ["Feature1", "Feature2"],
-        Properties = new()
+        Features = [FeatureEntry.FromName("Feature1"), FeatureEntry.FromName("Feature2")],
+        Configuration = new()
         {
             ["Key1"] = "Value1"
         }

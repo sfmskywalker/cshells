@@ -4,22 +4,12 @@
     "Core",
     "PayPalPayment",
     "SmsNotification",
-    "FraudDetection"
+    { "Name": "FraudDetection", "Threshold": 0.85, "MaxTransactionAmount": 5000 }
   ],
-  "properties": {
+  "configuration": {
     "WebRouting": {
       "Path": "acme",
       "HeaderName": "X-Tenant-Id"
-    }
-  },
-  "Settings": {
-    "ConnectionStringKey": "AcmeConnection",
-    "Theme": "Dark",
-    "MaxUploadSizeMB": "50",
-    "Features": {
-      "FraudDetection": {
-        "Threshold": "0.85"
-      }
     }
   }
 }
