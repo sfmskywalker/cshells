@@ -259,8 +259,6 @@ builder.AddShells(cshells =>
             .WithSetting("EnableAuditLog", true))
         .WithConfiguration("WebRouting:Path", "admin")
         .WithConfiguration("WebRouting:RoutePrefix", "api/v1"));
-
-    cshells.WithInMemoryShells();
 });
 ```
 
