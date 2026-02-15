@@ -86,19 +86,54 @@ public class FastEndpointsFeature(
     /// <remarks>
     /// Since <see cref="IFastEndpointsShellFeature"/> is a marker interface, we simply collect the assemblies
     /// containing the feature startup types without needing to instantiate the features.
+    /// This method recursively discovers all dependency features to ensure endpoints from dependency features are also registered.
     /// </remarks>
     private List<Assembly> DiscoverFastEndpointsAssemblies()
     {
-        // Filter already-discovered features for those implementing IFastEndpointsShellFeature
-        // and are enabled for this shell
-        var fastEndpointsAssemblies = _allFeatureDescriptors
-            .Where(d => d.StartupType != null &&
-                        typeof(IFastEndpointsShellFeature).IsAssignableFrom(d.StartupType) &&
-                        _shellSettings.EnabledFeatures.Contains(d.Id, StringComparer.OrdinalIgnoreCase))
-            .Select(d => d.StartupType!.Assembly)
-            .Distinct()
-            .ToList();
+        // Build lookup dictionary for O(1) access
+        var descriptorLookup = _allFeatureDescriptors
+            .ToDictionary(d => d.Id, StringComparer.OrdinalIgnoreCase);
 
-        return fastEndpointsAssemblies;
+        var visitedFeatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var assemblies = new HashSet<Assembly>();
+
+        // Process each enabled feature and its dependencies
+        foreach (var featureId in _shellSettings.EnabledFeatures)
+        {
+            DiscoverFastEndpointsAssembliesRecursive(featureId, descriptorLookup, visitedFeatures, assemblies);
+        }
+
+        return assemblies.ToList();
+    }
+
+    /// <summary>
+    /// Recursively discovers FastEndpoints assemblies for a feature and its dependencies.
+    /// </summary>
+    private void DiscoverFastEndpointsAssembliesRecursive(
+        string featureId,
+        Dictionary<string, ShellFeatureDescriptor> descriptorLookup,
+        HashSet<string> visitedFeatures,
+        HashSet<Assembly> assemblies)
+    {
+        // Skip if already processed
+        if (!visitedFeatures.Add(featureId))
+            return;
+
+        // Get the feature descriptor
+        if (!descriptorLookup.TryGetValue(featureId, out var descriptor))
+            return;
+
+        // If this feature implements IFastEndpointsShellFeature, add its assembly
+        if (descriptor.StartupType != null &&
+            typeof(IFastEndpointsShellFeature).IsAssignableFrom(descriptor.StartupType))
+        {
+            assemblies.Add(descriptor.StartupType.Assembly);
+        }
+
+        // Recursively process dependencies
+        foreach (var dependency in descriptor.Dependencies)
+        {
+            DiscoverFastEndpointsAssembliesRecursive(dependency, descriptorLookup, visitedFeatures, assemblies);
+        }
     }
 }
