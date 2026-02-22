@@ -191,23 +191,30 @@ public static class FeatureDiscovery
             // Return the types that were successfully loaded
             return ex.Types.OfType<Type>();
         }
+        catch (TypeLoadException ex)
+        {
+            // A type within the assembly references something that cannot be loaded
+            // (e.g. a version-mismatched dependency). Skip the assembly entirely.
+            onAssemblyLoadError?.Invoke(assembly, ex);
+            return [];
+        }
         catch (FileNotFoundException ex)
         {
             // Assembly has missing dependencies - skip it
             onAssemblyLoadError?.Invoke(assembly, ex);
-            return Enumerable.Empty<Type>();
+            return [];
         }
         catch (FileLoadException ex)
         {
             // Assembly cannot be loaded - skip it
             onAssemblyLoadError?.Invoke(assembly, ex);
-            return Enumerable.Empty<Type>();
+            return [];
         }
         catch (BadImageFormatException ex)
         {
             // Assembly is not a valid .NET assembly - skip it
             onAssemblyLoadError?.Invoke(assembly, ex);
-            return Enumerable.Empty<Type>();
+            return [];
         }
     }
 

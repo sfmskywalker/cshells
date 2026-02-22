@@ -28,7 +28,9 @@ public class ShellActivationHandler : INotificationHandler<ShellActivated>
         _logger.LogInformation("Activating services for shell '{ShellId}'", shellId);
 
         var handlers = notification.Context.ServiceProvider
-            .GetServices<IShellActivatedHandler>();
+            .GetServices<IShellActivatedHandler>()
+            .OrderForActivation()
+            .ToList();
 
         foreach (var handler in handlers)
         {
@@ -48,6 +50,6 @@ public class ShellActivationHandler : INotificationHandler<ShellActivated>
         }
 
         _logger.LogInformation("Successfully activated {HandlerCount} handler(s) for shell '{ShellId}'",
-            handlers.Count(), shellId);
+            handlers.Count, shellId);
     }
 }

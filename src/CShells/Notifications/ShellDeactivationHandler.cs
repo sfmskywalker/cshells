@@ -33,7 +33,8 @@ public class ShellDeactivationHandler : INotificationHandler<ShellDeactivating>
 
         var handlers = notification.Context.ServiceProvider
             .GetServices<IShellDeactivatingHandler>()
-            .Reverse(); // Deactivate in reverse order of registration
+            .OrderForDeactivation()
+            .ToList();
 
         var handlerCount = 0;
         var failedCount = 0;

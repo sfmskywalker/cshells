@@ -9,7 +9,8 @@ namespace CShells.Hosting;
 /// before the shell's <see cref="IServiceProvider"/> is disposed.
 /// </para>
 /// <para>
-/// Handlers are invoked in reverse registration order (LIFO) when:
+/// Handlers are invoked in descending <see cref="ShellHandlerOrderAttribute"/> order (highest first),
+/// which is the natural inverse of activation order. Handlers with no attribute are treated as order <c>0</c>.
 /// </para>
 /// <list type="bullet">
 ///   <item><description>A shell is being dynamically removed via <see cref="IShellManager.RemoveShellAsync"/></description></item>
