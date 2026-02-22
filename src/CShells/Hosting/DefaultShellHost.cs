@@ -301,9 +301,21 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
 
         // Step 3: Configure feature services in dependency order.
         // Features can override root services by registering the same service type.
+        // A single ShellFeatureContext is shared across all features so they can
+        // exchange data through its Properties bag during construction.
+        var featureContext = new ShellFeatureContext(settings, _featureMap.Values.ToList().AsReadOnly());
+        var postConfigureFeatures = new List<IPostConfigureShellServices>();
         if (orderedFeatures.Count > 0)
         {
-            ConfigureFeatureServices(shellServices, orderedFeatures, settings);
+            ConfigureFeatureServices(shellServices, orderedFeatures, settings, featureContext, postConfigureFeatures);
+        }
+
+        // Step 3b: Post-configure — called after ALL features have registered their services
+        // but before the container is built. Allows features to finalize registrations that
+        // depend on what later-running features may have contributed (e.g. AddMassTransit).
+        foreach (var feature in postConfigureFeatures)
+        {
+            feature.PostConfigureServices(shellServices);
         }
 
         // Step 4: Build the service provider only after all registrations are complete.
@@ -407,7 +419,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     /// as an explicit parameter. No temporary shell ServiceProviders are created during configuration.
     /// This ensures features can only depend on root-level services in their constructors.
     /// </remarks>
-    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures, ShellSettings settings)
+    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures, ShellSettings settings, ShellFeatureContext featureContext, List<IPostConfigureShellServices> postConfigureFeatures)
     {
         var featuresWithStartups = orderedFeatures
             .Select(name => (Name: name, Descriptor: _featureMap[name]))
@@ -415,30 +427,25 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
 
         foreach (var (featureName, descriptor) in featuresWithStartups)
         {
-            ConfigureFeature(services, settings, featureName, descriptor);
+            ConfigureFeature(services, settings, featureName, descriptor, featureContext, postConfigureFeatures);
         }
     }
 
-    /// <summary>
-    /// Configures services for a single feature by instantiating its startup and calling ConfigureServices.
-    /// </summary>
-    /// <remarks>
-    /// The feature is instantiated using the root IServiceProvider (via ActivatorUtilities.CreateInstance)
-    /// with ShellSettings passed as an explicit parameter. This means feature constructors can only
-    /// depend on root-level services (logging, configuration, etc.) and ShellSettings.
-    /// </remarks>
-    private void ConfigureFeature(ServiceCollection services, ShellSettings settings, string featureName, ShellFeatureDescriptor descriptor)
+    private void ConfigureFeature(ServiceCollection services, ShellSettings settings, string featureName, ShellFeatureDescriptor descriptor, ShellFeatureContext featureContext, List<IPostConfigureShellServices> postConfigureFeatures)
     {
         try
         {
             // Create the feature instance using the root provider with ShellSettings as explicit parameter.
             // This ensures features can only depend on root-level services and ShellSettings, not shell services.
-            var startup = CreateFeatureInstance(descriptor.StartupType!, settings);
+            var startup = CreateFeatureInstance(descriptor.StartupType!, settings, featureContext);
 
             // Apply configuration to the feature before calling ConfigureServices
             ApplyFeatureConfiguration(startup, settings, featureName);
 
             startup.ConfigureServices(services);
+
+            if (startup is IPostConfigureShellServices postConfigure)
+                postConfigureFeatures.Add(postConfigure);
 
             _logger.LogDebug("Configured services from feature '{FeatureName}' startup type '{StartupType}'",
                 featureName, descriptor.StartupType!.FullName);
@@ -497,15 +504,14 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     /// </summary>
     /// <param name="featureType">The feature type to instantiate.</param>
     /// <param name="shellSettings">The shell settings to pass as an explicit parameter.</param>
+    /// <param name="featureContext">The shared context for this shell build, passed to all features.</param>
     /// <returns>The instantiated feature.</returns>
     /// <remarks>
     /// Uses the <see cref="IShellFeatureFactory"/> to instantiate the feature with proper
     /// dependency injection and automatic ShellSettings or ShellFeatureContext parameter handling.
     /// </remarks>
-    private IShellFeature CreateFeatureInstance(Type featureType, ShellSettings shellSettings)
+    private IShellFeature CreateFeatureInstance(Type featureType, ShellSettings shellSettings, ShellFeatureContext featureContext)
     {
-        // Create a ShellFeatureContext that contains all the metadata a feature might need
-        var featureContext = new ShellFeatureContext(shellSettings, _featureMap.Values.ToList().AsReadOnly());
 
         // The factory will automatically choose the right parameter based on what the feature constructor accepts:
         // - ShellFeatureContext (if available)

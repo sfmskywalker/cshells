@@ -59,4 +59,15 @@ public class ShellFeatureContext(ShellSettings settings, IEnumerable<ShellFeatur
     /// to determine which features are enabled for this shell.
     /// </remarks>
     public IReadOnlyCollection<ShellFeatureDescriptor> AllFeatures { get; } = allFeatures.ToList();
+
+    /// <summary>
+    /// A shared property bag that lives for the duration of a single shell build.
+    /// </summary>
+    /// <remarks>
+    /// Features running earlier in dependency order can contribute data (keyed by any
+    /// <see cref="object"/>) that features running later — or
+    /// <see cref="IPostConfigureShellServices.PostConfigureServices"/> — can read back.
+    /// This replaces <c>IModule.Properties</c> from the old feature system.
+    /// </remarks>
+    public IDictionary<object, object> Properties { get; } = new Dictionary<object, object>();
 }
