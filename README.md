@@ -138,7 +138,7 @@ public class WeatherFeature : IShellFeature
     }
 }
 
-// With attribute - explicit name "Weather", display name, and dependencies
+// With attribute - explicit name "Weather", display name, and string-based dependency
 [ShellFeature("Weather", DisplayName = "Weather API", DependsOn = ["Core"])]
 public class WeatherFeature : IShellFeature
 {
@@ -147,7 +147,29 @@ public class WeatherFeature : IShellFeature
         services.AddSingleton<IWeatherService, WeatherService>();
     }
 }
+
+// Strongly-typed dependency - the feature name is resolved from CoreFeature's attribute
+[ShellFeature("Weather", DisplayName = "Weather API", DependsOn = [typeof(CoreFeature)])]
+public class WeatherFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IWeatherService, WeatherService>();
+    }
+}
+
+// Mixed - combine string and type-based dependencies
+[ShellFeature("Weather", DisplayName = "Weather API", DependsOn = [typeof(CoreFeature), "Logging"])]
+public class WeatherFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IWeatherService, WeatherService>();
+    }
+}
 ```
+
+> **Note:** When using `typeof(SomeFeature)` in `DependsOn`, the type must implement `IShellFeature`. The feature name is resolved from the target type's `[ShellFeature]` attribute (or derived from the class name if no attribute is present), so renaming the attribute automatically updates all dependents.
 
 Features can access shell configuration via `IConfiguration` (resolved from the shell's service provider):
 

@@ -304,7 +304,7 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 
-// Using [ShellFeature] to specify explicit name and dependencies
+// Using [ShellFeature] to specify explicit name and dependencies (string-based)
 [ShellFeature("Payment", DisplayName = "Payment API", DependsOn = ["Core"])]
 public class PaymentFeature : IWebShellFeature
 {
@@ -318,6 +318,20 @@ public class PaymentFeature : IWebShellFeature
         endpoints.MapPost("payment/process", (PaymentRequest request, IPaymentProcessor processor) =>
             processor.Process(request));
     }
+}
+
+// Using strongly-typed dependency - the feature name is resolved from CoreFeature at discovery time
+[ShellFeature("Payment", DisplayName = "Payment API", DependsOn = [typeof(CoreFeature)])]
+public class PaymentFeature : IWebShellFeature
+{
+    // ...
+}
+
+// Mixed string and type-based dependencies are also supported
+[ShellFeature("Payment", DisplayName = "Payment API", DependsOn = [typeof(CoreFeature), "Logging"])]
+public class PaymentFeature : IWebShellFeature
+{
+    // ...
 }
 ```
 

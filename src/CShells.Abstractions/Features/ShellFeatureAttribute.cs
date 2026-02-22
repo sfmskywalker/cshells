@@ -22,9 +22,9 @@ public sealed class ShellFeatureAttribute(string? name = null) : Attribute
     public string? Description { get; set; }
 
     /// <summary>
-    /// Gets or sets the feature names that this feature depends on.
+    /// Gets or sets the feature dependencies. Only <see cref="string"/> and <see cref="Type"/> values are supported.
     /// </summary>
-    public string[] DependsOn { get; set; } = [];
+    public object[] DependsOn { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the metadata associated with this feature.

@@ -1,5 +1,6 @@
 using System.Reflection;
 using CShells.Features;
+using CShells.Tests.Integration.ShellHost;
 using CShells.Tests.TestHelpers;
 
 namespace CShells.Tests.Integration.FeatureDiscovery;
@@ -76,22 +77,66 @@ public class FeatureDiscoveryTests
         Assert.Equal(["Dependency1", "Dependency2"], feature.Dependencies);
     }
 
-    [Fact(DisplayName = "DiscoverFeatures with feature having metadata sets metadata")]
-    public void DiscoverFeatures_WithFeatureHavingMetadata_SetsMetadata()
+    [Fact(DisplayName = "DiscoverFeatures resolves type-based dependencies to feature names")]
+    public void DiscoverFeatures_WithTypeBasedDependencies_ResolvesFeatureNames()
     {
-        // Arrange - use assembly with feature that has metadata
+        // Arrange
         var assembly = TestAssemblyBuilder.CreateTestAssembly(
-            ("FeatureWithMeta", typeof(IShellFeature), [], ["key1", "value1", "key2", "value2"])
+            ("FeatureWithTypeDeps", typeof(IShellFeature), [typeof(TestFixtures.CoreFeatureStartup)], [])
         );
 
         // Act
         var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
 
         // Assert
-        var feature = features.FirstOrDefault(f => f.Id == "FeatureWithMeta");
+        var feature = features.FirstOrDefault(f => f.Id == "FeatureWithTypeDeps");
         Assert.NotNull(feature);
-        Assert.Equal("value1", feature.Metadata["key1"]);
-        Assert.Equal("value2", feature.Metadata["key2"]);
+        Assert.Equal(["Core"], feature.Dependencies);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures resolves mixed dependencies")]
+    public void DiscoverFeatures_WithMixedDependencies_ResolvesDependencies()
+    {
+        // Arrange
+        var assembly = TestAssemblyBuilder.CreateTestAssembly(
+            ("FeatureWithMixedDeps", typeof(IShellFeature), ["Dependency1", typeof(TestFixtures.CoreFeatureStartup)], [])
+        );
+
+        // Act
+        var features = CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList();
+
+        // Assert
+        var feature = features.FirstOrDefault(f => f.Id == "FeatureWithMixedDeps");
+        Assert.NotNull(feature);
+        Assert.Equal(["Dependency1", "Core"], feature.Dependencies);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures throws for unsupported dependency types")]
+    public void DiscoverFeatures_WithUnsupportedDependencyType_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var assembly = TestAssemblyBuilder.CreateTestAssembly(
+            ("FeatureWithBadDeps", typeof(IShellFeature), [123], [])
+        );
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
+        Assert.Contains("unsupported dependency type", ex.Message);
+        Assert.Contains("FeatureWithBadDeps", ex.Message);
+    }
+
+    [Fact(DisplayName = "DiscoverFeatures throws when dependency type does not implement IShellFeature")]
+    public void DiscoverFeatures_WithNonFeatureTypeDependency_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var assembly = TestAssemblyBuilder.CreateTestAssembly(
+            ("FeatureWithInvalidType", typeof(IShellFeature), [typeof(string)], [])
+        );
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => CShells.Features.FeatureDiscovery.DiscoverFeatures([assembly]).ToList());
+        Assert.Contains("does not implement", ex.Message);
+        Assert.Contains(nameof(IShellFeature), ex.Message);
     }
 
     [Fact(DisplayName = "DiscoverFeatures without attribute derives name from class name with Feature suffix")]

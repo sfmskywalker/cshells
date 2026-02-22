@@ -107,13 +107,15 @@ public static class FeatureDiscovery
     private static ShellFeatureDescriptor CreateFeatureDescriptor(Type type, ShellFeatureAttribute? attribute, string featureName)
     {
         // Get explicit dependencies from attribute
-        var explicitDependencies = attribute?.DependsOn ?? [];
+        var explicitDependencies = GetExplicitDependencies(featureName, attribute);
 
         // Get inferred dependencies from IInfersDependenciesFrom<> interface
         var inferredDependencies = GetInferredDependencies(type);
 
         // Combine and deduplicate dependencies
-        var allDependencies = explicitDependencies.Concat(inferredDependencies).Distinct().ToArray();
+        var allDependencies = explicitDependencies.Concat(inferredDependencies)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         var descriptor = new ShellFeatureDescriptor(featureName)
         {
@@ -207,5 +209,41 @@ public static class FeatureDiscovery
             onAssemblyLoadError?.Invoke(assembly, ex);
             return Enumerable.Empty<Type>();
         }
+    }
+
+    private static IEnumerable<string> GetExplicitDependencies(string featureName, ShellFeatureAttribute? attribute)
+    {
+        if (attribute?.DependsOn is not { Length: > 0 } dependencies)
+            return [];
+
+        var results = new List<string>(dependencies.Length);
+        foreach (var dependency in dependencies)
+        {
+            switch (dependency)
+            {
+                case string name when !string.IsNullOrWhiteSpace(name):
+                    results.Add(name);
+                    break;
+                case string:
+                    throw new InvalidOperationException($"Feature '{featureName}' has an empty dependency name.");
+                case Type dependencyType:
+                    if (!typeof(IShellFeature).IsAssignableFrom(dependencyType))
+                    {
+                        throw new InvalidOperationException(
+                            $"Feature '{featureName}' has dependency type '{dependencyType.FullName}' that does not implement {nameof(IShellFeature)}.");
+                    }
+
+                    var resolvedName = GetFeatureName(dependencyType, dependencyType.GetCustomAttribute<ShellFeatureAttribute>());
+                    results.Add(resolvedName);
+                    break;
+                case null:
+                    throw new InvalidOperationException($"Feature '{featureName}' has a null dependency entry.");
+                default:
+                    throw new InvalidOperationException(
+                        $"Feature '{featureName}' has unsupported dependency type '{dependency.GetType().FullName}'. Only string and Type are supported.");
+            }
+        }
+
+        return results;
     }
 }

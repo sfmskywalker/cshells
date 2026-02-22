@@ -13,7 +13,7 @@ public static class TestAssemblyBuilder
     /// <summary>
     /// Creates a dynamic assembly with test feature types for testing purposes.
     /// </summary>
-    public static Assembly CreateTestAssembly(params (string FeatureName, Type? ImplementInterface, string[] Dependencies, object[] Metadata)[] featureDefinitions)
+    public static Assembly CreateTestAssembly(params (string FeatureName, Type? ImplementInterface, object[] Dependencies, object[] Metadata)[] featureDefinitions)
     {
         var assemblyName = new AssemblyName($"TestAssembly_{Guid.NewGuid():N}");
         var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
@@ -66,7 +66,7 @@ public static class TestAssemblyBuilder
     /// <summary>
     /// Creates a dynamic assembly with feature types and service registrations.
     /// </summary>
-    public static Assembly CreateTestAssemblyWithServices(params (string FeatureName, Type StartupType, string[] Dependencies)[] featureDefinitions)
+    public static Assembly CreateTestAssemblyWithServices(params (string FeatureName, Type StartupType, object[] Dependencies)[] featureDefinitions)
     {
         var assemblyName = new AssemblyName($"TestAssembly_{Guid.NewGuid():N}");
         var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
@@ -106,7 +106,7 @@ public static class TestAssemblyBuilder
     /// <summary>
     /// Creates a feature type in a module with service registration.
     /// </summary>
-    public static void CreateFeatureType(ModuleBuilder moduleBuilder, string featureName, string[] dependencies, Type serviceInterface, Type serviceImplementation)
+    public static void CreateFeatureType(ModuleBuilder moduleBuilder, string featureName, object[] dependencies, Type serviceInterface, Type serviceImplementation)
     {
         var typeName = $"{featureName}Startup";
         var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
