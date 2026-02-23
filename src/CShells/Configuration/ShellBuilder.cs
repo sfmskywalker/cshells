@@ -1,3 +1,5 @@
+using System.Reflection;
+using CShells.Features;
 using Microsoft.Extensions.Configuration;
 
 namespace CShells.Configuration;
@@ -27,25 +29,144 @@ public class ShellBuilder
     }
 
     /// <summary>
-    /// Adds features to the shell.
+    /// Adds features to the shell by string identifier.
     /// </summary>
     public ShellBuilder WithFeatures(params string[] featureIds)
     {
         Guard.Against.Null(featureIds);
-        _settings.EnabledFeatures = [..featureIds];
+        var current = _settings.EnabledFeatures.ToList();
+        foreach (var id in featureIds)
+            if (!current.Contains(id, StringComparer.OrdinalIgnoreCase))
+                current.Add(id);
+        _settings.EnabledFeatures = [..current];
         return this;
     }
 
     /// <summary>
-    /// Adds a single feature to the shell.
+    /// Adds features to the shell from a mixed array.
+    /// Each element may be:
+    /// <list type="bullet">
+    ///   <item>A <see cref="string"/> — used directly as the feature identifier.</item>
+    ///   <item>A <see cref="Type"/> implementing <see cref="IShellFeature"/> — the feature name is resolved from
+    ///         <see cref="ShellFeatureAttribute"/> or the class name.</item>
+    ///   <item>A <see cref="FeatureEntry"/> — enables the named feature and applies its settings.</item>
+    /// </list>
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// shell.WithFeatures(
+    ///     "AdminUser",
+    ///     typeof(IdentityFeature),
+    ///     new FeatureEntry { Name = "FastEndpoints", Settings = { ["EndpointRoutePrefix"] = "elsa/api" } });
+    /// </code>
+    /// </example>
+    public ShellBuilder WithFeatures(params object[] features)
+    {
+        Guard.Against.Null(features);
+        foreach (var feature in features)
+        {
+            switch (feature)
+            {
+                case string featureId:
+                    WithFeature(featureId);
+                    break;
+                case Type featureType:
+                    WithFeature(featureType);
+                    break;
+                case FeatureEntry featureEntry:
+                    WithFeature(featureEntry);
+                    break;
+                case null:
+                    throw new ArgumentException("Feature array must not contain null elements.");
+                default:
+                    throw new ArgumentException(
+                        $"Unsupported feature descriptor type '{feature.GetType().FullName}'. " +
+                        "Each element must be a string, Type, or FeatureEntry.");
+            }
+        }
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a single feature to the shell by string identifier.
     /// </summary>
     public ShellBuilder WithFeature(string featureId)
     {
         Guard.Against.Null(featureId);
-        var currentFeatures = _settings.EnabledFeatures.ToList();
-        currentFeatures.Add(featureId);
-        _settings.EnabledFeatures = [..currentFeatures];
+        var current = _settings.EnabledFeatures.ToList();
+        if (!current.Contains(featureId, StringComparer.OrdinalIgnoreCase))
+            current.Add(featureId);
+        _settings.EnabledFeatures = [..current];
         return this;
+    }
+
+    /// <summary>
+    /// Adds a feature to the shell by its type.
+    /// The feature name is resolved from <see cref="ShellFeatureAttribute"/> or derived from the class name.
+    /// </summary>
+    public ShellBuilder WithFeature<TFeature>() where TFeature : IShellFeature
+        => WithFeature(typeof(TFeature));
+
+    /// <summary>
+    /// Adds a feature to the shell by its type, with a strongly-typed configure action that is
+    /// applied to the live feature instance at shell-build time — after config binding but before
+    /// <c>ConfigureServices</c> is called, so code-first values always win over appsettings.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// shell.WithFeature&lt;QuartzFeature&gt;(feature =>
+    /// {
+    ///     feature.WaitForJobsToComplete = false;
+    /// });
+    /// </code>
+    /// </example>
+    public ShellBuilder WithFeature<TFeature>(Action<TFeature> configure) where TFeature : IShellFeature
+    {
+        Guard.Against.Null(configure);
+        var featureId = ResolveFeatureName(typeof(TFeature));
+
+        // Enable the feature
+        WithFeature(featureId);
+
+        // Wrap the typed delegate as Action<IShellFeature> and store it.
+        // If the same feature is configured multiple times, compose the delegates so all run.
+        Action<IShellFeature> untyped = feature =>
+        {
+            if (feature is TFeature typed)
+                configure(typed);
+            else
+                throw new InvalidOperationException(
+                    $"Feature configurator for '{featureId}' expected an instance of '{typeof(TFeature).Name}' " +
+                    $"but received '{feature.GetType().Name}'.");
+        };
+
+        if (_settings.FeatureConfigurators.TryGetValue(featureId, out var existing))
+            _settings.FeatureConfigurators[featureId] = existing + untyped;
+        else
+            _settings.FeatureConfigurators[featureId] = untyped;
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a feature to the shell by its type.
+    /// The feature name is resolved from <see cref="ShellFeatureAttribute"/> or derived from the class name.
+    /// </summary>
+    public ShellBuilder WithFeature(Type featureType)
+    {
+        Guard.Against.Null(featureType);
+        return WithFeature(ResolveFeatureName(featureType));
+    }
+
+    /// <summary>
+    /// Adds a feature to the shell by its type, with settings configured via a <see cref="FeatureSettingsBuilder"/>.
+    /// The feature name is resolved from <see cref="ShellFeatureAttribute"/> or derived from the class name.
+    /// </summary>
+    public ShellBuilder WithFeature(Type featureType, Action<FeatureSettingsBuilder> configure)
+    {
+        Guard.Against.Null(featureType);
+        Guard.Against.Null(configure);
+        return WithFeature(ResolveFeatureName(featureType), configure);
     }
 
     /// <summary>
@@ -59,13 +180,11 @@ public class ShellBuilder
         Guard.Against.Null(featureId);
         Guard.Against.Null(configure);
 
-        // Add the feature to enabled features
-        var currentFeatures = _settings.EnabledFeatures.ToList();
-        if (!currentFeatures.Contains(featureId))
-            currentFeatures.Add(featureId);
-        _settings.EnabledFeatures = [..currentFeatures];
+        var current = _settings.EnabledFeatures.ToList();
+        if (!current.Contains(featureId, StringComparer.OrdinalIgnoreCase))
+            current.Add(featureId);
+        _settings.EnabledFeatures = [..current];
 
-        // Build the settings
         var settingsBuilder = new FeatureSettingsBuilder(featureId);
         configure(settingsBuilder);
         settingsBuilder.ApplyTo(_settings.ConfigurationData);
@@ -80,15 +199,40 @@ public class ShellBuilder
     {
         Guard.Against.Null(feature);
 
-        var currentFeatures = _settings.EnabledFeatures.ToList();
-        if (!currentFeatures.Contains(feature.Name))
-            currentFeatures.Add(feature.Name);
-        _settings.EnabledFeatures = [..currentFeatures];
+        var current = _settings.EnabledFeatures.ToList();
+        if (!current.Contains(feature.Name, StringComparer.OrdinalIgnoreCase))
+            current.Add(feature.Name);
+        _settings.EnabledFeatures = [..current];
 
-        // Apply feature settings to configuration data
         ConfigurationHelper.PopulateFeatureSettings([feature], _settings.ConfigurationData);
 
         return this;
+    }
+
+    /// <summary>
+    /// Resolves the feature name from a feature type, using the same logic as <see cref="FeatureDiscovery"/>.
+    /// </summary>
+    public static string ResolveFeatureName(Type featureType)
+    {
+        Guard.Against.Null(featureType);
+
+        if (!typeof(IShellFeature).IsAssignableFrom(featureType))
+            throw new ArgumentException($"Type '{featureType.FullName}' does not implement {nameof(IShellFeature)}.", nameof(featureType));
+
+        var attribute = featureType.GetCustomAttribute<ShellFeatureAttribute>();
+        return attribute?.Name ?? StripSuffixes(featureType.Name, "ShellFeature", "Feature");
+    }
+
+    private static string StripSuffixes(string source, params string[] suffixes)
+    {
+        foreach (var suffix in suffixes)
+        {
+            if (!string.IsNullOrEmpty(suffix) &&
+                source.EndsWith(suffix, StringComparison.Ordinal) &&
+                source.Length > suffix.Length)
+                return source[..^suffix.Length];
+        }
+        return source;
     }
 
     /// <summary>

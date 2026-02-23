@@ -439,8 +439,16 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
             // This ensures features can only depend on root-level services and ShellSettings, not shell services.
             var startup = CreateFeatureInstance(descriptor.StartupType!, settings, featureContext);
 
-            // Apply configuration to the feature before calling ConfigureServices
+            // Step 1: Bind properties from shell configuration (appsettings / ConfigurationData).
             ApplyFeatureConfiguration(startup, settings, featureName);
+
+            // Step 2: Apply any code-first configurator registered via WithFeature<T>(Action<T>).
+            // This runs AFTER config binding so code-first values always win over appsettings.
+            if (settings.FeatureConfigurators.TryGetValue(featureName, out var configurator))
+            {
+                configurator(startup);
+                _logger.LogDebug("Applied code-first configurator to feature '{FeatureName}'", featureName);
+            }
 
             startup.ConfigureServices(services);
 

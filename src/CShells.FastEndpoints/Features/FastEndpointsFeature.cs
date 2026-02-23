@@ -27,6 +27,8 @@ public class FastEndpointsFeature(
     private readonly ShellSettings _shellSettings = context.Settings;
     private readonly IReadOnlyCollection<ShellFeatureDescriptor> _allFeatureDescriptors = context.AllFeatures;
     private readonly ILogger<FastEndpointsFeature> _logger = logger ?? NullLogger<FastEndpointsFeature>.Instance;
+    
+    public string EndpointRoutePrefix { get; set; } = "elsa/api";
 
     /// <inheritdoc />
     public void ConfigureServices(IServiceCollection services)
@@ -34,12 +36,12 @@ public class FastEndpointsFeature(
         // Discover all FastEndpoints assemblies from enabled features
         var assemblies = DiscoverFastEndpointsAssemblies();
 
-        _logger.LogInformation("Configuring FastEndpoints for shell '{ShellId}' with {AssemblyCount} assembly(ies)",
-            _shellSettings.Id, assemblies.Count);
-
-        services
-            .AddOptions<FastEndpointsOptions>()
-            .BindConfiguration("FastEndpoints");
+        _logger.LogInformation("Configuring FastEndpoints for shell '{ShellId}' with {AssemblyCount} assembly(ies)", _shellSettings.Id, assemblies.Count);
+        
+        services.Configure<FastEndpointsOptions>(options =>
+        {
+            options.EndpointRoutePrefix = EndpointRoutePrefix;
+        });
 
         // Register FastEndpoints with the discovered assemblies
         services.AddFastEndpoints(options =>
