@@ -303,7 +303,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
         // Features can override root services by registering the same service type.
         // A single ShellFeatureContext is shared across all features so they can
         // exchange data through its Properties bag during construction.
-        var featureContext = new ShellFeatureContext(settings, _featureMap.Values.ToList().AsReadOnly());
+        var featureContext = new ShellFeatureContext(settings, _featureMap.Values);
         var postConfigureFeatures = new List<IPostConfigureShellServices>();
         if (orderedFeatures.Count > 0)
         {
