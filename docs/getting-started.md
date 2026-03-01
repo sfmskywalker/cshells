@@ -164,6 +164,7 @@ See [Shell Resolution](./shell-resolution.md) for full details.
 ## Next Steps
 
 - [Feature Configuration](./feature-configuration.md) — per-shell feature settings
+- [Shell Lifecycle](./shell-lifecycle.md) — per-shell startup and shutdown hooks
 - [Shell Resolution](./shell-resolution.md) — customize request-to-shell mapping
 - [Multiple Shell Providers](./multiple-shell-providers.md) — load shells from multiple sources
 - [Integration Patterns](./integration-patterns.md) — integrate CShells into existing apps

@@ -1,15 +1,18 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using CShells.Hosting;
 using CShells.Workbench.Features.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
 namespace CShells.Workbench.Features.Posts;
+
 /// <summary>
 /// Posts feature — adds blog post management.
-/// Exposes GET /posts and GET /posts/{id}.
+/// Exposes GET /posts, GET /posts/{id}, and POST /posts.
 /// </summary>
 [ShellFeature("Posts", DependsOn = ["Core"], DisplayName = "Blog Posts")]
 public class PostsFeature : IWebShellFeature
@@ -18,6 +21,9 @@ public class PostsFeature : IWebShellFeature
     {
         // Each shell gets its own isolated in-memory store
         services.AddSingleton<IPostRepository, InMemoryPostRepository>();
+
+        // Seed a tenant-specific welcome post when the shell activates
+        services.AddSingleton<IShellActivatedHandler, SeedPostsHandler>();
     }
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {

@@ -14,8 +14,9 @@ Feature library for the CShells Workbench sample application — a multi-tenant 
 | Acme     | `/acme`   | Core, Posts, Comments                 | Pro tier                 |
 | Contoso  | `/contoso`| Core, Posts, Comments, Analytics      | Enterprise tier          |
 ## Key Concepts Demonstrated
-- **`IShellFeature`**: `PostsFeature` — service-only registration  
-- **`IWebShellFeature`**: All features — endpoint mapping  
-- **`[ShellFeature]`**: Feature metadata + `DependsOn` chains  
-- **`IConfigurableFeature<T>`**: `AnalyticsFeature` — typed per-shell options  
-- **Feature isolation**: Each shell gets its own in-memory data stores  
+
+- **`IWebShellFeature`**: All features — service registration + endpoint mapping
+- **`[ShellFeature]`**: Feature metadata + `DependsOn` chains
+- **`IConfigurableFeature<T>`**: `AnalyticsFeature` — typed per-shell options
+- **`IShellActivatedHandler`**: `SeedPostsHandler` — per-shell startup work
+- **Feature isolation**: Each shell gets its own in-memory data stores
