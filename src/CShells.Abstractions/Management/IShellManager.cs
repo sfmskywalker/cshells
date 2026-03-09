@@ -2,7 +2,7 @@ namespace CShells.Management;
 
 /// <summary>
 /// Provides methods for managing shells at runtime.
-/// Supports adding, removing, and updating shells without requiring application restart.
+/// Supports adding, removing, updating, and reloading shells without requiring application restart.
 /// </summary>
 public interface IShellManager
 {
@@ -12,14 +12,6 @@ public interface IShellManager
     /// <param name="settings">The shell settings.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the shell has been added and activated.</returns>
-    /// <remarks>
-    /// This method will:
-    /// <list type="number">
-    /// <item>Add the shell settings to the cache</item>
-    /// <item>Build the shell context (service provider)</item>
-    /// <item>Register the shell's endpoints (for web features)</item>
-    /// </list>
-    /// </remarks>
     Task AddShellAsync(ShellSettings settings, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -28,14 +20,6 @@ public interface IShellManager
     /// <param name="shellId">The ID of the shell to remove.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the shell has been removed.</returns>
-    /// <remarks>
-    /// This method will:
-    /// <list type="number">
-    /// <item>Remove the shell's endpoints</item>
-    /// <item>Dispose the shell's service provider</item>
-    /// <item>Remove the shell settings from the cache</item>
-    /// </list>
-    /// </remarks>
     Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -44,11 +28,29 @@ public interface IShellManager
     /// <param name="settings">The updated shell settings.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the shell has been updated.</returns>
-    /// <remarks>
-    /// This method will remove the existing shell and add the updated version,
-    /// which may cause a brief interruption in request processing for that shell.
-    /// </remarks>
     Task UpdateShellAsync(ShellSettings settings, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reloads a single shell from the configured shell settings provider.
+    /// </summary>
+    /// <param name="shellId">The ID of the shell to reload.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the shell has been reloaded.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method uses strict reload semantics:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>If the provider returns a shell definition for the specified ID, the runtime refreshes
+    /// that shell and makes the refreshed state effective on the next access.</item>
+    /// <item>If the provider returns <c>null</c> for the specified ID, the operation fails explicitly
+    /// and does not delete or mutate the current runtime state for that shell.</item>
+    /// </list>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the provider does not define the requested shell.
+    /// </exception>
+    Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reloads all shells from the configured shell settings provider.
@@ -56,8 +58,8 @@ public interface IShellManager
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when all shells have been reloaded.</returns>
     /// <remarks>
-    /// This is useful for refreshing shells from external storage (e.g., database, blob storage)
-    /// without restarting the application.
+    /// This method reconciles runtime shell membership to provider state by adding new shells,
+    /// updating changed shells, preserving unchanged shells, and removing shells no longer returned.
     /// </remarks>
     Task ReloadAllShellsAsync(CancellationToken cancellationToken = default);
 }

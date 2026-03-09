@@ -22,6 +22,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="CShells.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\CShells.Abstractions\CShells.Abstractions.csproj"/>
     </ItemGroup>
 

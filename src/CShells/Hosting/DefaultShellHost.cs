@@ -529,6 +529,69 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     }
 
     /// <summary>
+    /// Invalidates the cached shell context for the specified shell, disposing its service provider.
+    /// The next access to this shell will rebuild it from the latest shell settings.
+    /// </summary>
+    /// <param name="shellId">The shell to invalidate.</param>
+    /// <remarks>
+    /// This is an internal framework seam used by the shell manager during reload operations.
+    /// It does not eagerly rebuild the shell context.
+    /// </remarks>
+    internal async ValueTask InvalidateShellContextAsync(ShellId shellId)
+    {
+        if (_shellContexts.TryRemove(shellId, out var context))
+        {
+            _logger.LogDebug("Invalidating cached shell context for '{ShellId}'", shellId);
+            await DisposeShellContextAsync(context);
+        }
+    }
+
+    /// <summary>
+    /// Invalidates all cached shell contexts, disposing their service providers.
+    /// The next access to any shell will rebuild it from the latest shell settings.
+    /// </summary>
+    /// <remarks>
+    /// This is an internal framework seam used by the shell manager during full reload operations.
+    /// </remarks>
+    internal async ValueTask InvalidateAllShellContextsAsync()
+    {
+        var contexts = _shellContexts.Values.ToList();
+        _shellContexts.Clear();
+
+        foreach (var context in contexts)
+        {
+            _logger.LogDebug("Invalidating cached shell context for '{ShellId}'", context.Settings.Id);
+            await DisposeShellContextAsync(context);
+        }
+    }
+
+    private async ValueTask DisposeShellContextAsync(ShellContext context)
+    {
+        if (context.ServiceProvider is IAsyncDisposable asyncDisposable)
+        {
+            try
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing service provider for shell '{ShellId}'", context.Settings.Id);
+            }
+        }
+        else if (context.ServiceProvider is IDisposable disposable)
+        {
+            try
+            {
+                disposable.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing service provider for shell '{ShellId}'", context.Settings.Id);
+            }
+        }
+    }
+
+    /// <summary>
     /// A holder class that allows the ShellContext to be set after the service provider is built.
     /// This is an internal implementation detail and is not registered in the service collection.
     /// </summary>
@@ -556,28 +619,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
         // Dispose all service providers asynchronously
         foreach (var context in _shellContexts.Values)
         {
-            if (context.ServiceProvider is IAsyncDisposable asyncDisposable)
-            {
-                try
-                {
-                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error disposing service provider");
-                }
-            }
-            else if (context.ServiceProvider is IDisposable disposable)
-            {
-                try
-                {
-                    disposable.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error disposing service provider");
-                }
-            }
+            await DisposeShellContextAsync(context);
         }
 
         _shellContexts.Clear();

@@ -163,5 +163,18 @@ cshells.WithProvider(mutableProvider);
 
 - Register providers from **most general** (defaults) to **most specific** (overrides).
 - Use `IShellManager.ReloadAllShellsAsync()` to refresh shells after external changes.
+- Use `IShellManager.ReloadShellAsync(shellId)` to reload a single shell efficiently.
 - Ensure custom providers are **thread-safe** — they may be called concurrently.
 - Code-first shells and provider-based shells coexist naturally; no special opt-in is required.
+
+---
+
+## Targeted Provider Lookup
+
+Providers implement `GetShellSettingsAsync(ShellId)` for efficient single-shell lookup during `ReloadShellAsync`. Built-in providers optimize this (e.g., `MutableInMemoryShellSettingsProvider` uses O(1) dictionary lookup). Custom providers can override this method; the default implementation enumerates all shells and filters by ID.
+
+With a `CompositeShellSettingsProvider`, all providers are queried for the targeted shell ID, and the last non-null result wins — matching the same last-wins semantics used during full enumeration.
+
+### Reload Notifications
+
+During reload operations, `ShellReloading` and `ShellReloaded` notifications are emitted. Providers do not need to handle these notifications, but downstream consumers can observe them to react to configuration changes. See [Runtime Shell Management](Runtime-Shell-Management.md#reload-notification-ordering) for ordering details.

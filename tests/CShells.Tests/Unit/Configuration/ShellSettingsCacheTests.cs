@@ -130,5 +130,10 @@ public class ShellSettingsCacheInitializerTests
         {
             throw new NotImplementedException();
         }
+
+        public Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

@@ -83,4 +83,11 @@ public class FluentStorageShellSettingsProvider : IShellSettingsProvider
 
         return shellSettings;
     }
+
+    /// <inheritdoc />
+    public async Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    {
+        var allShells = await GetShellSettingsAsync(cancellationToken);
+        return allShells.FirstOrDefault(s => s.Id.Equals(shellId));
+    }
 }

@@ -19,4 +19,11 @@ public class ConfigurationShellSettingsProvider(IConfiguration configuration, st
         var shells = shellConfigurations.Select(ShellSettingsFactory.CreateFromConfiguration);
         return Task.FromResult(shells);
     }
+
+    /// <inheritdoc />
+    public async Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    {
+        var allShells = await GetShellSettingsAsync(cancellationToken);
+        return allShells.FirstOrDefault(s => s.Id.Equals(shellId));
+    }
 }

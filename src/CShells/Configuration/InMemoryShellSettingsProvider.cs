@@ -10,4 +10,8 @@ public class InMemoryShellSettingsProvider(IReadOnlyList<ShellSettings> shells) 
     /// <inheritdoc />
     public Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IEnumerable<ShellSettings>>(_shells);
+
+    /// <inheritdoc />
+    public Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_shells.FirstOrDefault(s => s.Id.Equals(shellId)));
 }

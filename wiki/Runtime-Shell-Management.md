@@ -95,7 +95,25 @@ public async Task RefreshAllTenantsAsync()
 }
 ```
 
-Shells that no longer exist in the providers are removed; new shells are added; changed shells are updated.
+Shells that no longer exist in the providers are removed; new shells are added; changed shells are updated. All cached runtime contexts are invalidated and rebuilt on next access.
+
+---
+
+## Reloading a Single Shell
+
+Reload a specific shell from its provider without affecting other shells. The provider is queried by `ShellId`; if the provider no longer defines the shell, an `InvalidOperationException` is thrown and the runtime state is left unchanged.
+
+```csharp
+public async Task RefreshTenantAsync(string tenantId)
+{
+    await _shellManager.ReloadShellAsync(new ShellId(tenantId));
+    // Shell's DI container will be rebuilt on next access
+}
+```
+
+- The reloaded shell's cached runtime context is invalidated and rebuilt lazily.
+- Unrelated shells are not affected.
+- If the shell is unknown to the provider, the call throws without mutating cache or runtime state.
 
 ---
 
@@ -112,7 +130,28 @@ CShells publishes notifications during shell lifecycle events. Register a handle
 | `ShellAdded` | A shell was added via `IShellManager.AddShellAsync` |
 | `ShellRemoved` | A shell was removed via `IShellManager.RemoveShellAsync` |
 | `ShellUpdated` | A shell was updated via `IShellManager.UpdateShellAsync` |
+| `ShellReloading` | A reload operation is starting (per-shell or aggregate) |
+| `ShellReloaded` | A reload operation completed successfully (per-shell or aggregate) |
 | `ShellsReloaded` | All shells were reloaded via `IShellManager.ReloadAllShellsAsync` |
+
+### Reload Notification Ordering
+
+During a **single-shell reload** (`ReloadShellAsync`):
+
+1. `ShellReloading(shellId)` — reload is starting
+2. Cache update + context invalidation
+3. `ShellReloaded(shellId, [shellId])` — reload succeeded
+
+If the provider does not define the shell, `ShellReloading` may be emitted but `ShellReloaded` is **never** emitted on failure.
+
+During a **full reload** (`ReloadAllShellsAsync`):
+
+1. `ShellReloading(null)` — aggregate reload is starting
+2. Cache reconciliation + context invalidation
+3. `ShellsReloaded(allShells)` — existing aggregate notification
+4. `ShellReloaded(null, changedShells)` — aggregate reload succeeded
+
+The `ShellReloaded.ChangedShells` collection contains only shells whose reconciliation outcome was Added, Updated, or Removed. Unchanged shells are excluded.
 
 ### Implementing a Notification Handler
 

@@ -115,8 +115,21 @@ public class DatabaseShellSettingsProvider(MyDbContext db) : IShellSettingsProvi
             new ShellId(t.Id.ToString()),
             t.EnabledFeatures.ToList()));
     }
+
+    public async Task<ShellSettings?> GetShellSettingsAsync(
+        ShellId shellId, CancellationToken ct = default)
+    {
+        var tenant = await db.Tenants.FindAsync([shellId.Value], ct);
+        if (tenant is null || !tenant.IsActive) return null;
+
+        return new ShellSettings(
+            new ShellId(tenant.Id.ToString()),
+            tenant.EnabledFeatures.ToList());
+    }
 }
 ```
+
+The `GetShellSettingsAsync(ShellId)` overload enables targeted reload via `IShellManager.ReloadShellAsync`. If a provider does not override this method, the default implementation enumerates all shells and filters by ID.
 
 Register it:
 
@@ -131,7 +144,7 @@ shells.WithProvider(sp =>
 
 ## Runtime Shell Management
 
-`IShellManager` supports adding, removing, and updating shells at runtime:
+`IShellManager` supports adding, removing, updating, and reloading shells at runtime:
 
 ```csharp
 public class TenantController(IShellManager shellManager)
@@ -148,10 +161,22 @@ public class TenantController(IShellManager shellManager)
     public async Task UpdateTenantAsync(ShellSettings settings) =>
         await shellManager.UpdateShellAsync(settings);
 
+    public async Task ReloadTenantAsync(string id) =>
+        await shellManager.ReloadShellAsync(new ShellId(id));
+
     public async Task ReloadAllAsync() =>
         await shellManager.ReloadAllShellsAsync();
 }
 ```
+
+### Reload Behavior with Multiple Providers
+
+When using a `CompositeShellSettingsProvider` (the default when multiple providers are registered):
+
+- **`ReloadShellAsync`** queries all providers for the targeted `ShellId` and keeps the last non-null result. If no provider defines the shell, an `InvalidOperationException` is thrown and the runtime state is left unchanged.
+- **`ReloadAllShellsAsync`** queries all providers, reconciles the full set (last-wins), and invalidates all cached runtime contexts. Shells that no longer exist are removed; new shells are added; changed shells are updated.
+
+During both operations, `ShellReloading` and `ShellReloaded` notifications are emitted to allow observers to react to reload lifecycle events.
 
 ## Best Practices
 

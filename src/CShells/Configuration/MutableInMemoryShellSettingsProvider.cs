@@ -66,6 +66,13 @@ public class MutableInMemoryShellSettingsProvider : IShellSettingsProvider
     {
         return Task.FromResult<IEnumerable<ShellSettings>>(_shells.Values);
     }
+
+    /// <inheritdoc />
+    public Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    {
+        _shells.TryGetValue(shellId, out var settings);
+        return Task.FromResult(settings);
+    }
 }
 
 

@@ -30,5 +30,24 @@ public class CompositeShellSettingsProvider(IEnumerable<IShellSettingsProvider> 
 
         return shellsById.Values;
     }
+
+    /// <inheritdoc />
+    public async Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    {
+        // Query providers in reverse order so the last provider wins (consistent with full enumeration)
+        ShellSettings? result = null;
+
+        foreach (var provider in _providers)
+        {
+            var settings = await provider.GetShellSettingsAsync(shellId, cancellationToken);
+
+            if (settings != null)
+            {
+                result = settings;
+            }
+        }
+
+        return result;
+    }
 }
 

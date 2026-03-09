@@ -13,6 +13,8 @@
 - Q: What should full reload do with shells no longer returned by the provider? → A: Full reload reconciles to provider state by adding newly returned shells, updating changed shells, and removing shells no longer returned.
 - Q: What reload notification granularity should full reload use? → A: Full reload emits aggregate reload notifications for the overall operation and also emits per-shell reload notifications for each changed shell.
 - Q: What should provider-level single-shell lookup return when a shell is not found? → A: `GetShellSettingsAsync(ShellId)` returns a nullable shell definition when the shell is not found.
+- Q: What counts as a changed shell during full reload notifications? → A: A changed shell is any shell whose reconciliation outcome is Added, Updated, or Removed; unchanged shells do not emit per-shell reload notifications.
+- Q: Is backward compatibility required for this feature? → A: No. This feature may change public contracts and runtime behavior as needed to satisfy the new reload semantics.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -90,6 +92,7 @@ As an extension author or operator, I want explicit reload lifecycle notificatio
 - **FR-013**: Reload behavior and notification behavior MUST be documented in the runtime shell management guidance and multi-provider guidance.
 - **FR-014**: Reload notification ordering MUST be deterministic: `ShellReloading` is emitted first, existing lifecycle notifications are emitted in their normal order as applicable to the reload, and `ShellReloaded` is emitted last.
 - **FR-015**: Full reload MUST emit aggregate reload notifications for the overall reconciliation operation and MUST also emit per-shell reload notifications for each shell whose definition changes during that reconciliation.
+- **FR-015a**: For full reload notifications, a changed shell MUST mean a shell whose reconciliation outcome is Added, Updated, or Removed. Unchanged shells MUST NOT emit per-shell reload notifications.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -97,7 +100,7 @@ As an extension author or operator, I want explicit reload lifecycle notificatio
 - **Runtime Shell Context**: The active in-memory representation of a shell that serves requests or resolves services and can become stale if it outlives newer provider data.
 - **Reload Operation**: A management action that refreshes either one shell or all shells from provider data while coordinating runtime state replacement and lifecycle notifications.
 - **Reload Notification**: A lifecycle event that marks the start or successful completion of a reload operation and identifies whether the scope is a single shell or all shells.
-- **Provider Lookup Result**: The outcome of asking a provider for one shell by shell ID, including whether a current definition exists for that shell.
+- **Changed Shell**: A shell whose reconciliation outcome during full reload is Added, Updated, or Removed, and therefore participates in per-shell reload notifications.
 - **Provider Lookup Result**: The nullable outcome of asking a provider for one shell by shell ID, where the absence of a shell definition means the shell is not currently provided.
 
 ## Assumptions
@@ -106,6 +109,7 @@ As an extension author or operator, I want explicit reload lifecycle notificatio
 - Full reload remains the reconciliation command for refreshing the complete provider-backed shell set while correcting stale runtime state for any previously activated shells.
 - Full reload reconciliation applies to both shell configuration membership and cached runtime shell contexts.
 - Existing lifecycle notifications remain part of the observable behavior and the new reload notifications supplement them rather than replace them.
+- Backward compatibility is not required for this feature; public contracts and runtime semantics may be changed directly to align with the specified reload model.
 
 ## Success Criteria *(mandatory)*
 

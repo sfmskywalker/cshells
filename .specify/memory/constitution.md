@@ -1,24 +1,20 @@
 <!--
   Sync Impact Report
   ===================
-  Version change: 0.0.0 → 1.0.0 (initial ratification)
-  Modified principles: N/A (initial)
-  Added sections:
+  Version change: 1.0.1 → 1.0.2
+  Modified principles:
     - I. Abstraction-First Architecture
-    - II. Feature Modularity
-    - III. Modern C# Style
-    - IV. Explicit Error Handling
-    - V. Test Coverage
-    - VI. Simplicity & Minimalism
-    - Technology Stack & Constraints
-    - Development Workflow
-  Removed sections: N/A (initial)
+  Added sections:
+    - None
+  Removed sections:
+    - None
   Templates requiring updates:
     - .specify/templates/plan-template.md ✅ (uses dynamic Constitution Check)
     - .specify/templates/spec-template.md ✅ (no principle references)
     - .specify/templates/tasks-template.md ✅ (no principle references)
     - .specify/templates/checklist-template.md ✅ (no principle references)
-  Follow-up TODOs: None
+  Follow-up TODOs:
+    - Keep future analysis aligned with the internal-seam and notification-record exceptions
 -->
 
 # CShells Constitution
@@ -27,13 +23,21 @@
 
 ### I. Abstraction-First Architecture
 
-Every public contract MUST be defined as an interface in a dedicated
-`*.Abstractions` project before implementation. Implementations MUST
-reside in a separate project that references the abstractions.
+Every new public interface or consumer-extensibility contract MUST be
+defined in a dedicated `*.Abstractions` project before implementation.
+Implementations MUST reside in a separate project that references the
+abstractions.
 
 - Abstractions projects (`CShells.Abstractions`,
   `CShells.AspNetCore.Abstractions`) MUST depend only on
   `Microsoft.Extensions.*` abstractions — never on concrete frameworks.
+- Internal framework-only interface seams that are not intended for
+  external consumption MAY remain in implementation projects when doing
+  so preserves a simpler public API surface.
+- Framework-owned public notification message records MAY remain in
+  implementation projects when they are emitted by the framework,
+  consumed via existing notification abstractions, and are not intended
+  to define third-party implementation contracts.
 - Feature libraries SHOULD reference only abstractions packages, keeping
   them lightweight and decoupled from the full framework.
 - Each shell MUST have its own isolated DI container. Root-level services
@@ -206,4 +210,4 @@ supersedes ad-hoc conventions or undocumented habits.
   requirement, document the deviation in the PR with a justification.
   Recurring deviations signal that the constitution needs amendment.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08
+**Version**: 1.0.2 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08

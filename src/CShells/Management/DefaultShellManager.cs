@@ -116,24 +116,94 @@ public class DefaultShellManager : IShellManager
     }
 
     /// <inheritdoc />
+    public async Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Reloading shell '{ShellId}' from provider", shellId);
+
+        // Emit ShellReloading before any state mutation
+        await _notificationPublisher.PublishAsync(new ShellReloading(shellId), strategy: null, cancellationToken);
+
+        // Query the provider for the targeted shell
+        var freshSettings = await _provider.GetShellSettingsAsync(shellId, cancellationToken);
+
+        if (freshSettings is null)
+        {
+            _logger.LogWarning("Provider does not define shell '{ShellId}'; reload aborted without state mutation", shellId);
+            throw new InvalidOperationException($"Shell '{shellId}' is not defined by the provider. Reload aborted without modifying runtime state.");
+        }
+
+        lock (_lock)
+        {
+            // Update cache: replace the targeted shell, preserve all others
+            _cache.Load(_cache.GetAll().Where(s => !s.Id.Equals(shellId)).Append(freshSettings));
+        }
+
+        // Invalidate the cached runtime context so next access rebuilds
+        if (_shellHost is DefaultShellHost defaultHost)
+        {
+            await defaultHost.InvalidateShellContextAsync(shellId);
+        }
+
+        _logger.LogInformation("Shell '{ShellId}' reloaded successfully", shellId);
+
+        // Emit ShellReloaded on success (always last)
+        await _notificationPublisher.PublishAsync(
+            new ShellReloaded(shellId, [shellId]), strategy: null, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Reloading all shells from provider");
+
+        // Emit aggregate ShellReloading (null ShellId = full reload)
+        await _notificationPublisher.PublishAsync(new ShellReloading(null), strategy: null, cancellationToken);
 
         // Load fresh shell settings from provider
         var settings = await _provider.GetShellSettingsAsync(cancellationToken);
         var settingsList = settings.ToList();
 
+        // Capture current shell IDs before updating cache for reconciliation
+        IReadOnlyCollection<ShellSettings> previousShells;
+
         lock (_lock)
         {
-            // Update cache
+            previousShells = _cache.GetAll();
+
+            // Update cache - reconciles to provider state
             _cache.Clear();
             _cache.Load(settingsList);
         }
 
+        // Determine changed shells (added, removed, or updated)
+        var previousIds = previousShells.Select(s => s.Id).ToHashSet();
+        var currentIds = settingsList.Select(s => s.Id).ToHashSet();
+
+        var addedIds = currentIds.Except(previousIds);
+        var removedIds = previousIds.Except(currentIds);
+        var potentiallyUpdatedIds = currentIds.Intersect(previousIds);
+
+        // For "updated", compare settings objects by reference to detect changes
+        var previousByKey = previousShells.ToDictionary(s => s.Id);
+        var currentByKey = settingsList.ToDictionary(s => s.Id);
+        var updatedIds = potentiallyUpdatedIds.Where(id =>
+            !ReferenceEquals(previousByKey[id], currentByKey[id]));
+
+        var changedShells = addedIds.Concat(removedIds).Concat(updatedIds).ToList();
+
+        // Invalidate all cached runtime contexts so next access rebuilds from fresh settings
+        if (_shellHost is DefaultShellHost defaultHost)
+        {
+            await defaultHost.InvalidateAllShellContextsAsync();
+        }
+
         _logger.LogInformation("Reloaded {Count} shell(s)", settingsList.Count);
 
-        // Publish notification (outside lock to avoid deadlocks)
+        // Publish ShellsReloaded (existing aggregate notification, preserved)
         await _notificationPublisher.PublishAsync(new ShellsReloaded(settingsList), strategy: null, cancellationToken);
+
+        // Publish aggregate ShellReloaded last (null ShellId, with all changed shells)
+        await _notificationPublisher.PublishAsync(
+            new ShellReloaded(null, changedShells.AsReadOnly()), strategy: null, cancellationToken);
     }
 }
