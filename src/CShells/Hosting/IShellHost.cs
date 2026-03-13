@@ -23,4 +23,17 @@ public interface IShellHost
     /// Gets all available shell contexts.
     /// </summary>
     IReadOnlyCollection<ShellContext> AllShells { get; }
+
+    /// <summary>
+    /// Evicts the cached context for the specified shell, disposing its service provider.
+    /// The next access to this shell will rebuild it from the latest shell settings.
+    /// </summary>
+    /// <param name="shellId">The shell whose cached context should be evicted.</param>
+    ValueTask EvictShellAsync(ShellId shellId);
+
+    /// <summary>
+    /// Evicts all cached shell contexts, disposing their service providers.
+    /// The next access to any shell will rebuild it from the latest shell settings.
+    /// </summary>
+    ValueTask EvictAllShellsAsync();
 }

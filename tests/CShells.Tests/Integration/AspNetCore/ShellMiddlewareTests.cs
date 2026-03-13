@@ -239,5 +239,8 @@ public class ShellMiddlewareTests
             }
             return shellContext;
         }
+
+        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
+        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
     }
 }

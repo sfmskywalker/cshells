@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using CShells.Management;
 
 namespace CShells.Hosting;
 
@@ -15,5 +16,9 @@ public class DefaultShellServiceExclusionProvider : IShellServiceExclusionProvid
         yield return typeof(IShellContextScopeFactory);
         yield return typeof(IRootServiceCollectionAccessor);
         yield return typeof(IReadOnlyCollection<ShellSettings>);
+        // IShellManager depends on IShellHost (which is excluded above), so copying the root
+        // descriptor would produce a broken registration in shell containers.
+        // It is re-registered in each shell as a root-provider delegation (see RegisterCoreServices).
+        yield return typeof(IShellManager);
     }
 }

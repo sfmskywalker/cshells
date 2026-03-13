@@ -59,6 +59,8 @@ public class ApplicationBuilderExtensionsTests
         public ShellContext DefaultShell => throw new InvalidOperationException();
         public IReadOnlyCollection<ShellContext> AllShells => [];
         public ShellContext GetShell(ShellId id) => throw new KeyNotFoundException();
+        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
+        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
     }
 
     private class TestApplicationBuilder(IServiceProvider serviceProvider) : IApplicationBuilder, IEndpointRouteBuilder

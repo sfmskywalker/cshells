@@ -13,7 +13,7 @@ namespace CShells.Management;
 public class DefaultShellManager : IShellManager
 {
     private readonly IShellHost _shellHost;
-    private readonly ShellSettingsCache _cache;
+    private readonly IShellSettingsCache _cache;
     private readonly IShellSettingsProvider _provider;
     private readonly INotificationPublisher _notificationPublisher;
     private readonly ILogger<DefaultShellManager> _logger;
@@ -24,7 +24,7 @@ public class DefaultShellManager : IShellManager
     /// </summary>
     public DefaultShellManager(
         IShellHost shellHost,
-        ShellSettingsCache cache,
+        IShellSettingsCache cache,
         IShellSettingsProvider provider,
         INotificationPublisher notificationPublisher,
         ILogger<DefaultShellManager>? logger = null)
@@ -151,11 +151,8 @@ public class DefaultShellManager : IShellManager
             _cache.Load(existing);
         }
 
-        // Invalidate the cached runtime context so next access rebuilds
-        if (_shellHost is DefaultShellHost defaultHost)
-        {
-            await defaultHost.InvalidateShellContextAsync(shellId);
-        }
+        // Evict the cached runtime context so next access rebuilds from fresh settings
+        await _shellHost.EvictShellAsync(shellId);
 
         _logger.LogInformation("Shell '{ShellId}' reloaded successfully", shellId);
 
@@ -221,11 +218,8 @@ public class DefaultShellManager : IShellManager
             _cache.Load(settingsList);
         }
 
-        // Invalidate all cached runtime contexts so next access rebuilds from fresh settings
-        if (_shellHost is DefaultShellHost defaultHost)
-        {
-            await defaultHost.InvalidateAllShellContextsAsync();
-        }
+        // Evict all cached runtime contexts so next access rebuilds from fresh settings
+        await _shellHost.EvictAllShellsAsync();
 
         _logger.LogInformation("Reloaded {Count} shell(s)", settingsList.Count);
 

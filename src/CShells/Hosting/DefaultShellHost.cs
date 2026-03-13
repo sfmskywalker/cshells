@@ -409,6 +409,12 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
         // The holder will be populated after the service provider is built
         services.AddSingleton<ShellContext>(sp => contextHolder.Context
             ?? throw new InvalidOperationException($"ShellContext for shell '{settings.Id}' has not been initialized yet. This may indicate a service is being resolved during shell construction."));
+
+        // IShellManager is a root-level infrastructure service. Its default implementation
+        // (DefaultShellManager) depends on IShellHost, which is excluded from shell containers.
+        // Re-register it here as a delegation to the root provider so that shell code
+        // (e.g. endpoints) can inject IShellManager and receive the root singleton.
+        services.AddSingleton<Management.IShellManager>(sp => rootProvider.GetRequiredService<Management.IShellManager>());
     }
 
     /// <summary>
@@ -528,39 +534,25 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
         return _featureFactory.CreateFeature<IShellFeature>(featureType, shellSettings, featureContext);
     }
 
-    /// <summary>
-    /// Invalidates the cached shell context for the specified shell, disposing its service provider.
-    /// The next access to this shell will rebuild it from the latest shell settings.
-    /// </summary>
-    /// <param name="shellId">The shell to invalidate.</param>
-    /// <remarks>
-    /// This is an internal framework seam used by the shell manager during reload operations.
-    /// It does not eagerly rebuild the shell context.
-    /// </remarks>
-    internal async ValueTask InvalidateShellContextAsync(ShellId shellId)
+    /// <inheritdoc />
+    public async ValueTask EvictShellAsync(ShellId shellId)
     {
         if (_shellContexts.TryRemove(shellId, out var context))
         {
-            _logger.LogDebug("Invalidating cached shell context for '{ShellId}'", shellId);
+            _logger.LogDebug("Evicting cached shell context for '{ShellId}'", shellId);
             await DisposeShellContextAsync(context);
         }
     }
 
-    /// <summary>
-    /// Invalidates all cached shell contexts, disposing their service providers.
-    /// The next access to any shell will rebuild it from the latest shell settings.
-    /// </summary>
-    /// <remarks>
-    /// This is an internal framework seam used by the shell manager during full reload operations.
-    /// </remarks>
-    internal async ValueTask InvalidateAllShellContextsAsync()
+    /// <inheritdoc />
+    public async ValueTask EvictAllShellsAsync()
     {
         var contexts = _shellContexts.Values.ToList();
         _shellContexts.Clear();
 
         foreach (var context in contexts)
         {
-            _logger.LogDebug("Invalidating cached shell context for '{ShellId}'", context.Settings.Id);
+            _logger.LogDebug("Evicting cached shell context for '{ShellId}'", context.Settings.Id);
             await DisposeShellContextAsync(context);
         }
     }

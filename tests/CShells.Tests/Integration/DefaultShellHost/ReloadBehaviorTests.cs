@@ -34,7 +34,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         cache.Load(cache.GetAll().Where(s => !s.Id.Equals(shellId)).Append(updatedSettings).ToList());
 
         // Invalidate the cached context
-        await host.InvalidateShellContextAsync(shellId);
+        await host.EvictShellAsync(shellId);
 
         // Act - next access should rebuild
         var rebuiltContext = host.GetShell(shellId);
@@ -63,7 +63,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var context2Before = host.GetShell(tenant2);
 
         // Act - invalidate only Tenant1
-        await host.InvalidateShellContextAsync(tenant1);
+        await host.EvictShellAsync(tenant1);
 
         // Assert - Tenant2 should still be the same instance
         var context2After = host.GetShell(tenant2);
@@ -80,7 +80,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var host = fixture.CreateHost(cache, typeof(TestFixtures).Assembly);
 
         // Act - invalidate a shell that was never built (should not throw)
-        await host.InvalidateShellContextAsync(shellId);
+        await host.EvictShellAsync(shellId);
 
         // Assert - shell should still be buildable
         var context = host.GetShell(shellId);
@@ -99,7 +99,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var originalContext = host.GetShell(shellId);
 
         // Act - invalidate without updating cache
-        await host.InvalidateShellContextAsync(shellId);
+        await host.EvictShellAsync(shellId);
         var rebuiltContext = host.GetShell(shellId);
 
         // Assert - should be a different instance but with same settings
@@ -130,7 +130,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var context2Before = host.GetShell(tenant2);
 
         // Act - invalidate all
-        await host.InvalidateAllShellContextsAsync();
+        await host.EvictAllShellsAsync();
 
         // Assert - next access returns fresh instances
         var context1After = host.GetShell(tenant1);
@@ -153,7 +153,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
 
         // Remove from cache and invalidate context
         cache.Load([]); // empty cache
-        await host.InvalidateShellContextAsync(shellId);
+        await host.EvictShellAsync(shellId);
 
         // Act & Assert - shell should no longer be accessible
         Assert.Throws<KeyNotFoundException>(() => host.GetShell(shellId));

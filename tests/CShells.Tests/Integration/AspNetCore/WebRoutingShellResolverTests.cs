@@ -401,6 +401,8 @@ public class WebRoutingShellResolverTests
     {
         public IReadOnlyCollection<ShellSettings> GetAll() => shells;
         public ShellSettings? GetById(ShellId id) => shells.FirstOrDefault(s => s.Id == id);
+        public void Load(IEnumerable<ShellSettings> settings) { }
+        public void Clear() { }
     }
 
     #endregion

@@ -18,4 +18,14 @@ public interface IShellSettingsCache
     /// <param name="id">The shell identifier.</param>
     /// <returns>The shell settings if found; otherwise, null.</returns>
     ShellSettings? GetById(ShellId id);
+
+    /// <summary>
+    /// Loads shell settings into the cache, replacing any existing entries.
+    /// </summary>
+    void Load(IEnumerable<ShellSettings> settings);
+    
+    /// <summary>
+    /// Clears all cached shell settings.
+    /// </summary>
+    void Clear();
 }

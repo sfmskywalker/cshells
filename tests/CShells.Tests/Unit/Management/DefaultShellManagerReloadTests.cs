@@ -551,9 +551,24 @@ public class DefaultShellManagerReloadTests
     /// </summary>
     private sealed class StubShellHost : IShellHost
     {
+        public List<ShellId> EvictedShells { get; } = [];
+        public bool AllShellsEvicted { get; private set; }
+
         public ShellContext DefaultShell => throw new NotImplementedException();
         public IReadOnlyCollection<ShellContext> AllShells => throw new NotImplementedException();
         public ShellContext GetShell(ShellId id) => throw new NotImplementedException();
+
+        public ValueTask EvictShellAsync(ShellId shellId)
+        {
+            EvictedShells.Add(shellId);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask EvictAllShellsAsync()
+        {
+            AllShellsEvicted = true;
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>
