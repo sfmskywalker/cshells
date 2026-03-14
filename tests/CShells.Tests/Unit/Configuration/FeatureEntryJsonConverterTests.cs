@@ -400,5 +400,32 @@ public class FeatureEntryJsonConverterTests
         Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Core", ex.Message);
     }
+
+    [Fact(DisplayName = "List converter trims whitespace from object-map keys")]
+    public void ListConverter_Deserialize_TrimsObjectMapKeys()
+    {
+        // Arrange — JSON property names with surrounding whitespace (unusual but possible)
+        var json = """{ " Core ": {}, "Analytics": { "TopPostsCount": 10 } }""";
+
+        // Act
+        var entries = JsonSerializer.Deserialize<List<FeatureEntry>>(json, ListOptions);
+
+        // Assert
+        Assert.NotNull(entries);
+        Assert.Equal("Core", entries[0].Name);
+        Assert.Equal("Analytics", entries[1].Name);
+    }
+
+    [Fact(DisplayName = "List converter rejects empty/whitespace-only object-map key")]
+    public void ListConverter_Deserialize_RejectsWhitespaceOnlyKey()
+    {
+        // Arrange
+        var json = """{ " ": {}, "Core": {} }""";
+
+        // Act & Assert
+        var ex = Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<List<FeatureEntry>>(json, ListOptions));
+        Assert.Contains("empty", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
