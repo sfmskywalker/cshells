@@ -18,6 +18,10 @@ public static class ShellSettingsFactory
         Guard.Against.Null(config);
 
         var shellId = new ShellId(config.Name);
+
+        // Validate no duplicate features before processing
+        ConfigurationHelper.ValidateNoDuplicateFeatures(config.Features, config.Name);
+
         var featureNames = ConfigurationHelper.ExtractFeatureNames(config.Features);
         var settings = new ShellSettings(shellId, featureNames);
 
@@ -74,9 +78,13 @@ public static class ShellSettingsFactory
 
         var name = section.GetValue<string>("Name") ?? throw new InvalidOperationException("Shell name is required");
         
-        // Parse features from configuration (handles mixed string/object array)
+        // Parse features from configuration (handles array and object-map forms)
         var featuresSection = section.GetSection("Features");
-        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection);
+        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, name);
+
+        // Validate no duplicate features
+        ConfigurationHelper.ValidateNoDuplicateFeatures(features, name);
+
         var featureNames = ConfigurationHelper.ExtractFeatureNames(features);
 
         var shellId = new ShellId(name);

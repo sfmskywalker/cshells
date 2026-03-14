@@ -269,9 +269,9 @@ public class ShellBuilder
     {
         Guard.Against.Null(section);
 
-        // Parse features from configuration (handles mixed string/object array)
+        // Parse features from configuration (handles array and object-map forms)
         var featuresSection = section.GetSection("Features");
-        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection);
+        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, _settings.Id.Name);
 
         if (features.Count > 0)
         {

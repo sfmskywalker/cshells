@@ -200,6 +200,58 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
+    /// Describes the structural shape of a <c>Features</c> configuration section.
+    /// </summary>
+    public enum FeaturesShape { Empty, Array, Object, Ambiguous }
+
+    /// <summary>
+    /// Detects the shape of a Features configuration section.
+    /// </summary>
+    public static FeaturesShape DetectFeaturesShape(IConfigurationSection featuresSection)
+    {
+        var children = featuresSection.GetChildren().ToList();
+
+        if (children.Count == 0)
+            return FeaturesShape.Empty;
+
+        var hasNumeric = false;
+        var hasNamed = false;
+
+        foreach (var child in children)
+        {
+            if (int.TryParse(child.Key, out _))
+                hasNumeric = true;
+            else
+                hasNamed = true;
+        }
+
+        if (hasNumeric && hasNamed)
+            return FeaturesShape.Ambiguous;
+
+        return hasNumeric ? FeaturesShape.Array : FeaturesShape.Object;
+    }
+
+    /// <summary>
+    /// Validates that a feature list contains no duplicate configured feature names.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when duplicate feature names are detected.</exception>
+    public static void ValidateNoDuplicateFeatures(List<FeatureEntry> entries, string shellName)
+    {
+        var duplicates = entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+            .GroupBy(e => e.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+
+        if (duplicates.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Shell '{shellName}' contains duplicate configured feature name(s): {string.Join(", ", duplicates.Select(d => $"'{d}'"))}.");
+        }
+    }
+
+    /// <summary>
     /// Populates configuration data from feature entries.
     /// Settings from each feature are namespaced under the feature name.
     /// </summary>
@@ -242,9 +294,27 @@ internal static class ConfigurationHelper
 
     /// <summary>
     /// Parses feature entries from a configuration section.
-    /// Handles both string and object formats in the Features array.
+    /// Handles array form (string/object elements) and object-map form (named properties with settings objects).
+    /// Rejects ambiguous mixed-shape sections.
     /// </summary>
-    public static List<FeatureEntry> ParseFeaturesFromConfiguration(IConfigurationSection featuresSection)
+    public static List<FeatureEntry> ParseFeaturesFromConfiguration(IConfigurationSection featuresSection, string? shellName = null)
+    {
+        var shape = DetectFeaturesShape(featuresSection);
+
+        return shape switch
+        {
+            FeaturesShape.Empty => [],
+            FeaturesShape.Array => ParseArrayFeaturesFromConfiguration(featuresSection),
+            FeaturesShape.Object => ParseObjectMapFeaturesFromConfiguration(featuresSection, shellName),
+            FeaturesShape.Ambiguous => throw new InvalidOperationException(
+                $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
+                "Use either array syntax or object-map syntax, not both."),
+            _ => throw new InvalidOperationException(
+                $"Shell '{shellName ?? "unknown"}' has an unrecognized 'Features' configuration shape '{shape}'."),
+        };
+    }
+
+    private static List<FeatureEntry> ParseArrayFeaturesFromConfiguration(IConfigurationSection featuresSection)
     {
         var entries = new List<FeatureEntry>();
 
@@ -287,6 +357,55 @@ internal static class ConfigurationHelper
 
                 entries.Add(entry);
             }
+        }
+
+        return entries;
+    }
+
+    private static List<FeatureEntry> ParseObjectMapFeaturesFromConfiguration(IConfigurationSection featuresSection, string? shellName = null)
+    {
+        var entries = new List<FeatureEntry>();
+        var shellContext = shellName is not null ? $" in shell '{shellName}'" : "";
+
+        foreach (var featureSection in featuresSection.GetChildren())
+        {
+            var featureName = featureSection.Key;
+
+            if (string.IsNullOrWhiteSpace(featureName))
+                continue;
+
+            // Reject scalar values (e.g., "Posts": "invalid")
+            if (featureSection.Value is not null && !featureSection.GetChildren().Any())
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found a scalar value '{featureSection.Value}'.");
+            }
+
+            // Reject array-like children (e.g., "Posts": [1, 2])
+            var children = featureSection.GetChildren().ToList();
+            if (children.Count > 0 && children.All(c => int.TryParse(c.Key, out _)))
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found an array.");
+            }
+
+            var entry = new FeatureEntry { Name = featureName };
+
+            // In object-map form, all children (including "Name") are settings
+            foreach (var settingSection in children)
+            {
+                if (settingSection.GetChildren().Any())
+                {
+                    var json = SerializeConfigurationSection(settingSection);
+                    entry.Settings[settingSection.Key] = JsonSerializer.Deserialize<JsonElement>(json);
+                }
+                else
+                {
+                    entry.Settings[settingSection.Key] = settingSection.Value;
+                }
+            }
+
+            entries.Add(entry);
         }
 
         return entries;
