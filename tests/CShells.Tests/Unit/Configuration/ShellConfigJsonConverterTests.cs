@@ -27,15 +27,13 @@ public class ShellConfigJsonConverterTests
         """;
 
         // Act — deserialize
-        var config = JsonSerializer.Deserialize<ShellConfig>(json, Options);
-        Assert.NotNull(config);
+        var config = Deserialize(json);
 
         // Act — serialize back
         var serialized = JsonSerializer.Serialize(config, Options);
-        var roundTripped = JsonSerializer.Deserialize<ShellConfig>(serialized, Options);
+        var roundTripped = Deserialize(serialized);
 
         // Assert
-        Assert.NotNull(roundTripped);
         Assert.Equal("Default", roundTripped.Name);
         Assert.Equal(3, roundTripped.Features.Count);
         Assert.Equal("Core", roundTripped.Features[0].Name);
@@ -59,15 +57,13 @@ public class ShellConfigJsonConverterTests
         """;
 
         // Act — deserialize
-        var config = JsonSerializer.Deserialize<ShellConfig>(json, Options);
-        Assert.NotNull(config);
+        var config = Deserialize(json);
 
         // Act — serialize back (now outputs object-map form)
         var serialized = JsonSerializer.Serialize(config, Options);
-        var roundTripped = JsonSerializer.Deserialize<ShellConfig>(serialized, Options);
+        var roundTripped = Deserialize(serialized);
 
         // Assert
-        Assert.NotNull(roundTripped);
         Assert.Equal(2, roundTripped.Features.Count);
         Assert.Equal("Core", roundTripped.Features[0].Name);
         Assert.Equal("Analytics", roundTripped.Features[1].Name);
@@ -92,8 +88,7 @@ public class ShellConfigJsonConverterTests
         var json = JsonSerializer.Serialize(config, Options);
 
         // Assert
-        using var doc = JsonDocument.Parse(json);
-        var features = doc.RootElement.GetProperty("Features");
+        var features = ParseFeatures(json);
         Assert.Equal(JsonValueKind.Object, features.ValueKind);
         Assert.True(features.TryGetProperty("Core", out _));
         Assert.True(features.TryGetProperty("Analytics", out _));
@@ -113,8 +108,7 @@ public class ShellConfigJsonConverterTests
         var json = JsonSerializer.Serialize(config, Options);
 
         // Assert
-        using var doc = JsonDocument.Parse(json);
-        var features = doc.RootElement.GetProperty("Features");
+        var features = ParseFeatures(json);
         Assert.Equal("{}", features.GetProperty("Core").GetRawText());
         Assert.Equal("{}", features.GetProperty("Posts").GetRawText());
     }
@@ -138,10 +132,9 @@ public class ShellConfigJsonConverterTests
         """;
 
         // Act
-        var config = JsonSerializer.Deserialize<ShellConfig>(json, Options);
+        var config = Deserialize(json);
 
         // Assert
-        Assert.NotNull(config);
         Assert.Single(config.Features);
         Assert.Equal("Database", config.Features[0].Name);
         var connection = Assert.IsType<JsonElement>(config.Features[0].Settings["Connection"]);
@@ -182,10 +175,9 @@ public class ShellConfigJsonConverterTests
         """;
 
         // Act
-        var config = JsonSerializer.Deserialize<ShellConfig>(json, Options);
+        var config = Deserialize(json);
 
         // Assert — deserialization doesn't reject; runtime validation does
-        Assert.NotNull(config);
         Assert.Equal(2, config.Features.Count);
         Assert.All(config.Features, f => Assert.Equal("Core", f.Name));
     }
@@ -215,12 +207,10 @@ public class ShellConfigJsonConverterTests
         """;
 
         // Act
-        var arrayConfig = JsonSerializer.Deserialize<ShellConfig>(arrayJson, Options);
-        var objectMapConfig = JsonSerializer.Deserialize<ShellConfig>(objectMapJson, Options);
+        var arrayConfig = Deserialize(arrayJson);
+        var objectMapConfig = Deserialize(objectMapJson);
 
         // Assert
-        Assert.NotNull(arrayConfig);
-        Assert.NotNull(objectMapConfig);
         Assert.Equal(arrayConfig.Features.Count, objectMapConfig.Features.Count);
 
         for (var i = 0; i < arrayConfig.Features.Count; i++)
@@ -230,5 +220,18 @@ public class ShellConfigJsonConverterTests
                 arrayConfig.Features[i].Settings.Keys.OrderBy(k => k),
                 objectMapConfig.Features[i].Settings.Keys.OrderBy(k => k));
         }
+    }
+
+    private static ShellConfig Deserialize(string json)
+    {
+        var config = JsonSerializer.Deserialize<ShellConfig>(json, Options);
+        Assert.NotNull(config);
+        return config;
+    }
+
+    private static JsonElement ParseFeatures(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("Features").Clone();
     }
 }

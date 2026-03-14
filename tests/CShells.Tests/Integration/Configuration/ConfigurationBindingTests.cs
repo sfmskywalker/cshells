@@ -80,7 +80,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Object-map Features loaded from IConfiguration produces correct feature names")]
         public void ObjectMapFeatures_LoadedFromConfiguration_ProducesCorrectFeatureNames()
         {
-            var json = """
+            var settings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -95,13 +95,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
-
-            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+            """);
 
             Assert.Equal("Contoso", settings.Id.Name);
             // IConfiguration sorts children alphabetically, so order differs from declaration
@@ -117,7 +111,7 @@ namespace CShells.Tests.Configuration
             // IConfiguration sorts children alphabetically by key, so object-map
             // property order is not preserved through this path. Declaration
             // order is preserved only through direct JSON deserialization.
-            var json = """
+            var settings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -132,13 +126,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
-
-            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+            """);
 
             Assert.Equal(3, settings.EnabledFeatures.Count);
             Assert.Contains("Zeta", settings.EnabledFeatures);
@@ -149,7 +137,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Object-map Features flattens feature settings into ConfigurationData")]
         public void ObjectMapFeatures_FlattensFeatureSettings()
         {
-            var json = """
+            var settings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -163,13 +151,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
-
-            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+            """);
 
             Assert.Equal("10", settings.ConfigurationData["Analytics:TopPostsCount"]);
             Assert.Equal("true", settings.ConfigurationData["Analytics:Enabled"]);
@@ -178,7 +160,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Object-map and array Features produce equivalent ConfigurationData")]
         public void ObjectMapAndArray_ProduceEquivalentConfigurationData()
         {
-            var arrayJson = """
+            var arraySettings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -192,9 +174,9 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
+            """);
 
-            var objectMapJson = """
+            var objectMapSettings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -208,15 +190,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var arrayStream = new MemoryStream(Encoding.UTF8.GetBytes(arrayJson));
-            var arrayConfig = new ConfigurationBuilder().AddJsonStream(arrayStream).Build();
-            var arraySettings = ShellSettingsFactory.CreateFromConfiguration(arrayConfig.GetSection("CShells:Shells:0"));
-
-            using var objectMapStream = new MemoryStream(Encoding.UTF8.GetBytes(objectMapJson));
-            var objectMapConfig = new ConfigurationBuilder().AddJsonStream(objectMapStream).Build();
-            var objectMapSettings = ShellSettingsFactory.CreateFromConfiguration(objectMapConfig.GetSection("CShells:Shells:0"));
+            """);
 
             // Feature names may differ in order (IConfiguration sorts alphabetically for object-map)
             // but should contain the same set
@@ -232,7 +206,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Object-map Features with nested settings flattens nested properties")]
         public void ObjectMapFeatures_WithNestedSettings_FlattensNestedProperties()
         {
-            var json = """
+            var settings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -250,13 +224,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
-
-            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+            """);
 
             Assert.Equal(["Database"], settings.EnabledFeatures);
             Assert.Equal("localhost", settings.ConfigurationData["Database:Connection:Server"]);
@@ -266,7 +234,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Empty object-map Features produces no enabled features")]
         public void EmptyObjectMapFeatures_ProducesNoEnabledFeatures()
         {
-            var json = """
+            var settings = LoadShell("""
             {
               "CShells": {
                 "Shells": [
@@ -277,13 +245,7 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
-
-            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+            """);
 
             Assert.Empty(settings.EnabledFeatures);
         }
@@ -291,7 +253,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Duplicate features in array form throws with shell context")]
         public void DuplicateFeatures_InArrayForm_ThrowsWithShellContext()
         {
-            var json = """
+            var section = ShellSection("""
             {
               "CShells": {
                 "Shells": [
@@ -302,14 +264,10 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
+            """);
 
             var ex = Assert.Throws<InvalidOperationException>(
-                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+                () => ShellSettingsFactory.CreateFromConfiguration(section));
             Assert.Contains("DupShell", ex.Message);
             Assert.Contains("Core", ex.Message);
             Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -318,7 +276,7 @@ namespace CShells.Tests.Configuration
         [Fact(DisplayName = "Duplicate features in object array form throws with shell context")]
         public void DuplicateFeatures_InObjectArrayForm_ThrowsWithShellContext()
         {
-            var json = """
+            var section = ShellSection("""
             {
               "CShells": {
                 "Shells": [
@@ -333,14 +291,10 @@ namespace CShells.Tests.Configuration
                 ]
               }
             }
-            """;
-
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
-            var shellSection = config.GetSection("CShells:Shells:0");
+            """);
 
             var ex = Assert.Throws<InvalidOperationException>(
-                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+                () => ShellSettingsFactory.CreateFromConfiguration(section));
             Assert.Contains("DupShell2", ex.Message);
             Assert.Contains("Core", ex.Message);
         }
@@ -366,5 +320,14 @@ namespace CShells.Tests.Configuration
             Assert.Contains("MixedShell", ex.Message);
             Assert.Contains("ambiguous", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
+        private static IConfigurationSection ShellSection(string json, int index = 0)
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            return new ConfigurationBuilder().AddJsonStream(stream).Build()
+                .GetSection($"CShells:Shells:{index}");
+        }
+
+        private static ShellSettings LoadShell(string json, int index = 0) =>
+            ShellSettingsFactory.CreateFromConfiguration(ShellSection(json, index));
     }
 }
