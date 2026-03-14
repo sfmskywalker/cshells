@@ -305,7 +305,7 @@ internal static class ConfigurationHelper
         {
             FeaturesShape.Empty => [],
             FeaturesShape.Array => ParseArrayFeaturesFromConfiguration(featuresSection),
-            FeaturesShape.Object => ParseObjectMapFeaturesFromConfiguration(featuresSection),
+            FeaturesShape.Object => ParseObjectMapFeaturesFromConfiguration(featuresSection, shellName),
             FeaturesShape.Ambiguous => throw new InvalidOperationException(
                 $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
                 "Use either array syntax or object-map syntax, not both."),
@@ -362,9 +362,10 @@ internal static class ConfigurationHelper
         return entries;
     }
 
-    private static List<FeatureEntry> ParseObjectMapFeaturesFromConfiguration(IConfigurationSection featuresSection)
+    private static List<FeatureEntry> ParseObjectMapFeaturesFromConfiguration(IConfigurationSection featuresSection, string? shellName = null)
     {
         var entries = new List<FeatureEntry>();
+        var shellContext = shellName is not null ? $" in shell '{shellName}'" : "";
 
         foreach (var featureSection in featuresSection.GetChildren())
         {
@@ -377,7 +378,7 @@ internal static class ConfigurationHelper
             if (featureSection.Value is not null && !featureSection.GetChildren().Any())
             {
                 throw new InvalidOperationException(
-                    $"Feature '{featureName}' in object-map syntax must have an object value, but found a scalar value '{featureSection.Value}'.");
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found a scalar value '{featureSection.Value}'.");
             }
 
             // Reject array-like children (e.g., "Posts": [1, 2])
@@ -385,7 +386,7 @@ internal static class ConfigurationHelper
             if (children.Count > 0 && children.All(c => int.TryParse(c.Key, out _)))
             {
                 throw new InvalidOperationException(
-                    $"Feature '{featureName}' in object-map syntax must have an object value, but found an array.");
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found an array.");
             }
 
             var entry = new FeatureEntry { Name = featureName };
