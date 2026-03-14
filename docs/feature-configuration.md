@@ -4,13 +4,42 @@ CShells provides a convention-based configuration system that lets features rece
 
 ## Overview
 
-Features can be configured in three ways:
+Features can be configured in four ways:
 
-1. **Inline configuration** — settings defined directly alongside the feature name in the `Features` array
-2. **Explicit configuration** — implement `IConfigurableFeature<TOptions>` for strongly-typed options
-3. **Manual configuration** — use `IConfiguration` or `IOptions<T>` directly in `ConfigureServices`
+1. **Object-map configuration** — features as property keys with settings as values (recommended)
+2. **Inline configuration** — settings defined directly alongside the feature name in the `Features` array
+3. **Explicit configuration** — implement `IConfigurableFeature<TOptions>` for strongly-typed options
+4. **Manual configuration** — use `IConfiguration` or `IOptions<T>` directly in `ConfigureServices`
 
-## Inline Configuration (Recommended)
+## Object-Map Configuration (Recommended)
+
+The `Features` property supports an object-map syntax where each property key is the feature name and the property value provides the feature settings:
+
+```json
+{
+  "CShells": {
+    "Shells": [
+      {
+        "Name": "Default",
+        "Features": {
+          "Core": {},
+          "Analytics": { "TopPostsCount": 10 }
+        }
+      }
+    ]
+  }
+}
+```
+
+Features with no settings use an empty object `{}`. All properties within a feature's object are treated as settings — there is no special `Name` property since the object key serves as the feature name.
+
+### Validation Rules
+
+- **No duplicates**: Each feature name must appear exactly once per shell.
+- **No mixing**: A shell's `Features` value must be entirely array syntax or entirely object-map syntax. Mixing both styles is rejected with an error that identifies the affected shell.
+- **Values must be objects**: In object-map syntax, every feature value must be a JSON object (not a string, number, or array).
+
+## Inline Configuration (Array Syntax)
 
 Each entry in the `Features` array can be either a string (feature name) or an object with `Name` plus any additional properties:
 

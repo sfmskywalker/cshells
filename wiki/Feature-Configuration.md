@@ -9,14 +9,48 @@ CShells provides a convention-based configuration system that binds settings fro
 Shell features can receive configuration from three places, listed in order of precedence (highest first):
 
 1. **Environment variables** — override everything
-2. **Inline feature settings** — settings placed alongside the feature name in the `Features` array
+2. **Inline feature settings** — settings placed alongside the feature name in the `Features` section
 3. **Shell `Configuration` section** — `CShells:Shells[n]:Configuration:<FeatureName>`
 
 ---
 
-## Inline Feature Settings (Recommended)
+## Object-Map Feature Settings (Recommended)
 
-Place settings directly beside the feature name in the `Features` array:
+Use an object-map where each property key is the feature name and the value supplies per-feature settings:
+
+```json
+{
+  "CShells": {
+    "Shells": [
+      {
+        "Name": "Default",
+        "Features": {
+          "Core": {},
+          "Database": {
+            "ConnectionString": "Server=prod;Database=App;Integrated Security=true",
+            "CommandTimeout": 60
+          },
+          "Logging": {}
+        }
+      }
+    ]
+  }
+}
+```
+
+Features with no settings use an empty object `{}`. All properties within a feature's value are treated as settings — the property key is the feature name.
+
+### Validation Rules
+
+- **No duplicates**: Each feature name must appear exactly once per shell.
+- **No mixing**: A shell must use either array syntax or object-map syntax exclusively. Mixing both is rejected.
+- **Values must be objects**: In object-map syntax, each feature value must be a JSON object.
+
+---
+
+## Array Feature Settings
+
+Place settings in a mixed array of strings and objects (the original syntax, still fully supported):
 
 ```json
 {

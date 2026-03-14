@@ -76,5 +76,295 @@ namespace CShells.Tests.Configuration
             Assert.NotEmpty(duplicates);
             Assert.Contains("X", duplicates, StringComparer.OrdinalIgnoreCase);
         }
+
+        [Fact(DisplayName = "Object-map Features loaded from IConfiguration produces correct feature names")]
+        public void ObjectMapFeatures_LoadedFromConfiguration_ProducesCorrectFeatureNames()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "Contoso",
+                    "Features": {
+                      "Core": {},
+                      "Posts": {},
+                      "Analytics": { "TopPostsCount": 10 }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+
+            Assert.Equal("Contoso", settings.Id.Name);
+            // IConfiguration sorts children alphabetically, so order differs from declaration
+            Assert.Equal(3, settings.EnabledFeatures.Count);
+            Assert.Contains("Core", settings.EnabledFeatures);
+            Assert.Contains("Posts", settings.EnabledFeatures);
+            Assert.Contains("Analytics", settings.EnabledFeatures);
+        }
+
+        [Fact(DisplayName = "Object-map Features through IConfiguration returns all declared features")]
+        public void ObjectMapFeatures_ThroughIConfiguration_ReturnsAllDeclaredFeatures()
+        {
+            // IConfiguration sorts children alphabetically by key, so object-map
+            // property order is not preserved through this path. Declaration
+            // order is preserved only through direct JSON deserialization.
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "OrderTest",
+                    "Features": {
+                      "Zeta": {},
+                      "Alpha": {},
+                      "Mu": {}
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+
+            Assert.Equal(3, settings.EnabledFeatures.Count);
+            Assert.Contains("Zeta", settings.EnabledFeatures);
+            Assert.Contains("Alpha", settings.EnabledFeatures);
+            Assert.Contains("Mu", settings.EnabledFeatures);
+        }
+
+        [Fact(DisplayName = "Object-map Features flattens feature settings into ConfigurationData")]
+        public void ObjectMapFeatures_FlattensFeatureSettings()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "SettingsTest",
+                    "Features": {
+                      "Core": {},
+                      "Analytics": { "TopPostsCount": "10", "Enabled": "true" }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+
+            Assert.Equal("10", settings.ConfigurationData["Analytics:TopPostsCount"]);
+            Assert.Equal("true", settings.ConfigurationData["Analytics:Enabled"]);
+        }
+
+        [Fact(DisplayName = "Object-map and array Features produce equivalent ConfigurationData")]
+        public void ObjectMapAndArray_ProduceEquivalentConfigurationData()
+        {
+            var arrayJson = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "Shell1",
+                    "Features": [
+                      "Core",
+                      { "Name": "Analytics", "TopPostsCount": "10" }
+                    ]
+                  }
+                ]
+              }
+            }
+            """;
+
+            var objectMapJson = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "Shell1",
+                    "Features": {
+                      "Core": {},
+                      "Analytics": { "TopPostsCount": "10" }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var arrayStream = new MemoryStream(Encoding.UTF8.GetBytes(arrayJson));
+            var arrayConfig = new ConfigurationBuilder().AddJsonStream(arrayStream).Build();
+            var arraySettings = ShellSettingsFactory.CreateFromConfiguration(arrayConfig.GetSection("CShells:Shells:0"));
+
+            using var objectMapStream = new MemoryStream(Encoding.UTF8.GetBytes(objectMapJson));
+            var objectMapConfig = new ConfigurationBuilder().AddJsonStream(objectMapStream).Build();
+            var objectMapSettings = ShellSettingsFactory.CreateFromConfiguration(objectMapConfig.GetSection("CShells:Shells:0"));
+
+            // Feature names may differ in order (IConfiguration sorts alphabetically for object-map)
+            // but should contain the same set
+            Assert.Equal(
+                arraySettings.EnabledFeatures.OrderBy(f => f).ToArray(),
+                objectMapSettings.EnabledFeatures.OrderBy(f => f).ToArray());
+
+            Assert.Equal(
+                arraySettings.ConfigurationData.OrderBy(kv => kv.Key).ToArray(),
+                objectMapSettings.ConfigurationData.OrderBy(kv => kv.Key).ToArray());
+        }
+
+        [Fact(DisplayName = "Object-map Features with nested settings flattens nested properties")]
+        public void ObjectMapFeatures_WithNestedSettings_FlattensNestedProperties()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "NestedTest",
+                    "Features": {
+                      "Database": {
+                        "Connection": {
+                          "Server": "localhost",
+                          "Port": "5432"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+
+            Assert.Equal(["Database"], settings.EnabledFeatures);
+            Assert.Equal("localhost", settings.ConfigurationData["Database:Connection:Server"]);
+            Assert.Equal("5432", settings.ConfigurationData["Database:Connection:Port"]);
+        }
+
+        [Fact(DisplayName = "Empty object-map Features produces no enabled features")]
+        public void EmptyObjectMapFeatures_ProducesNoEnabledFeatures()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "EmptyTest",
+                    "Features": {}
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var settings = ShellSettingsFactory.CreateFromConfiguration(shellSection);
+
+            Assert.Empty(settings.EnabledFeatures);
+        }
+
+        [Fact(DisplayName = "Duplicate features in array form throws with shell context")]
+        public void DuplicateFeatures_InArrayForm_ThrowsWithShellContext()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "DupShell",
+                    "Features": ["Core", "Analytics", "Core"]
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+            Assert.Contains("DupShell", ex.Message);
+            Assert.Contains("Core", ex.Message);
+            Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact(DisplayName = "Duplicate features in object array form throws with shell context")]
+        public void DuplicateFeatures_InObjectArrayForm_ThrowsWithShellContext()
+        {
+            var json = """
+            {
+              "CShells": {
+                "Shells": [
+                  {
+                    "Name": "DupShell2",
+                    "Features": [
+                      { "Name": "Core" },
+                      { "Name": "Analytics" },
+                      { "Name": "Core" }
+                    ]
+                  }
+                ]
+              }
+            }
+            """;
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var config = new ConfigurationBuilder().AddJsonStream(stream).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+            Assert.Contains("DupShell2", ex.Message);
+            Assert.Contains("Core", ex.Message);
+        }
+
+        [Fact(DisplayName = "Mixed array and object-map Features throws ambiguous error")]
+        public void MixedShapeFeatures_ThrowsAmbiguousError()
+        {
+            // IConfiguration can't natively produce mixed shapes from a single JSON file,
+            // but multiple configuration providers could merge sections with numeric and named keys.
+            // Simulate by directly building an IConfiguration with mixed keys.
+            var configData = new Dictionary<string, string?>
+            {
+                ["CShells:Shells:0:Name"] = "MixedShell",
+                ["CShells:Shells:0:Features:0"] = "Core",           // numeric key (array-like)
+                ["CShells:Shells:0:Features:Analytics:TopPostsCount"] = "10" // named key (object-map-like)
+            };
+
+            var config = new ConfigurationBuilder().AddInMemoryCollection(configData).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+            Assert.Contains("MixedShell", ex.Message);
+            Assert.Contains("ambiguous", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

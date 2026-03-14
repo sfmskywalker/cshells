@@ -200,6 +200,54 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
+    /// Detects the shape of a Features configuration section.
+    /// Returns <c>"array"</c>, <c>"object"</c>, <c>"empty"</c>, or <c>"ambiguous"</c>.
+    /// </summary>
+    public static string DetectFeaturesShape(IConfigurationSection featuresSection)
+    {
+        var children = featuresSection.GetChildren().ToList();
+
+        if (children.Count == 0)
+            return "empty";
+
+        var hasNumeric = false;
+        var hasNamed = false;
+
+        foreach (var child in children)
+        {
+            if (int.TryParse(child.Key, out _))
+                hasNumeric = true;
+            else
+                hasNamed = true;
+        }
+
+        if (hasNumeric && hasNamed)
+            return "ambiguous";
+
+        return hasNumeric ? "array" : "object";
+    }
+
+    /// <summary>
+    /// Validates that a feature list contains no duplicate configured feature names.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when duplicate feature names are detected.</exception>
+    public static void ValidateNoDuplicateFeatures(List<FeatureEntry> entries, string shellName)
+    {
+        var duplicates = entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+            .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+
+        if (duplicates.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Shell '{shellName}' contains duplicate configured feature name(s): {string.Join(", ", duplicates.Select(d => $"'{d}'"))}.");
+        }
+    }
+
+    /// <summary>
     /// Populates configuration data from feature entries.
     /// Settings from each feature are namespaced under the feature name.
     /// </summary>
@@ -242,9 +290,26 @@ internal static class ConfigurationHelper
 
     /// <summary>
     /// Parses feature entries from a configuration section.
-    /// Handles both string and object formats in the Features array.
+    /// Handles array form (string/object elements) and object-map form (named properties with settings objects).
+    /// Rejects ambiguous mixed-shape sections.
     /// </summary>
-    public static List<FeatureEntry> ParseFeaturesFromConfiguration(IConfigurationSection featuresSection)
+    public static List<FeatureEntry> ParseFeaturesFromConfiguration(IConfigurationSection featuresSection, string? shellName = null)
+    {
+        var shape = DetectFeaturesShape(featuresSection);
+
+        return shape switch
+        {
+            "empty" => [],
+            "array" => ParseArrayFeaturesFromConfiguration(featuresSection),
+            "object" => ParseObjectMapFeaturesFromConfiguration(featuresSection),
+            "ambiguous" => throw new InvalidOperationException(
+                $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
+                "Use either array syntax or object-map syntax, not both."),
+            _ => []
+        };
+    }
+
+    private static List<FeatureEntry> ParseArrayFeaturesFromConfiguration(IConfigurationSection featuresSection)
     {
         var entries = new List<FeatureEntry>();
 
@@ -287,6 +352,39 @@ internal static class ConfigurationHelper
 
                 entries.Add(entry);
             }
+        }
+
+        return entries;
+    }
+
+    private static List<FeatureEntry> ParseObjectMapFeaturesFromConfiguration(IConfigurationSection featuresSection)
+    {
+        var entries = new List<FeatureEntry>();
+
+        foreach (var featureSection in featuresSection.GetChildren())
+        {
+            var featureName = featureSection.Key;
+
+            if (string.IsNullOrWhiteSpace(featureName))
+                continue;
+
+            var entry = new FeatureEntry { Name = featureName };
+
+            // In object-map form, all children (including "Name") are settings
+            foreach (var settingSection in featureSection.GetChildren())
+            {
+                if (settingSection.GetChildren().Any())
+                {
+                    var json = SerializeConfigurationSection(settingSection);
+                    entry.Settings[settingSection.Key] = JsonSerializer.Deserialize<JsonElement>(json);
+                }
+                else
+                {
+                    entry.Settings[settingSection.Key] = settingSection.Value;
+                }
+            }
+
+            entries.Add(entry);
         }
 
         return entries;

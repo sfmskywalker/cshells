@@ -212,4 +212,172 @@ public class ShellSettingsFactoryTests
             ["Key1"] = "Value1"
         }
     };
+
+    [Fact(DisplayName = "Create with object-map features normalizes correctly")]
+    public void Create_WithObjectMapFeatures_NormalizesCorrectly()
+    {
+        // Arrange — simulate what the list converter produces from object-map JSON
+        var config = new ShellConfig
+        {
+            Name = "ObjMapShell",
+            Features =
+            [
+                FeatureEntry.FromName("Core"),
+                FeatureEntry.FromName("Posts"),
+                new FeatureEntry
+                {
+                    Name = "Analytics",
+                    Settings = new() { ["TopPostsCount"] = 10 }
+                }
+            ]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert
+        Assert.Equal("ObjMapShell", settings.Id.Name);
+        Assert.Equal(["Core", "Posts", "Analytics"], settings.EnabledFeatures);
+        Assert.Equal(10, settings.ConfigurationData["Analytics:TopPostsCount"]);
+    }
+
+    [Fact(DisplayName = "Create preserves declaration order from object-map features")]
+    public void Create_PreservesDeclarationOrder_FromObjectMapFeatures()
+    {
+        // Arrange
+        var config = new ShellConfig
+        {
+            Name = "OrderedShell",
+            Features =
+            [
+                FeatureEntry.FromName("Zeta"),
+                FeatureEntry.FromName("Alpha"),
+                FeatureEntry.FromName("Mu")
+            ]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert
+        Assert.Equal(["Zeta", "Alpha", "Mu"], settings.EnabledFeatures);
+    }
+
+    [Fact(DisplayName = "Create with inner Name property in object-map treats Name as configuration")]
+    public void Create_WithInnerNameProperty_TreatsNameAsConfiguration()
+    {
+        // Arrange — in object-map syntax, the map key "Analytics" is the identity;
+        //           an inner "Name" property is just feature configuration
+        var config = new ShellConfig
+        {
+            Name = "InnerNameShell",
+            Features =
+            [
+                new FeatureEntry
+                {
+                    Name = "Analytics",
+                    Settings = new() { ["Name"] = "AnalyticsDisplay", ["TopPostsCount"] = 5 }
+                }
+            ]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert
+        Assert.Equal(["Analytics"], settings.EnabledFeatures);
+        Assert.Equal("AnalyticsDisplay", settings.ConfigurationData["Analytics:Name"]);
+        Assert.Equal(5, settings.ConfigurationData["Analytics:TopPostsCount"]);
+    }
+
+    [Fact(DisplayName = "ValidateNoDuplicateFeatures throws for duplicate feature names")]
+    public void ValidateNoDuplicateFeatures_ThrowsForDuplicates()
+    {
+        // Arrange
+        var entries = new List<FeatureEntry>
+        {
+            FeatureEntry.FromName("Core"),
+            FeatureEntry.FromName("Analytics"),
+            FeatureEntry.FromName("Core") // duplicate
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ConfigurationHelper.ValidateNoDuplicateFeatures(entries, "TestShell"));
+        Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Core", ex.Message);
+        Assert.Contains("TestShell", ex.Message);
+    }
+
+    [Fact(DisplayName = "ValidateNoDuplicateFeatures succeeds for unique feature names")]
+    public void ValidateNoDuplicateFeatures_SucceedsForUniqueNames()
+    {
+        // Arrange
+        var entries = new List<FeatureEntry>
+        {
+            FeatureEntry.FromName("Core"),
+            FeatureEntry.FromName("Analytics"),
+            FeatureEntry.FromName("Posts")
+        };
+
+        // Act & Assert — should not throw
+        ConfigurationHelper.ValidateNoDuplicateFeatures(entries, "TestShell");
+    }
+
+    [Fact(DisplayName = "ValidateNoDuplicateFeatures reports all duplicate names")]
+    public void ValidateNoDuplicateFeatures_ReportsAllDuplicateNames()
+    {
+        // Arrange
+        var entries = new List<FeatureEntry>
+        {
+            FeatureEntry.FromName("Core"),
+            FeatureEntry.FromName("Analytics"),
+            FeatureEntry.FromName("Core"),     // duplicate
+            FeatureEntry.FromName("Analytics") // duplicate
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ConfigurationHelper.ValidateNoDuplicateFeatures(entries, "TestShell"));
+        Assert.Contains("Core", ex.Message);
+        Assert.Contains("Analytics", ex.Message);
+    }
+
+    [Fact(DisplayName = "Create with duplicate features throws with shell name context")]
+    public void Create_WithDuplicateFeatures_ThrowsWithShellNameContext()
+    {
+        // Arrange
+        var config = new ShellConfig
+        {
+            Name = "MyShell",
+            Features =
+            [
+                FeatureEntry.FromName("Core"),
+                FeatureEntry.FromName("Core") // duplicate
+            ]
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => ShellSettingsFactory.Create(config));
+        Assert.Contains("MyShell", ex.Message);
+        Assert.Contains("Core", ex.Message);
+        Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "Create with empty-named feature after whitespace trim throws with context")]
+    public void Create_EmptyNamedFeature_IsFilteredOut()
+    {
+        // Arrange — a feature entry whose name becomes empty after trimming
+        var config = new ShellConfig
+        {
+            Name = "TestShell",
+            Features = [FeatureEntry.FromName("  "), FeatureEntry.FromName("Core")]
+        };
+
+        // Act
+        var settings = ShellSettingsFactory.Create(config);
+
+        // Assert — empty-name entry filtered out, only Core remains
+        Assert.Equal(["Core"], settings.EnabledFeatures);
+    }
 }
