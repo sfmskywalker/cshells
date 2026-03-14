@@ -20,7 +20,8 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
         return TryResolveByPath(context)
             ?? TryResolveByHost(context)
             ?? TryResolveByHeader(context)
-            ?? TryResolveByClaim(context);
+            ?? TryResolveByClaim(context)
+            ?? TryResolveByRootPath();
     }
 
     private ShellId? TryResolveByPath(ShellResolutionContext context)
@@ -103,5 +104,57 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns the shell whose <c>WebRouting:Path</c> is explicitly set to an empty string
+    /// (<c>""</c>), indicating it is a root-level shell that should handle requests not matched
+    /// by any path-prefixed, host-based, header-based, or claim-based resolver.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is intentionally the last resort within this strategy: it only fires after all
+    /// other resolution methods have returned <see langword="null"/>.
+    /// </para>
+    /// <para>
+    /// The key distinction between <c>null</c> and <c>""</c> for <c>WebRouting:Path</c>:
+    /// <list type="bullet">
+    ///   <item><description><c>null</c> / not set — the shell is not path-routed at all; this method ignores it.</description></item>
+    ///   <item><description><c>""</c> (explicit empty string) — the shell opts in to root-level routing and becomes the fallback for unmatched requests.</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// If more than one shell has <c>WebRouting:Path = ""</c> the configuration is ambiguous
+    /// and <see langword="null"/> is returned, allowing <see cref="DefaultShellResolverStrategy"/>
+    /// to act as the final fallback.
+    /// </para>
+    /// </remarks>
+    private ShellId? TryResolveByRootPath()
+    {
+        if (!_options.EnablePathRouting)
+            return null;
+
+        ShellId? rootShellId = null;
+
+        foreach (var shell in _cache.GetAll())
+        {
+            var routeValue = shell.GetConfiguration("WebRouting:Path");
+
+            // Only match a shell that explicitly set WebRouting:Path = "" (not null/absent).
+            // A null value means the shell simply has no path routing configured.
+            if (routeValue is not { Length: 0 })
+                continue;
+
+            if (rootShellId.HasValue)
+            {
+                // Ambiguous: two shells both claim the root path. Return null so that the
+                // DefaultShellResolverStrategy can act as the final fallback instead.
+                return null;
+            }
+
+            rootShellId = shell.Id;
+        }
+
+        return rootShellId;
     }
 }

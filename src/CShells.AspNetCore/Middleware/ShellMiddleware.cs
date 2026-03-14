@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Extensions;
+using CShells.AspNetCore.Routing;
 using CShells.Hosting;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +44,29 @@ public class ShellMiddleware(
             return;
         }
 
-        var shellId = ResolveShellWithCache(context, resolutionContext);
+        // Prefer the shell that owns the matched endpoint (set by UseRouting before this middleware).
+        // This is critical for shell-registered FastEndpoints routes: the compiled route-handler
+        // delegate resolves IEndpointFactory (and other shell services) from ctx.RequestServices.
+        // If the resolver pipeline returns a *different* shell (e.g. "Default" via
+        // DefaultShellResolverStrategy), that shell's container may not have those services
+        // registered, causing "No service for type 'FastEndpoints.IEndpointFactory'" errors.
+        //
+        // By checking ShellEndpointMetadata first we guarantee that a shell-owned endpoint always
+        // executes inside the service scope of the shell that registered it, while non-shell
+        // endpoints (no metadata) continue to use the normal resolver pipeline.
+        var endpointShellId = context.GetEndpoint()?.Metadata.GetMetadata<ShellEndpointMetadata>()?.ShellId;
+
+        ShellId? shellId;
+        if (endpointShellId.HasValue)
+        {
+            shellId = endpointShellId.Value;
+            _logger.LogDebug("Using shell '{ShellId}' from matched endpoint metadata for request path '{Path}'",
+                shellId.Value, context.Request.Path);
+        }
+        else
+        {
+            shellId = ResolveShellWithCache(context, resolutionContext);
+        }
 
         if (shellId is null)
         {
