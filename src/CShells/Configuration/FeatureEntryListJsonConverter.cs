@@ -78,7 +78,13 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
 
         foreach (var property in root.EnumerateObject())
         {
-            var featureName = property.Name;
+            var featureName = property.Name.Trim();
+
+            if (string.IsNullOrWhiteSpace(featureName))
+            {
+                throw new JsonException(
+                    "Feature name in object-map syntax must not be empty or whitespace.");
+            }
 
             if (property.Value.ValueKind != JsonValueKind.Object)
             {

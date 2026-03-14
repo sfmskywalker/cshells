@@ -324,7 +324,7 @@ public class ShellSettingsFactoryTests
         Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(DisplayName = "Create with empty-named feature after whitespace trim throws with context")]
+    [Fact(DisplayName = "Create with empty-named feature after whitespace trim filters it out")]
     public void Create_EmptyNamedFeature_IsFilteredOut()
     {
         // Arrange — a feature entry whose name becomes empty after trimming
@@ -339,5 +339,19 @@ public class ShellSettingsFactoryTests
 
         // Assert — empty-name entry filtered out, only Core remains
         Assert.Equal(["Core"], settings.EnabledFeatures);
+    }
+
+    [Fact(DisplayName = "ValidateNoDuplicateFeatures catches whitespace-variant duplicates")]
+    public void ValidateNoDuplicateFeatures_CatchesWhitespaceVariantDuplicates()
+    {
+        // Arrange — "Core" and " Core " differ only by whitespace but are effectively the same
+        var entries = FeatureList("Core", " Core ");
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ConfigurationHelper.ValidateNoDuplicateFeatures(entries, "TestShell"));
+        Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Core", ex.Message);
+        Assert.Contains("TestShell", ex.Message);
     }
 }

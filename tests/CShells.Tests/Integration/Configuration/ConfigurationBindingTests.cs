@@ -320,6 +320,45 @@ namespace CShells.Tests.Configuration
             Assert.Contains("MixedShell", ex.Message);
             Assert.Contains("ambiguous", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
+        [Fact(DisplayName = "Object-map feature with scalar value throws with feature context")]
+        public void ObjectMapFeature_ScalarValue_ThrowsWithFeatureContext()
+        {
+            var configData = new Dictionary<string, string?>
+            {
+                ["CShells:Shells:0:Name"] = "ScalarShell",
+                ["CShells:Shells:0:Features:Core"] = null,
+                ["CShells:Shells:0:Features:Posts"] = "invalid"  // scalar value
+            };
+
+            var config = new ConfigurationBuilder().AddInMemoryCollection(configData).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+            Assert.Contains("Posts", ex.Message);
+            Assert.Contains("scalar", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact(DisplayName = "Object-map feature with array value throws with feature context")]
+        public void ObjectMapFeature_ArrayValue_ThrowsWithFeatureContext()
+        {
+            var configData = new Dictionary<string, string?>
+            {
+                ["CShells:Shells:0:Name"] = "ArrayShell",
+                ["CShells:Shells:0:Features:Core:TopCount"] = "5",  // valid object-map feature
+                ["CShells:Shells:0:Features:Posts:0"] = "tag1",     // array-like children
+                ["CShells:Shells:0:Features:Posts:1"] = "tag2"
+            };
+
+            var config = new ConfigurationBuilder().AddInMemoryCollection(configData).Build();
+            var shellSection = config.GetSection("CShells:Shells:0");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => ShellSettingsFactory.CreateFromConfiguration(shellSection));
+            Assert.Contains("Posts", ex.Message);
+            Assert.Contains("array", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static IConfigurationSection ShellSection(string json, int index = 0)
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));

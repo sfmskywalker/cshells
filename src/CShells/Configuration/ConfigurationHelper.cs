@@ -239,7 +239,7 @@ internal static class ConfigurationHelper
     {
         var duplicates = entries
             .Where(e => !string.IsNullOrWhiteSpace(e.Name))
-            .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(e => e.Name.Trim(), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToArray();
@@ -309,6 +309,8 @@ internal static class ConfigurationHelper
             FeaturesShape.Ambiguous => throw new InvalidOperationException(
                 $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
                 "Use either array syntax or object-map syntax, not both."),
+            _ => throw new InvalidOperationException(
+                $"Shell '{shellName ?? "unknown"}' has an unrecognized 'Features' configuration shape '{shape}'."),
         };
     }
 
@@ -371,10 +373,25 @@ internal static class ConfigurationHelper
             if (string.IsNullOrWhiteSpace(featureName))
                 continue;
 
+            // Reject scalar values (e.g., "Posts": "invalid")
+            if (featureSection.Value is not null && !featureSection.GetChildren().Any())
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}' in object-map syntax must have an object value, but found a scalar value '{featureSection.Value}'.");
+            }
+
+            // Reject array-like children (e.g., "Posts": [1, 2])
+            var children = featureSection.GetChildren().ToList();
+            if (children.Count > 0 && children.All(c => int.TryParse(c.Key, out _)))
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}' in object-map syntax must have an object value, but found an array.");
+            }
+
             var entry = new FeatureEntry { Name = featureName };
 
             // In object-map form, all children (including "Name") are settings
-            foreach (var settingSection in featureSection.GetChildren())
+            foreach (var settingSection in children)
             {
                 if (settingSection.GetChildren().Any())
                 {
