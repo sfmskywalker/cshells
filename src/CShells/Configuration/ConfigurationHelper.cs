@@ -200,15 +200,19 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
-    /// Detects the shape of a Features configuration section.
-    /// Returns <c>"array"</c>, <c>"object"</c>, <c>"empty"</c>, or <c>"ambiguous"</c>.
+    /// Describes the structural shape of a <c>Features</c> configuration section.
     /// </summary>
-    public static string DetectFeaturesShape(IConfigurationSection featuresSection)
+    public enum FeaturesShape { Empty, Array, Object, Ambiguous }
+
+    /// <summary>
+    /// Detects the shape of a Features configuration section.
+    /// </summary>
+    public static FeaturesShape DetectFeaturesShape(IConfigurationSection featuresSection)
     {
         var children = featuresSection.GetChildren().ToList();
 
         if (children.Count == 0)
-            return "empty";
+            return FeaturesShape.Empty;
 
         var hasNumeric = false;
         var hasNamed = false;
@@ -222,9 +226,9 @@ internal static class ConfigurationHelper
         }
 
         if (hasNumeric && hasNamed)
-            return "ambiguous";
+            return FeaturesShape.Ambiguous;
 
-        return hasNumeric ? "array" : "object";
+        return hasNumeric ? FeaturesShape.Array : FeaturesShape.Object;
     }
 
     /// <summary>
@@ -299,13 +303,12 @@ internal static class ConfigurationHelper
 
         return shape switch
         {
-            "empty" => [],
-            "array" => ParseArrayFeaturesFromConfiguration(featuresSection),
-            "object" => ParseObjectMapFeaturesFromConfiguration(featuresSection),
-            "ambiguous" => throw new InvalidOperationException(
+            FeaturesShape.Empty => [],
+            FeaturesShape.Array => ParseArrayFeaturesFromConfiguration(featuresSection),
+            FeaturesShape.Object => ParseObjectMapFeaturesFromConfiguration(featuresSection),
+            FeaturesShape.Ambiguous => throw new InvalidOperationException(
                 $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
                 "Use either array syntax or object-map syntax, not both."),
-            _ => []
         };
     }
 
