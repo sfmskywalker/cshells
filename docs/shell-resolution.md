@@ -28,7 +28,7 @@ The built-in `WebRoutingShellResolver` supports four resolution methods, tried i
 ### Configuration
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithConfigurationProvider(builder.Configuration);
     shells.WithWebRouting(options =>
@@ -89,7 +89,7 @@ Result: requests to `acme.example.com` route to the Acme shell.
 ## Header-Based Routing
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithConfigurationProvider(builder.Configuration);
     shells.WithWebRouting(options => options.HeaderName = "X-Tenant-Id");
@@ -101,7 +101,7 @@ Result: a request with `X-Tenant-Id: Acme` routes to the Acme shell.
 ## Claim-Based Routing
 
 ```csharp
-shells.WithWebRouting(options => options.ClaimKey = "tenant_id");
+builder.Services.AddCShells(shells => shells.WithWebRouting(options => options.ClaimKey = "tenant_id"));
 ```
 
 Result: if the authenticated user has claim `tenant_id = "Acme"`, the request routes to Acme.
@@ -113,9 +113,12 @@ If no strategy matches, `DefaultShellResolverStrategy` resolves to the shell nam
 ## Excluding Paths
 
 ```csharp
-shells.WithWebRouting(options =>
+builder.Services.AddCShells(shells =>
 {
-    options.ExcludePaths = ["/health", "/swagger", "/admin"];
+    shells.WithWebRouting(options =>
+    {
+        options.ExcludePaths = ["/health", "/swagger", "/admin"];
+    });
 });
 ```
 
@@ -148,7 +151,7 @@ public class ApiKeyShellResolver : IShellResolverStrategy
 Register it:
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithResolverStrategy<ApiKeyShellResolver>(order: 10);
 });
