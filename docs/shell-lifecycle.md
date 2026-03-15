@@ -48,6 +48,7 @@ public class PostsFeature : IShellFeature
 
 - **Application startup** — all configured shells are activated in order
 - **Dynamic shell addition** — `await shellManager.AddShellAsync(settings)` activates the new shell
+- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` re-activates the rebuilt shell after eviction
 - Handlers run in **registration order**
 - If a handler throws, the exception is logged and **propagated** (the shell activation fails)
 
@@ -89,6 +90,7 @@ public class AnalyticsFeature : IShellFeature
 
 - **Application shutdown** — all shells are deactivated
 - **Dynamic shell removal** — `await shellManager.RemoveShellAsync(shellId)`
+- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` deactivates the old shell before evicting its service provider
 - Handlers run in **reverse registration order** (LIFO)
 - Exceptions are **logged but swallowed** — all handlers get a chance to run
 

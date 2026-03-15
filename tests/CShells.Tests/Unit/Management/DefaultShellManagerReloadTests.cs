@@ -2,6 +2,7 @@ using CShells.Configuration;
 using CShells.Hosting;
 using CShells.Management;
 using CShells.Notifications;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Unit.Management;
 
@@ -380,11 +381,10 @@ public class DefaultShellManagerReloadTests
             "ShellsReloaded must be emitted before the aggregate ShellReloaded");
     }
 
-    [Fact(DisplayName = "Existing lifecycle notifications are preserved during reload")]
-    public async Task ReloadShellAsync_PreservesExistingLifecycleNotifications()
+    [Fact(DisplayName = "Existing lifecycle notifications are published during reload")]
+    public async Task ReloadShellAsync_PublishesLifecycleNotifications()
     {
-        // Arrange - this test verifies that ShellReloading/ShellReloaded don't replace
-        // other notification types.
+        // Arrange
         var shellId = new ShellId("Tenant1");
         var settings = CreateShell("Tenant1", ["FeatureA"]);
 
@@ -400,12 +400,16 @@ public class DefaultShellManagerReloadTests
         // Act
         await manager.ReloadShellAsync(shellId);
 
-        // Assert - ShellReloading and ShellReloaded are the reload-specific notifications
-        // Other notifications (if emitted) should not be ShellReloading/ShellReloaded only
+        // Assert - reload emits lifecycle notifications alongside reload-specific ones
         var reloadNotifications = notifications.Notifications
             .Where(n => n is ShellReloading or ShellReloaded)
             .ToList();
         Assert.Equal(2, reloadNotifications.Count); // exactly one ShellReloading + one ShellReloaded
+
+        var lifecycleNotifications = notifications.Notifications
+            .Where(n => n is ShellDeactivating or ShellActivated)
+            .ToList();
+        Assert.Equal(2, lifecycleNotifications.Count); // exactly one ShellDeactivating + one ShellActivated
     }
 
     [Fact(DisplayName = "ReloadAllShellsAsync emits per-shell notifications for changed shells")]
@@ -497,6 +501,194 @@ public class DefaultShellManagerReloadTests
         Assert.Contains(new ShellId("Tenant2"), aggregateReloaded.ChangedShells);
     }
 
+    #endregion
+
+    #region US4 - Lifecycle Notifications During Reload
+
+    [Fact(DisplayName = "ReloadShellAsync emits ShellDeactivating before ShellActivated")]
+    public async Task ReloadShellAsync_EmitsDeactivating_BeforeActivated()
+    {
+        // Arrange
+        var shellId = new ShellId("Tenant1");
+        var settings = CreateShell("Tenant1", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(shellId, settings);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([settings]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadShellAsync(shellId);
+
+        // Assert
+        var all = notifications.Notifications.ToList();
+        var deactivatingIdx = all.FindIndex(n => n is ShellDeactivating);
+        var activatedIdx = all.FindIndex(n => n is ShellActivated);
+        Assert.True(deactivatingIdx >= 0, "ShellDeactivating should be emitted");
+        Assert.True(activatedIdx >= 0, "ShellActivated should be emitted");
+        Assert.True(deactivatingIdx < activatedIdx, "ShellDeactivating must precede ShellActivated");
+    }
+
+    [Fact(DisplayName = "ReloadShellAsync full notification sequence: Reloading → Deactivating → Activated → Reloaded")]
+    public async Task ReloadShellAsync_FullNotificationSequence()
+    {
+        // Arrange
+        var shellId = new ShellId("Tenant1");
+        var settings = CreateShell("Tenant1", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(shellId, settings);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([settings]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadShellAsync(shellId);
+
+        // Assert - exact ordering
+        var all = notifications.Notifications.ToList();
+        Assert.Equal(4, all.Count);
+        Assert.IsType<ShellReloading>(all[0]);
+        Assert.IsType<ShellDeactivating>(all[1]);
+        Assert.IsType<ShellActivated>(all[2]);
+        Assert.IsType<ShellReloaded>(all[3]);
+    }
+
+    [Fact(DisplayName = "ReloadShellAsync with new shell skips ShellDeactivating")]
+    public async Task ReloadShellAsync_NewShell_SkipsDeactivating()
+    {
+        // Arrange
+        var shellId = new ShellId("NewTenant");
+        var newSettings = CreateShell("NewTenant", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(shellId, newSettings);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([]); // empty cache — shell was never built
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadShellAsync(shellId);
+
+        // Assert - no ShellDeactivating since there was no old context
+        Assert.DoesNotContain(notifications.Notifications, n => n is ShellDeactivating);
+        Assert.Contains(notifications.Notifications, n => n is ShellActivated);
+    }
+
+    [Fact(DisplayName = "ReloadShellAsync failure does not emit ShellDeactivating or ShellActivated")]
+    public async Task ReloadShellAsync_Failure_DoesNotEmitLifecycleNotifications()
+    {
+        // Arrange
+        var shellId = new ShellId("Tenant1");
+        var settings = CreateShell("Tenant1", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider(); // returns null
+        var cache = new ShellSettingsCache();
+        cache.Load([settings]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            manager.ReloadShellAsync(shellId));
+
+        // Assert - lifecycle notifications must NOT be emitted on failure
+        Assert.DoesNotContain(notifications.Notifications, n => n is ShellDeactivating);
+        Assert.DoesNotContain(notifications.Notifications, n => n is ShellActivated);
+    }
+
+    [Fact(DisplayName = "ReloadAllShellsAsync emits ShellDeactivating for all existing shells")]
+    public async Task ReloadAllShellsAsync_EmitsDeactivating_ForAllExistingShells()
+    {
+        // Arrange
+        var tenant1 = CreateShell("Tenant1", ["FeatureA"]);
+        var tenant2 = CreateShell("Tenant2", ["FeatureB"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(new("Tenant1"), tenant1);
+        provider.SetShell(new("Tenant2"), tenant2);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([tenant1, tenant2]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadAllShellsAsync();
+
+        // Assert - ShellDeactivating for both existing shells
+        var deactivating = notifications.Notifications.OfType<ShellDeactivating>().ToList();
+        Assert.Equal(2, deactivating.Count);
+        Assert.Contains(deactivating, d => d.Context.Id.Equals(new ShellId("Tenant1")));
+        Assert.Contains(deactivating, d => d.Context.Id.Equals(new ShellId("Tenant2")));
+    }
+
+    [Fact(DisplayName = "ReloadAllShellsAsync emits ShellActivated for all shells after rebuild")]
+    public async Task ReloadAllShellsAsync_EmitsActivated_ForAllShells()
+    {
+        // Arrange
+        var tenant1 = CreateShell("Tenant1", ["FeatureA"]);
+        var tenant2 = CreateShell("Tenant2", ["FeatureB"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(new("Tenant1"), tenant1);
+        provider.SetShell(new("Tenant2"), tenant2);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([tenant1, tenant2]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadAllShellsAsync();
+
+        // Assert - ShellActivated for both shells
+        var activated = notifications.Notifications.OfType<ShellActivated>().ToList();
+        Assert.Equal(2, activated.Count);
+        Assert.Contains(activated, a => a.Context.Id.Equals(new ShellId("Tenant1")));
+        Assert.Contains(activated, a => a.Context.Id.Equals(new ShellId("Tenant2")));
+    }
+
+    [Fact(DisplayName = "ReloadAllShellsAsync lifecycle notifications ordered: Deactivating before Activated")]
+    public async Task ReloadAllShellsAsync_DeactivatingBeforeActivated()
+    {
+        // Arrange
+        var settings = CreateShell("Tenant1", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(new("Tenant1"), settings);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([settings]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var manager = CreateManager(cache, provider, notifications);
+
+        // Act
+        await manager.ReloadAllShellsAsync();
+
+        // Assert - all ShellDeactivating must come before any ShellActivated
+        var all = notifications.Notifications.ToList();
+        var lastDeactivating = all.FindLastIndex(n => n is ShellDeactivating);
+        var firstActivated = all.FindIndex(n => n is ShellActivated);
+        Assert.True(lastDeactivating >= 0, "ShellDeactivating should be emitted");
+        Assert.True(firstActivated >= 0, "ShellActivated should be emitted");
+        Assert.True(lastDeactivating < firstActivated, "All ShellDeactivating must precede ShellActivated");
+    }
+
     [Fact(DisplayName = "ReloadShellAsync preserves insertion order of existing shells")]
     public async Task ReloadShellAsync_PreservesInsertionOrder()
     {
@@ -536,7 +728,7 @@ public class DefaultShellManagerReloadTests
         StubShellSettingsProvider provider,
         RecordingNotificationPublisher notifications)
     {
-        var host = new StubShellHost();
+        var host = new StubShellHost(cache);
         return new DefaultShellManager(host, cache, provider, notifications);
     }
 
@@ -548,27 +740,60 @@ public class DefaultShellManagerReloadTests
 
     /// <summary>
     /// A minimal stub shell host for unit testing.
+    /// Creates lightweight <see cref="ShellContext"/> instances backed by the cache.
     /// </summary>
-    private sealed class StubShellHost : IShellHost
+    private sealed class StubShellHost(ShellSettingsCache cache) : IShellHost
     {
+        private readonly Dictionary<ShellId, ShellContext> _contexts = new();
+
         public List<ShellId> EvictedShells { get; } = [];
         public bool AllShellsEvicted { get; private set; }
 
         public ShellContext DefaultShell => throw new NotImplementedException();
-        public IReadOnlyCollection<ShellContext> AllShells => throw new NotImplementedException();
-        public ShellContext GetShell(ShellId id) => throw new NotImplementedException();
+
+        public IReadOnlyCollection<ShellContext> AllShells
+        {
+            get
+            {
+                foreach (var settings in cache.GetAll())
+                {
+                    if (!_contexts.ContainsKey(settings.Id))
+                        _contexts[settings.Id] = CreateContext(settings);
+                }
+
+                return _contexts.Values.ToList().AsReadOnly();
+            }
+        }
+
+        public ShellContext GetShell(ShellId id)
+        {
+            if (_contexts.TryGetValue(id, out var context))
+                return context;
+
+            var settings = cache.GetById(id)
+                ?? throw new KeyNotFoundException($"Shell '{id}' not found.");
+
+            var newContext = CreateContext(settings);
+            _contexts[id] = newContext;
+            return newContext;
+        }
 
         public ValueTask EvictShellAsync(ShellId shellId)
         {
             EvictedShells.Add(shellId);
+            _contexts.Remove(shellId);
             return ValueTask.CompletedTask;
         }
 
         public ValueTask EvictAllShellsAsync()
         {
             AllShellsEvicted = true;
+            _contexts.Clear();
             return ValueTask.CompletedTask;
         }
+
+        private static ShellContext CreateContext(ShellSettings settings) =>
+            new(settings, new ServiceCollection().BuildServiceProvider(), settings.EnabledFeatures.ToList().AsReadOnly());
     }
 
     /// <summary>

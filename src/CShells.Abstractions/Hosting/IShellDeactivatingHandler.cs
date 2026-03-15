@@ -14,6 +14,7 @@ namespace CShells.Hosting;
 /// </para>
 /// <list type="bullet">
 ///   <item><description>A shell is being dynamically removed via <see cref="IShellManager.RemoveShellAsync"/></description></item>
+///   <item><description>A shell is being reloaded via <see cref="IShellManager.ReloadShellAsync"/> or <see cref="IShellManager.ReloadAllShellsAsync"/></description></item>
 ///   <item><description>The application is shutting down and all shells are being deactivated</description></item>
 /// </list>
 /// <para>

@@ -132,6 +132,25 @@ public class DefaultShellManager : IShellManager
             throw new InvalidOperationException($"Shell '{shellId}' is not defined by the provider. Reload aborted without modifying runtime state.");
         }
 
+        // Capture the old shell context (if it was previously built) so we can
+        // publish ShellDeactivating before disposing its service provider.
+        ShellContext? oldContext = null;
+        try
+        {
+            oldContext = _shellHost.GetShell(shellId);
+        }
+        catch (KeyNotFoundException)
+        {
+            // Shell was never built — no deactivation needed
+        }
+
+        // Deactivate the old shell before eviction (service provider is still alive)
+        if (oldContext is not null)
+        {
+            _logger.LogDebug("Publishing ShellDeactivating for shell '{ShellId}' before reload eviction", shellId);
+            await _notificationPublisher.PublishAsync(new ShellDeactivating(oldContext), strategy: null, cancellationToken);
+        }
+
         lock (_lock)
         {
             // Replace the targeted shell in-place to preserve insertion order;
@@ -153,6 +172,11 @@ public class DefaultShellManager : IShellManager
 
         // Evict the cached runtime context so next access rebuilds from fresh settings
         await _shellHost.EvictShellAsync(shellId);
+
+        // Eagerly rebuild the shell and publish ShellActivated so lifecycle handlers run
+        var newContext = _shellHost.GetShell(shellId);
+        _logger.LogDebug("Publishing ShellActivated for shell '{ShellId}' after reload rebuild", shellId);
+        await _notificationPublisher.PublishAsync(new ShellActivated(newContext), strategy: null, cancellationToken);
 
         _logger.LogInformation("Shell '{ShellId}' reloaded successfully", shellId);
 
@@ -211,6 +235,29 @@ public class DefaultShellManager : IShellManager
             await _notificationPublisher.PublishAsync(new ShellReloading(id), strategy: null, cancellationToken);
         }
 
+        // Capture all existing shell contexts before eviction so we can publish
+        // ShellDeactivating while their service providers are still alive.
+        // EvictAllShellsAsync disposes ALL contexts, not just changed ones.
+        var existingContexts = new List<ShellContext>();
+        foreach (var shell in previousShells)
+        {
+            try
+            {
+                existingContexts.Add(_shellHost.GetShell(shell.Id));
+            }
+            catch (KeyNotFoundException)
+            {
+                // Shell was never built — no deactivation needed
+            }
+        }
+
+        // Deactivate all existing shells before eviction
+        foreach (var context in existingContexts)
+        {
+            _logger.LogDebug("Publishing ShellDeactivating for shell '{ShellId}' before reload eviction", context.Id);
+            await _notificationPublisher.PublishAsync(new ShellDeactivating(context), strategy: null, cancellationToken);
+        }
+
         // Update cache - reconciles to provider state
         lock (_lock)
         {
@@ -220,6 +267,14 @@ public class DefaultShellManager : IShellManager
 
         // Evict all cached runtime contexts so next access rebuilds from fresh settings
         await _shellHost.EvictAllShellsAsync();
+
+        // Eagerly rebuild all shells and publish ShellActivated for each
+        var allShells = _shellHost.AllShells;
+        foreach (var context in allShells)
+        {
+            _logger.LogDebug("Publishing ShellActivated for shell '{ShellId}' after reload rebuild", context.Id);
+            await _notificationPublisher.PublishAsync(new ShellActivated(context), strategy: null, cancellationToken);
+        }
 
         _logger.LogInformation("Reloaded {Count} shell(s)", settingsList.Count);
 

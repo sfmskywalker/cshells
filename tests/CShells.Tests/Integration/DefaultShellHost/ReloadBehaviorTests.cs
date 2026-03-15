@@ -182,13 +182,17 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         // Act
         await manager.ReloadShellAsync(shellId);
 
-        // Assert
+        // Assert - reload notifications
         var reloading = notifications.Notifications.OfType<ShellReloading>().ToList();
         var reloaded = notifications.Notifications.OfType<ShellReloaded>().ToList();
         Assert.Single(reloading);
         Assert.Single(reloaded);
         Assert.Equal(shellId, reloading[0].ShellId);
         Assert.Equal(shellId, reloaded[0].ShellId);
+
+        // Assert - lifecycle notifications
+        Assert.Single(notifications.Notifications.OfType<ShellDeactivating>());
+        Assert.Single(notifications.Notifications.OfType<ShellActivated>());
     }
 
     [Fact(DisplayName = "ReloadAllShellsAsync through manager emits aggregate notifications and rebuilds shells")]
@@ -217,6 +221,12 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         Assert.Contains(notifications.Notifications, n => n is ShellReloading r && r.ShellId is null);
         Assert.Contains(notifications.Notifications, n => n is ShellReloaded r && r.ShellId is null);
 
+        // Assert - lifecycle notifications for both shells
+        var deactivating = notifications.Notifications.OfType<ShellDeactivating>().ToList();
+        var activated = notifications.Notifications.OfType<ShellActivated>().ToList();
+        Assert.Equal(2, deactivating.Count);
+        Assert.Equal(2, activated.Count);
+
         // Assert - shells are rebuilt
         var ctx1After = host.GetShell(tenant1);
         var ctx2After = host.GetShell(tenant2);
@@ -243,13 +253,21 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         // Act
         await manager.ReloadShellAsync(shellId);
 
-        // Assert - ShellReloading must precede ShellReloaded
+        // Assert - full sequence: ShellReloading → ShellDeactivating → ShellActivated → ShellReloaded
         var allNotifications = notifications.Notifications.ToList();
         var reloadingIdx = allNotifications.FindIndex(n => n is ShellReloading);
+        var deactivatingIdx = allNotifications.FindIndex(n => n is ShellDeactivating);
+        var activatedIdx = allNotifications.FindIndex(n => n is ShellActivated);
         var reloadedIdx = allNotifications.FindIndex(n => n is ShellReloaded);
+
         Assert.True(reloadingIdx >= 0, "ShellReloading should be emitted");
+        Assert.True(deactivatingIdx >= 0, "ShellDeactivating should be emitted");
+        Assert.True(activatedIdx >= 0, "ShellActivated should be emitted");
         Assert.True(reloadedIdx >= 0, "ShellReloaded should be emitted");
-        Assert.True(reloadingIdx < reloadedIdx, "ShellReloading must precede ShellReloaded");
+
+        Assert.True(reloadingIdx < deactivatingIdx, "ShellReloading must precede ShellDeactivating");
+        Assert.True(deactivatingIdx < activatedIdx, "ShellDeactivating must precede ShellActivated");
+        Assert.True(activatedIdx < reloadedIdx, "ShellActivated must precede ShellReloaded");
     }
 
     #endregion

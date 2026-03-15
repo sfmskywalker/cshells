@@ -14,6 +14,7 @@ namespace CShells.Hosting;
 /// <list type="bullet">
 ///   <item><description>The application starts and all configured shells are loaded</description></item>
 ///   <item><description>A new shell is dynamically added via <see cref="IShellManager.AddShellAsync"/></description></item>
+///   <item><description>A shell is reloaded via <see cref="IShellManager.ReloadShellAsync"/> or <see cref="IShellManager.ReloadAllShellsAsync"/></description></item>
 /// </list>
 /// <para>
 /// Register implementations in a shell feature's <see cref="Features.IShellFeature.ConfigureServices"/> method:
