@@ -69,7 +69,7 @@ Set `Path` to `""` when the **entire** application is multi-tenant:
 ## Excluding Paths from Shell Resolution
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithWebRouting(options =>
     {
@@ -108,7 +108,7 @@ using CShells.AspNetCore.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.AddShells([typeof(MyFeature)]);
+builder.Services.AddCShells([typeof(MyFeature)]);
 
 var app = builder.Build();
 
