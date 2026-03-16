@@ -7,14 +7,14 @@ CShells supports loading shells from multiple sources simultaneously. Providers 
 ### Configuration Provider Only (Default)
 
 ```csharp
-builder.AddShells([typeof(MyFeature)]);
+builder.Services.AddCShells([typeof(MyFeature)]);
 // Shells are loaded from appsettings.json automatically
 ```
 
 ### Code-First Shells
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.AddShell("Tenant1", shell =>
         shell.WithFeatures("Core", "Premium"));
@@ -27,7 +27,7 @@ builder.AddShells(shells =>
 ### Combining Multiple Providers
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     // 1. Code-first (loaded first)
     shells.AddShell("Default", shell =>
@@ -46,7 +46,7 @@ builder.AddShells(shells =>
 Providers are queried in registration order. If multiple providers return a shell with the same ID, the **last one wins**.
 
 ```csharp
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithConfigurationProvider(builder.Configuration);   // base
     shells.WithProvider<DatabaseShellSettingsProvider>();        // overrides
@@ -79,7 +79,7 @@ using FluentStorage;
 
 var blobStorage = StorageFactory.Blobs.DirectoryFiles("./Shells");
 
-builder.AddShells(shells =>
+builder.Services.AddCShells(shells =>
 {
     shells.WithFluentStorageProvider(blobStorage);
 });
