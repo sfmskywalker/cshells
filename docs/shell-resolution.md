@@ -8,12 +8,15 @@ When a request arrives, the `ShellMiddleware` runs it through an ordered list of
 
 ## Default Resolver: WebRoutingShellResolver
 
-The built-in `WebRoutingShellResolver` supports four resolution methods, tried in order:
+The built-in `WebRoutingShellResolver` supports multiple resolution methods. The methods are attempted in the following order (first match wins):
 
-1. **Header** (if `HeaderName` is set)
-2. **Claim** (if `ClaimKey` is set)
-3. **Host** (if any shell has `WebRouting:Host` configured)
-4. **Path** (if any shell has `WebRouting:Path` configured)
+1. **Path** (if `EnablePathRouting` is enabled and the request path contains a path segment)
+2. **Host** (if `EnableHostRouting` is enabled and a host matches a shell `WebRouting:Host`)
+3. **Header** (if `HeaderName` is set; read a header value and match)
+4. **Claim** (if `ClaimKey` is set; read a user claim and match)
+5. **Root path fallback** (a shell explicitly configured with `WebRouting:Path = ""` acts as a root-level fallback; this is only considered after all other methods)
+
+Note: path-based resolution is attempted first by the unified resolver. The resolver also treats an explicit empty-string `WebRouting:Path` (i.e. `""`) specially as a root-level fallback and only considers it after other matching strategies have been tried.
 
 ### WebRoutingShellResolverOptions
 
@@ -35,12 +38,14 @@ builder.Services.AddCShells(shells =>
     {
         options.HeaderName = "X-Tenant-Id";
         options.ClaimKey = "tenant_id";
-        options.ExcludePaths = ["/health", "/swagger"];
+        options.ExcludePaths = ["/health", "/swagger"]; // assign an array of strings
         options.EnablePathRouting = true;
         options.EnableHostRouting = false;
     });
 });
 ```
+
+> Note: the unified resolver will attempt path-based matching before host/header/claim-based checks. Configure which methods are active via the options.
 
 ## Path-Based Routing
 
