@@ -87,27 +87,24 @@ public class FeatureConfigurationBinder
 
         try
         {
-            // Handle complex types (bind entire section)
+            // Prefer direct materialization so interface/abstract collection types can bind.
+            var value = propertySection.Get(property.PropertyType);
+            if (value != null)
+            {
+                property.SetValue(feature, value);
+                _logger.LogDebug("Bound property '{PropertyName}' on feature '{FeatureName}'", property.Name, featureName);
+                return;
+            }
+
+            // Fallback for pre-initialized complex properties when Get(...) returns null.
             if (IsComplexType(property.PropertyType))
             {
-                var value = Activator.CreateInstance(property.PropertyType);
-                if (value != null)
+                var existingValue = property.GetValue(feature);
+                if (existingValue != null)
                 {
-                    propertySection.Bind(value);
-                    property.SetValue(feature, value);
+                    propertySection.Bind(existingValue);
                     _logger.LogDebug("Bound complex property '{PropertyName}' on feature '{FeatureName}'",
                         property.Name, featureName);
-                }
-            }
-            // Handle simple types (get value directly)
-            else
-            {
-                var value = propertySection.Get(property.PropertyType);
-                if (value != null)
-                {
-                    property.SetValue(feature, value);
-                    _logger.LogDebug("Bound property '{PropertyName}' on feature '{FeatureName}' to value: {Value}",
-                        property.Name, featureName, value);
                 }
             }
         }
