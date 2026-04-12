@@ -28,10 +28,10 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action to customize the CShells builder.</param>
     /// <returns>The CShells builder for further configuration.</returns>
-      /// <remarks>
-      /// Configure feature discovery assemblies through the returned <see cref="CShellsBuilder"/> using
-      /// <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>, or <c>WithAssemblyProvider(...)</c>.
-      /// </remarks>
+    /// <remarks>
+    /// Configure feature discovery assemblies through the returned <see cref="CShellsBuilder"/> using
+    /// <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>, or <c>WithAssemblyProvider(...)</c>.
+    /// </remarks>
     /// <example>
     /// <code>
     /// // Use defaults (web routing + endpoint routing)
