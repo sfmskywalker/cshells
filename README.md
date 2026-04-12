@@ -301,6 +301,8 @@ app.Run();
 
 To switch to explicit feature assembly selection, configure it fluently on `CShellsBuilder`:
 
+Use `From*` members to select which assemblies feature discovery should scan, and `WithAssemblyProvider(...)` when you want to attach a provider that contributes assemblies.
+
 ```csharp
 builder.AddShells(cshells =>
 {

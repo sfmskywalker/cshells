@@ -29,7 +29,8 @@ public static class ShellExtensions
         /// <param name="sectionName">The configuration section name to bind CShells options from.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         /// <remarks>
-        /// Configure feature discovery assemblies through the fluent <see cref="CShellsBuilder"/> APIs when needed.
+        /// Configure feature discovery assemblies through the fluent <see cref="CShellsBuilder"/> APIs when needed,
+        /// using <c>From*</c> members for source selection and <c>WithAssemblyProvider(...)</c> for provider attachment.
         /// </remarks>
         public WebApplicationBuilder AddShells(string sectionName)
         {
@@ -45,8 +46,9 @@ public static class ShellExtensions
         /// <param name="configureCShells">Callback used to configure the CShells builder.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         /// <remarks>
-        /// Configure feature discovery assemblies through <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>,
-        /// or <c>WithAssemblyProvider(...)</c> inside <paramref name="configureCShells"/>.
+        /// Configure feature discovery assemblies through <c>FromAssemblies(...)</c> or <c>FromHostAssemblies()</c>
+        /// to select discovery sources, and <c>WithAssemblyProvider(...)</c> to attach provider-based sources,
+        /// inside <paramref name="configureCShells"/>.
         /// </remarks>
         public WebApplicationBuilder AddShells(Action<CShellsBuilder> configureCShells)
         {

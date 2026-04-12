@@ -17,6 +17,7 @@ builder.Services.AddCShells(shells =>
 ### Feature Assembly Selection
 
 Shell settings providers and feature assembly providers are configured independently.
+Use `From*` members to select assembly sources directly, and `WithAssemblyProvider(...)` to attach provider-based sources.
 
 ```csharp
 builder.Services.AddCShells(shells =>

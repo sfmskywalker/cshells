@@ -126,6 +126,8 @@ app.Run();
 
 `AddShells()` preserves the default host-derived feature assembly discovery behavior. To switch to explicit feature assembly selection:
 
+Use `From*` members to select discovery sources, and `WithAssemblyProvider(...)` when attaching a provider that contributes assemblies.
+
 ```csharp
 builder.AddShells(cshells =>
 {

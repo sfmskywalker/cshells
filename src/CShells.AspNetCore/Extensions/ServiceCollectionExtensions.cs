@@ -30,7 +30,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The CShells builder for further configuration.</returns>
     /// <remarks>
     /// Configure feature discovery assemblies through the returned <see cref="CShellsBuilder"/> using
-    /// <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>, or <c>WithAssemblyProvider(...)</c>.
+    /// <c>FromAssemblies(...)</c> or <c>FromHostAssemblies()</c> to select discovery sources, and
+    /// <c>WithAssemblyProvider(...)</c> to attach a provider-based source.
     /// </remarks>
     /// <example>
     /// <code>

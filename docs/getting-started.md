@@ -113,6 +113,8 @@ CShells will:
 
 To switch to explicit feature assembly selection, configure it on the fluent builder:
 
+Use `From*` members to select feature-discovery sources, and `WithAssemblyProvider(...)` when attaching a provider that contributes assemblies.
+
 ```csharp
 builder.AddShells(cshells =>
 {

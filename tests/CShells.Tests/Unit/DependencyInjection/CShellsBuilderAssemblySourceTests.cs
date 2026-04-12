@@ -50,6 +50,18 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
+    public void FromHostAssemblies_AppendsHostProviderAndActivatesExplicitMode()
+    {
+        var builder = new CShellsBuilder(new ServiceCollection());
+        using var serviceProvider = new ServiceCollection().BuildServiceProvider();
+
+        CShellsBuilderExtensions.FromHostAssemblies(builder);
+
+        Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
+        Assert.IsType<HostFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
+    }
+
+    [Fact]
     public void WithAssemblyProvider_GenericOverloadResolvesProviderFromRootServiceProvider()
     {
         var services = new ServiceCollection();
@@ -101,6 +113,30 @@ public class CShellsBuilderAssemblySourceTests
 
         var provider = Assert.IsType<DelegateFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
         Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(provider.GetAssemblies(serviceProvider)));
+    }
+
+    [Fact]
+    public void WithAssemblyProvider_OverloadsComposeAdditivelyInRegistrationOrder()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<TestFeatureAssemblyProvider>();
+        var builder = new CShellsBuilder(services);
+        var instanceProvider = new DelegateFeatureAssemblyProvider(_ => [typeof(CShellsBuilderAssemblySourceTests).Assembly]);
+        using var serviceProvider = services.BuildServiceProvider();
+
+        CShellsBuilderExtensions.WithAssemblyProvider<TestFeatureAssemblyProvider>(builder);
+        CShellsBuilderExtensions.WithAssemblyProvider(builder, instanceProvider);
+        CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
+
+        Assert.Collection(
+            builder.BuildFeatureAssemblyProviders(serviceProvider),
+            provider => Assert.Same(serviceProvider.GetRequiredService<TestFeatureAssemblyProvider>(), provider),
+            provider => Assert.Same(instanceProvider, provider),
+            provider =>
+            {
+                var delegateProvider = Assert.IsType<DelegateFeatureAssemblyProvider>(provider);
+                Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(delegateProvider.GetAssemblies(serviceProvider)));
+            });
     }
 
     [Fact]

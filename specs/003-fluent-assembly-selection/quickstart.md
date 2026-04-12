@@ -15,6 +15,7 @@
 ## 2. Move assembly-source configuration onto `CShellsBuilder`
 
 - Extend the core builder fluent surface with `FromAssemblies(...)`, `FromHostAssemblies()`, and `WithAssemblyProvider(...)`.
+- Apply the naming matrix consistently: use `From*` for discovery-source selection and `With*` for provider attachment.
 - Store appended provider registrations on the builder in call order.
 - Keep this provider list independent from the shell-settings provider pipeline.
 
@@ -51,7 +52,7 @@
 
 - Update `README.md` examples that currently pass assemblies directly to `AddShells` or `AddCShells`.
 - Update relevant docs in `docs/` and mirrored wiki content if it repeats the old pattern.
-- Reflect the approved naming set from the naming decision record consistently.
+- Reflect the approved naming set and verb-family matrix from the naming decision record consistently.
 
 ## 8. Validate behavior
 
@@ -69,7 +70,4 @@ dotnet test tests/CShells.Tests/
 - Any explicit assembly-source call switches CShells into explicit-provider mode.
 - Host-derived, explicit, and custom providers compose additively and discover expected features exactly once.
 - Public examples no longer advertise the removed assembly-argument overloads.
-<<<<<<< HEAD
-=======
-
->>>>>>> 003-fluent-assembly-selection
+- Naming guidance clearly distinguishes `From*` source-selection methods from `With*` provider-attachment methods.

@@ -42,14 +42,26 @@ This approach also resolves the empty-input edge case cleanly. An empty explicit
 - Deduplicate providers instead of assemblies: rejected because different providers may legitimately contribute overlapping assemblies.
 - Sort assemblies alphabetically before discovery: rejected because it obscures registration-order behavior without any product requirement.
 
-## Decision: Finalize the fluent naming set as `FromAssemblies(...)`, `FromHostAssemblies()`, and `WithAssemblyProvider(...)`
+## Decision: Encode fluent builder naming as a verb-family matrix
 
-**Rationale**: The spec calls out a naming-focused work item and emphasizes mentally consistent terminology. `FromAssemblies(...)` communicates “append an explicit assembly contribution,” `FromHostAssemblies()` communicates “append the built-in host-derived contribution,” and `WithAssemblyProvider(...)` matches existing builder vocabulary for appending extensibility components. The interface name `IFeatureAssemblyProvider` ties the abstraction to feature discovery and avoids confusion with shell-settings providers.
+**Rationale**: The updated spec needs more than a one-off method-name choice; it needs a reusable naming rule for the builder surface around assembly discovery. `From*` best communicates source selection because it answers “where do discovered assemblies come from?” `With*` best communicates provider attachment because it answers “what provider component is being attached to the builder?” Encoding that split as a naming matrix keeps the assembly discovery API aligned with existing CShells builder vocabulary and gives future reviews a stable rule to apply.
 
 **Alternatives considered**:
 
+- Use `With*` for both source selection and provider attachment: rejected because it blurs the difference between selecting inputs and attaching extensibility components.
+- Use `Add*` for additive source selection: rejected because it sounds like raw list mutation rather than a semantic source-selection step.
+- Keep naming as an informal preference instead of a matrix: rejected because future builder additions would lack an explicit rule for consistency.
+
+## Decision: Preserve `FromAssemblies(...)`, `FromHostAssemblies()`, and `WithAssemblyProvider(...)` as the approved naming set
+
+**Rationale**: When the naming matrix is applied to the candidate set, the current approved names remain the clearest fit. `FromAssemblies(...)` and `FromHostAssemblies()` are source-selection calls, so they belong in the `From*` family. `WithAssemblyProvider(...)` attaches a provider abstraction, so it belongs in the `With*` family. Preserving these names avoids churn while still documenting why nearby alternatives such as `WithAssemblies(...)` and `AddAssemblies(...)` are less precise.
+
+**Alternatives considered**:
+
+- `WithAssemblies(...)`: rejected because it uses the provider-attachment family for a source-selection action.
+- `WithHostAssemblies()`: rejected for the same reason as `WithAssemblies(...)`; it obscures the fact that the method selects a discovery source.
+- `AddAssemblies(...)` / `AddHostAssemblies()`: rejected because `Add*` emphasizes collection mutation instead of the source-selection concept.
 - `UseAssemblies(...)` / `UseHostAssemblies()`: rejected because `Use*` often implies replacement semantics, which conflicts with additive composition.
-- `WithAssemblies(...)`: rejected because it reads more like an in-place property setter than a source-selection operation.
 - `IAssemblySourceProvider`: rejected because the double abstraction term is more awkward and less discoverable than `IFeatureAssemblyProvider`.
 
 ## Decision: Remove the legacy non-fluent assembly-argument APIs instead of preserving compatibility shims
@@ -71,7 +83,3 @@ This approach also resolves the empty-input edge case cleanly. An empty explicit
 - Documentation-only validation: rejected because additive composition and explicit-mode behavior are easy to regress without tests.
 - Unit tests only: rejected because the feature spans builder wiring, host registration, and ASP.NET Core entry points.
 - Leave examples unchanged until implementation is complete: rejected because the new public API surface must be unambiguous before the next Speckit step.
-<<<<<<< HEAD
-=======
-
->>>>>>> 003-fluent-assembly-selection
