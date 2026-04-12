@@ -7,9 +7,35 @@ CShells supports loading shells from multiple sources simultaneously. Providers 
 ### Configuration Provider Only (Default)
 
 ```csharp
-builder.Services.AddCShells([typeof(MyFeature)]);
-// Shells are loaded from appsettings.json automatically
+builder.Services.AddCShells(shells =>
+{
+    shells.WithConfigurationProvider(builder.Configuration);
+});
+// Shells are loaded from appsettings.json via the configuration provider
 ```
+
+### Feature Assembly Selection
+
+Shell settings providers and feature assembly providers are configured independently.
+
+```csharp
+builder.Services.AddCShells(shells =>
+{
+    shells.WithConfigurationProvider(builder.Configuration);
+
+    // Explicit feature assemblies
+    shells.FromAssemblies(typeof(MyFeature).Assembly);
+
+    // Append the built-in host-derived default explicitly when needed
+    shells.FromHostAssemblies();
+
+    // Append custom assembly providers additively
+    shells.WithAssemblyProvider(sp =>
+        new MyFeatureAssemblyProvider(sp.GetRequiredService<IModuleCatalog>()));
+});
+```
+
+If you do not call any assembly-source method, CShells preserves the default host-derived discovery behavior. As soon as you call `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)`, discovery uses only the explicitly configured providers, concatenates their assembly contributions in registration order, and deduplicates assemblies before feature discovery.
 
 ### Code-First Shells
 

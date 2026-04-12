@@ -1,4 +1,3 @@
-using System.Reflection;
 using CShells.Configuration;
 using CShells.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
@@ -20,62 +19,41 @@ public static class ShellExtensions
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         public WebApplicationBuilder AddShells()
         {
-            return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: null);
+            return builder.AddShells(sectionName: CShellsOptions.SectionName);
         }
 
         /// <summary>
         /// Adds CShells core services and ASP.NET Core integration using the default
         /// configuration section "CShells" and the default shell resolver.
         /// </summary>
-        /// <param name="featureAssemblyMarkerTypes"> The types used to locate feature assemblies to scan for CShells features.</param>
-        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddShells(IEnumerable<Type> featureAssemblyMarkerTypes)
-        {
-            var assemblyMarkerTypes = featureAssemblyMarkerTypes as Type[] ?? featureAssemblyMarkerTypes.ToArray();
-            Guard.Against.Null(assemblyMarkerTypes);
-            return builder.AddShells(assemblyMarkerTypes.Select(t => t.Assembly));
-        }
-
-        /// <summary>
-        /// Adds CShells core services and ASP.NET Core integration using the default
-        /// configuration section "CShells" and the specified feature assemblies.
-        /// </summary>
-        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
-        /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddShells(IEnumerable<Assembly> assemblies)
-        {
-            return builder.AddShells(sectionName: CShellsOptions.SectionName, assemblies: assemblies);
-        }
-
-        /// <summary>
-        /// Adds CShells core services and ASP.NET Core integration using the specified
-        /// configuration section and optional feature assemblies.
-        /// </summary>
         /// <param name="sectionName">The configuration section name to bind CShells options from.</param>
-        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddShells(string sectionName, IEnumerable<Assembly>? assemblies = null)
+        /// <remarks>
+        /// Configure feature discovery assemblies through the fluent <see cref="CShellsBuilder"/> APIs when needed.
+        /// </remarks>
+        public WebApplicationBuilder AddShells(string sectionName)
         {
             Guard.Against.NullOrEmpty(sectionName);
 
-            return builder.AddShells(shells => shells.WithConfigurationProvider(builder.Configuration, sectionName), assemblies);
+            return builder.AddShells(shells => shells.WithConfigurationProvider(builder.Configuration, sectionName));
         }
 
         /// <summary>
         /// Adds CShells core services and ASP.NET Core integration, allowing customization
-        /// of the shell settings provider and shell resolver.
+        /// of the shell settings provider, feature assembly sources, and shell resolver.
         /// </summary>
-        /// <param name="configureCShells">Callback used to configure the CShells builder (e.g., shell settings provider).</param>
-        /// <param name="assemblies">The assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
+        /// <param name="configureCShells">Callback used to configure the CShells builder.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
-        public WebApplicationBuilder AddShells(
-            Action<CShellsBuilder> configureCShells,
-            IEnumerable<Assembly>? assemblies = null)
+        /// <remarks>
+        /// Configure feature discovery assemblies through <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>,
+        /// or <c>WithAssemblyProvider(...)</c> inside <paramref name="configureCShells"/>.
+        /// </remarks>
+        public WebApplicationBuilder AddShells(Action<CShellsBuilder> configureCShells)
         {
             Guard.Against.Null(configureCShells);
 
             // Register ASP.NET Core integration for CShells
-            builder.Services.AddCShellsAspNetCore(configureCShells, assemblies);
+            builder.Services.AddCShellsAspNetCore(configureCShells);
 
             return builder;
         }
