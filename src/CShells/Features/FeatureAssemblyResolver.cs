@@ -6,6 +6,12 @@ namespace CShells.Features;
 internal static class FeatureAssemblyResolver
 {
     public static IReadOnlyCollection<Assembly> ResolveAssemblies(IEnumerable<IFeatureAssemblyProvider> providers, IServiceProvider serviceProvider)
+        => ResolveAssembliesAsync(providers, serviceProvider).ConfigureAwait(false).GetAwaiter().GetResult();
+
+    public static async Task<IReadOnlyCollection<Assembly>> ResolveAssembliesAsync(
+        IEnumerable<IFeatureAssemblyProvider> providers,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken = default)
     {
         var assemblyProviders = Guard.Against.Null(providers).ToArray();
         Guard.Against.Null(serviceProvider);
@@ -16,7 +22,7 @@ internal static class FeatureAssemblyResolver
         foreach (var provider in assemblyProviders)
         {
             var assemblyProvider = Guard.Against.Null(provider);
-            var contributedAssemblies = assemblyProvider.GetAssemblies(serviceProvider)
+            var contributedAssemblies = await assemblyProvider.GetAssembliesAsync(serviceProvider, cancellationToken)
                 ?? throw new InvalidOperationException($"The feature assembly provider '{assemblyProvider.GetType().FullName}' returned null. Providers must return a non-null sequence.");
 
             foreach (var assembly in contributedAssemblies)

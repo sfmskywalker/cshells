@@ -134,10 +134,10 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
 
         public RootMarkerService? ResolvedMarker { get; } = resolvedMarker;
 
-        public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider)
+        public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
         {
             CreatedProviders.Add(this);
-            return assemblies;
+            return Task.FromResult(assemblies);
         }
     }
 }
