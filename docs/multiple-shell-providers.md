@@ -7,8 +7,11 @@ CShells supports loading shells from multiple sources simultaneously. Providers 
 ### Configuration Provider Only (Default)
 
 ```csharp
-builder.Services.AddCShells();
-// Shells are loaded from appsettings.json automatically
+builder.Services.AddCShells(shells =>
+{
+    shells.WithConfigurationProvider(builder.Configuration);
+});
+// Shells are loaded from appsettings.json via the configuration provider
 ```
 
 ### Feature Assembly Selection
