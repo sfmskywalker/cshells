@@ -67,7 +67,8 @@ public static class CShellsBuilderExtensions
 
         builder.RegisterProvider((sp, providers) =>
         {
-            var provider = factory(sp);
+            var provider = factory(sp)
+                ?? throw new InvalidOperationException("The shell settings provider factory returned null.");
             providers.Add(provider);
         });
 
