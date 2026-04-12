@@ -1,4 +1,6 @@
+using System.Reflection;
 using CShells.Configuration;
+using CShells.Features;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.DependencyInjection;
@@ -11,6 +13,7 @@ public class CShellsBuilder
 {
     private readonly List<ShellSettings> _codeFirstShells = new();
     private readonly List<Action<IServiceProvider, List<IShellSettingsProvider>>> _providerRegistrations = new();
+    private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CShellsBuilder"/> class.
@@ -30,6 +33,11 @@ public class CShellsBuilder
     /// Gets all code-first shell settings configured via AddShell.
     /// </summary>
     internal IReadOnlyList<ShellSettings> CodeFirstShells => _codeFirstShells.AsReadOnly();
+
+    /// <summary>
+    /// Gets a value indicating whether explicit feature assembly providers were configured.
+    /// </summary>
+    internal bool UsesExplicitFeatureAssemblyProviders => _featureAssemblyProviderRegistrations.Count > 0;
 
     /// <summary>
     /// Registers a provider registration action.
@@ -55,14 +63,54 @@ public class CShellsBuilder
     }
 
     /// <summary>
+    /// Registers a feature assembly provider factory.
+    /// </summary>
+    internal void RegisterFeatureAssemblyProvider(Func<IServiceProvider, IFeatureAssemblyProvider> registration)
+    {
+        _featureAssemblyProviderRegistrations.Add(Guard.Against.Null(registration));
+    }
+
+    /// <summary>
+    /// Builds all registered feature assembly providers and returns them in registration order.
+    /// </summary>
+    internal IReadOnlyList<IFeatureAssemblyProvider> BuildFeatureAssemblyProviders(IServiceProvider serviceProvider)
+    {
+        Guard.Against.Null(serviceProvider);
+
+        var providers = new List<IFeatureAssemblyProvider>(_featureAssemblyProviderRegistrations.Count);
+
+        foreach (var registration in _featureAssemblyProviderRegistrations)
+        {
+            var provider = registration(serviceProvider)
+                ?? throw new InvalidOperationException("Feature assembly provider registrations must return a non-null provider instance.");
+
+            providers.Add(provider);
+        }
+
+        return providers.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Resolves the assemblies that should be scanned for shell feature discovery.
+    /// </summary>
+    internal IReadOnlyCollection<Assembly> BuildFeatureAssemblies(IServiceProvider serviceProvider)
+    {
+        Guard.Against.Null(serviceProvider);
+
+        return UsesExplicitFeatureAssemblyProviders
+            ? CShells.Features.FeatureAssemblyResolver.ResolveAssemblies(BuildFeatureAssemblyProviders(serviceProvider), serviceProvider)
+            : CShells.Features.FeatureAssemblyResolver.ResolveHostAssemblies();
+    }
+
+    /// <summary>
     /// Adds a shell using a fluent builder.
     /// </summary>
     /// <param name="configure">Configuration action for the shell builder.</param>
     /// <returns>This builder for method chaining.</returns>
-    public CShellsBuilder AddShell(Action<Configuration.ShellBuilder> configure)
+    public CShellsBuilder AddShell(Action<ShellBuilder> configure)
     {
         Guard.Against.Null(configure);
-        var shellBuilder = new Configuration.ShellBuilder(new ShellId(Guid.NewGuid().ToString()));
+        var shellBuilder = new ShellBuilder(new ShellId(Guid.NewGuid().ToString()));
         configure(shellBuilder);
         _codeFirstShells.Add(shellBuilder.Build());
         return this;
@@ -74,11 +122,11 @@ public class CShellsBuilder
     /// <param name="id">The shell identifier.</param>
     /// <param name="configure">Configuration action for the shell builder.</param>
     /// <returns>This builder for method chaining.</returns>
-    public CShellsBuilder AddShell(string id, Action<Configuration.ShellBuilder> configure)
+    public CShellsBuilder AddShell(string id, Action<ShellBuilder> configure)
     {
         Guard.Against.Null(id);
         Guard.Against.Null(configure);
-        var shellBuilder = new Configuration.ShellBuilder(new ShellId(id));
+        var shellBuilder = new ShellBuilder(new ShellId(id));
         configure(shellBuilder);
         _codeFirstShells.Add(shellBuilder.Build());
         return this;

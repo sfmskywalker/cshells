@@ -1,11 +1,9 @@
-using System.Reflection;
 using CShells.Configuration;
 using CShells.Features;
 using CShells.Hosting;
 using CShells.Management;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.Logging;
 
 namespace CShells.DependencyInjection;
@@ -20,12 +18,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action to customize the CShells builder.</param>
-    /// <param name="assemblies">Optional assemblies to scan for features. If null, scans all loaded assemblies.</param>
     /// <returns>A CShells builder for further configuration.</returns>
     public static CShellsBuilder AddCShells(
         this IServiceCollection services,
-        Action<CShellsBuilder>? configure,
-        IEnumerable<Assembly>? assemblies = null)
+        Action<CShellsBuilder>? configure = null)
     {
         Guard.Against.Null(services);
 
@@ -65,6 +61,8 @@ public static class ServiceCollectionExtensions
         // Register hosted service for shell lifecycle coordination with app lifecycle
         services.AddHostedService<ShellStartupHostedService>();
 
+        var builder = new CShellsBuilder(services);
+
         // Register IShellHost using the DefaultShellHost.
         // The root IServiceProvider is passed to allow IShellFeature constructors to resolve root-level services.
         // The root IServiceCollection is passed via the accessor to enable service inheritance in shells.
@@ -79,7 +77,7 @@ public static class ServiceCollectionExtensions
             var rootServicesAccessor = sp.GetRequiredService<IRootServiceCollectionAccessor>();
             var featureFactory = sp.GetRequiredService<IShellFeatureFactory>();
             var exclusionRegistry = sp.GetRequiredService<Hosting.IShellServiceExclusionRegistry>();
-            var assembliesToScan = assemblies ?? ResolveAssembliesToScan();
+            var assembliesToScan = builder.BuildFeatureAssemblies(sp);
 
             return new DefaultShellHost(shellCache, assembliesToScan, rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
         });
@@ -89,8 +87,6 @@ public static class ServiceCollectionExtensions
 
         // Register the shell manager for runtime shell lifecycle management
         services.TryAddSingleton<IShellManager, DefaultShellManager>();
-            
-        var builder = new CShellsBuilder(services);
         
         // Register the composite shell settings provider factory immediately
         // This must be done BEFORE configure is called so that DefaultShellManager can be constructed
@@ -129,60 +125,4 @@ public static class ServiceCollectionExtensions
         return builder;
     }
     
-    static IReadOnlyCollection<Assembly> ResolveAssembliesToScan(Func<AssemblyName, bool>? filter = null)
-    {
-        var entry = Assembly.GetEntryAssembly();
-        var names = new HashSet<AssemblyName>(new AssemblyNameComparer());
-
-        if (entry is not null)
-            names.Add(entry.GetName());
-
-        var dc = DependencyContext.Default;
-        if (dc is not null)
-        {
-            foreach (var lib in dc.RuntimeLibraries)
-            {
-                foreach (var an in lib.GetDefaultAssemblyNames(dc))
-                    names.Add(an);
-            }
-        }
-
-        if (filter is not null)
-            names.RemoveWhere(n => !filter(n));
-
-        var loaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
-        foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
-            loaded[a.GetName().Name!] = a;
-
-        var result = new List<Assembly>();
-        foreach (var name in names)
-        {
-            if (name.Name is null)
-                continue;
-
-            if (loaded.TryGetValue(name.Name, out var alreadyLoaded))
-            {
-                result.Add(alreadyLoaded);
-                continue;
-            }
-
-            try
-            {
-                result.Add(Assembly.Load(name));
-            }
-            catch
-            {
-                // Ignore assemblies that cannot be loaded in this process (optional deps, analyzers, etc.)
-            }
-        }
-
-        return result;
-    }
-
-    sealed class AssemblyNameComparer : IEqualityComparer<AssemblyName>
-    {
-        public bool Equals(AssemblyName? x, AssemblyName? y) => StringComparer.OrdinalIgnoreCase.Equals(x?.Name, y?.Name);
-        public int GetHashCode(AssemblyName obj) => StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name ?? string.Empty);
-    }
 }
-

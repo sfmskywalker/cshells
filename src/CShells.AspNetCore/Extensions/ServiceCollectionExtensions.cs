@@ -1,4 +1,3 @@
-using System.Reflection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Middleware;
 using CShells.DependencyInjection;
@@ -28,8 +27,11 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action to customize the CShells builder.</param>
-    /// <param name="assemblies">Optional assemblies to scan for CShells features. If <c>null</c>, all loaded assemblies are scanned.</param>
     /// <returns>The CShells builder for further configuration.</returns>
+      /// <remarks>
+      /// Configure feature discovery assemblies through the returned <see cref="CShellsBuilder"/> using
+      /// <c>FromAssemblies(...)</c>, <c>FromHostAssemblies()</c>, or <c>WithAssemblyProvider(...)</c>.
+      /// </remarks>
     /// <example>
     /// <code>
     /// // Use defaults (web routing + endpoint routing)
@@ -63,14 +65,12 @@ public static class ServiceCollectionExtensions
     /// </example>
     public static CShellsBuilder AddCShellsAspNetCore(
         this IServiceCollection services,
-        Action<CShellsBuilder>? configure = null,
-        IEnumerable<Assembly>? assemblies = null)
+        Action<CShellsBuilder>? configure = null)
     {
         Guard.Against.Null(services);
 
         // Allow user customization first so they can configure the pipeline
-        var builder = services.AddCShells(null, assemblies);
-        configure?.Invoke(builder);
+        var builder = services.AddCShells(configure);
 
         // Register shell resolver options for strategy ordering
         services.TryAddSingleton<ShellResolverOptions>();
