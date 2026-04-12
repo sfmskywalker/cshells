@@ -104,7 +104,3 @@ The previous non-fluent assembly-argument approach is removed.
 - Public examples must use fluent assembly-source configuration only.
 - Legacy `AddCShells` / `AddShells` overloads that accept assemblies as direct method arguments are not retained as supported API.
 - Migration guidance must map legacy assembly-argument examples to the new fluent equivalents.
-<<<<<<< HEAD
-=======
-
->>>>>>> 003-fluent-assembly-selection

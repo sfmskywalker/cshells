@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning  
 **Created**: 2026-04-11  
-**Feature**: [/Users/sipke/Projects/ValenceWorks/cshells/main/specs/003-fluent-assembly-selection/spec.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/003-fluent-assembly-selection/spec.md)
+**Feature**: [`../spec.md`](../spec.md)
 
 ## Content Quality
 
@@ -35,7 +35,4 @@
 - Explicitly captured breaking-change policy and legacy-removal intent in `FR-014` and assumptions.
 - Included naming-focused work item in `FR-016` per request.
 - Clarifications now require an assembly provider interface, a builder-maintained provider list, and additive provider appends for every fluent assembly-source call.
-<<<<<<< HEAD
-=======
-
->>>>>>> 003-fluent-assembly-selection
+- Validation iteration 2: Added the fluent builder verb matrix, explicit candidate evaluations, and preservation guidance for the approved assembly-discovery names; checklist still passes.

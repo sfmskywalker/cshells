@@ -110,16 +110,17 @@ Represents the approved terminology for the new public API surface.
 
 ### Fields
 
+- `VerbFamilyRules`: the approved mapping between source-selection actions and `From*`, and provider-attachment actions and `With*`
 - `ProviderInterfaceName`: approved interface name for the public extension point
 - `BuilderMethodNames`: approved fluent names for built-in and custom provider registration
 - `BuiltInProviderNames`: approved implementation names for the built-in host and explicit providers
+- `CandidateEvaluations`: the approved or rejected outcome for each reviewed method-name candidate
 - `RejectedAlternatives`: deprecated or rejected naming candidates with rationale
 
 ### Validation Rules
 
+- Source-selection methods must use the `From*` family unless a stronger documented alternative is explicitly approved.
+- Provider-attachment methods must use the `With*` family unless a stronger documented alternative is explicitly approved.
+- The candidate evaluation set must include `FromAssemblies`, `FromHostAssemblies`, `WithAssemblies`, `WithHostAssemblies`, `AddAssemblies`, `AddHostAssemblies`, and `WithAssemblyProvider`.
 - One approved naming set must be used consistently across contracts, implementation, tests, and docs.
 - Rejected names must not remain in public examples or documentation after the feature ships.
-<<<<<<< HEAD
-=======
-
->>>>>>> 003-fluent-assembly-selection

@@ -99,6 +99,8 @@ app.Run();
 
 **Explicit feature assembly selection:**
 
+Use `From*` members to select discovery sources, and `WithAssemblyProvider(...)` when attaching a provider that contributes assemblies.
+
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 

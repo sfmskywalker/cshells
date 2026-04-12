@@ -6,12 +6,12 @@ using CShells.Workbench.Features.Core;
 var builder = WebApplication.CreateBuilder(args);
 
 // Load shells from appsettings.json — three tenants with escalating feature tiers.
-// Configure feature discovery fluently so the features assembly is included explicitly.
+// Use From* members to select discovery sources explicitly; WithAssemblyProvider(...) is only needed when attaching a custom provider.
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
-    cshells.FromHostAssemblies(); // Host assembly is included by default, but we call this to demonstrate fluent configuration.
-    cshells.FromAssemblies(typeof(CoreFeature).Assembly);
+    cshells.FromHostAssemblies(); // Re-include the built-in host-derived source explicitly for this sample.
+    cshells.FromAssemblies(typeof(CoreFeature).Assembly); // Add the separate features assembly as an explicit source.
 });
 
 // Background service that logs a heartbeat for each active shell every 30 s.

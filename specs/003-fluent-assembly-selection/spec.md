@@ -17,6 +17,8 @@
 ### Session 2026-04-12
 
 - Q: Should the new assembly provider abstraction be a supported public extension point for custom implementations? → A: Yes. Developers should be able to supply their own custom assembly provider implementations through a public builder API in addition to the built-in convenience methods.
+- Q: How should the fluent builder verb system distinguish assembly source selection from provider attachment? → A: Methods that describe where discovery gets assemblies from stay in the `From*` family, while methods that attach provider instances, factories, or types stay in the `With*` family.
+- Q: Should the already approved assembly discovery names change as part of the naming review? → A: No. Preserve `FromAssemblies(...)`, `FromHostAssemblies()`, and `WithAssemblyProvider(...)` unless a stronger alternative is documented and justified through the naming matrix.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -73,16 +75,19 @@ As an application developer, I can append my own assembly provider implementatio
 
 ### User Story 4 - Adopt Clear Naming for the New API Surface (Priority: P4)
 
-As a maintainer, I can apply clear and mentally consistent names for this enhancement so developers understand intent without reading implementation details.
+As a maintainer, I can apply a clear naming matrix for the fluent builder surface so developers can distinguish source-selection calls from provider-attachment calls without reading implementation details.
 
 **Why this priority**: Naming quality strongly affects API discoverability, onboarding, and long-term maintainability.
 
-**Independent Test**: Review the finalized naming set in a short design pass and verify each name is unambiguous, consistent, and reflected in developer-facing usage examples.
+**Independent Test**: Review the finalized naming matrix and candidate evaluation record, then verify each approved name matches the correct verb family and is reflected consistently in developer-facing usage examples.
 
 **Acceptance Scenarios**:
 
 1. **Given** the new fluent assembly-source capability, **When** naming review is completed, **Then** one approved naming set is selected and used consistently across the exposed API.
 2. **Given** obsolete naming candidates, **When** the enhancement is finalized, **Then** those candidates are not left in developer-facing API surface or examples.
+3. **Given** a method that describes where discovery gets assemblies from, **When** the naming matrix is applied, **Then** the method remains in the `From*` family.
+4. **Given** a method that attaches a provider object, factory, or type, **When** the naming matrix is applied, **Then** the method remains in the `With*` family.
+5. **Given** the candidates `FromAssemblies`, `FromHostAssemblies`, `WithAssemblies`, `WithHostAssemblies`, `AddAssemblies`, `AddHostAssemblies`, and `WithAssemblyProvider`, **When** the naming review is recorded, **Then** each candidate has an approval or rejection rationale tied to the verb-family matrix.
 
 ### Edge Cases
 
@@ -95,6 +100,7 @@ As a maintainer, I can apply clear and mentally consistent names for this enhanc
 - Host assembly source is combined with custom sources in different call orders; resulting discovered feature set remains equivalent.
 - The builder receives many assembly source calls; provider registrations are all retained in call order and none are silently replaced.
 - A custom provider returns an assembly already contributed by another provider; discovery remains deduplicated.
+- A naming candidate uses `With*` for a source-selection action or `From*` for provider attachment; the naming matrix must reject the candidate unless a stronger rationale is documented.
 
 ## Requirements *(mandatory)*
 
@@ -117,8 +123,11 @@ As a maintainer, I can apply clear and mentally consistent names for this enhanc
 - **FR-015**: When explicit, host-derived, and custom providers are combined, discovery MUST use the deduplicated union of all contributed assemblies.
 - **FR-016**: The previous non-fluent assembly argument approach MUST be removed; maintaining backward compatibility with legacy overloads is out of scope and prohibited.
 - **FR-017**: Null assembly-source inputs, null custom provider registrations, null custom provider factories, and null custom provider output sequences MUST be rejected with clear guidance; empty explicit inputs MUST be accepted as zero-contribution additions that still participate in explicit-source mode.
-- **FR-018**: The enhancement MUST include a naming decision work item that results in clean, mentally consistent terminology for the provider abstraction, builder members, fluent methods, and custom-provider entry point.
-- **FR-019**: Developer-facing usage guidance and examples for shell setup MUST reflect the new fluent assembly-source pattern, the additive provider model, and the public custom-provider extension point only.
+- **FR-018**: The enhancement MUST include a naming decision work item that defines a fluent builder naming matrix for source-selection verbs versus provider-attachment verbs.
+- **FR-019**: The naming matrix MUST state that methods describing where discovery gets assemblies from use the `From*` family, while methods attaching provider instances, factories, or types use the `With*` family.
+- **FR-020**: The naming decision record MUST explicitly evaluate `FromAssemblies`, `FromHostAssemblies`, `WithAssemblies`, `WithHostAssemblies`, `AddAssemblies`, `AddHostAssemblies`, and `WithAssemblyProvider`, and MUST record approval or rejection rationale for each candidate.
+- **FR-021**: Unless the naming matrix documents a stronger justified alternative, the approved assembly-discovery terminology MUST remain `FromAssemblies(...)`, `FromHostAssemblies()`, and `WithAssemblyProvider(...)`.
+- **FR-022**: Developer-facing usage guidance and examples for shell setup MUST reflect the new fluent assembly-source pattern, the additive provider model, the public custom-provider extension point, and the approved verb-family matrix only.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -129,6 +138,7 @@ As a maintainer, I can apply clear and mentally consistent names for this enhanc
 - **ExplicitFeatureAssemblyProvider**: The built-in provider that returns a specific assembly set supplied during its creation.
 - **Custom `IFeatureAssemblyProvider` Implementation**: Any developer-supplied implementation of the provider interface appended through the public builder API.
 - **Naming Decision Record**: The accepted terminology for this enhancement, including selected method names and rejected alternatives with rationale.
+- **Fluent Builder Naming Matrix**: The approved mapping between builder action types and verb families, used to keep source-selection terminology separate from provider-attachment terminology.
 
 ### Assumptions
 
@@ -138,6 +148,7 @@ As a maintainer, I can apply clear and mentally consistent names for this enhanc
 - Each assembly-source call contributes through one or more provider registrations, and the final discovery set is built by concatenating all provider contributions before deduplication.
 - Custom providers are a supported public extension mechanism and are expected to follow the same additive and deduplicated discovery semantics as built-in providers.
 - Breaking changes are intentionally acceptable for this enhancement; migration support for legacy overloads is not required.
+- The fluent builder naming review should preserve already approved assembly-discovery names unless a more compelling alternative clearly improves clarity and consistency.
 
 ## Success Criteria *(mandatory)*
 
@@ -148,4 +159,4 @@ As a maintainer, I can apply clear and mentally consistent names for this enhanc
 - **SC-003**: In side-by-side verification, default (no explicit source directives) and explicit host-source configuration produce equivalent host-derived discovery outcomes in all defined test scenarios.
 - **SC-004**: In builder-behavior verification, every assembly-source fluent call results in an added provider entry and no previously configured provider entries are lost.
 - **SC-005**: In extension-point verification, custom providers appended through the public builder API contribute assemblies successfully in 100% of defined test scenarios.
-- **SC-006**: During internal API review, all new assembly-source and provider-related names are approved in one naming decision record with no unresolved naming conflicts.
+- **SC-006**: During internal API review, all seven evaluated naming candidates are classified in one naming decision record with no unresolved naming conflicts.
