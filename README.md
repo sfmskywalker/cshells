@@ -288,7 +288,7 @@ builder.AddShells(cshells =>
 var builder = WebApplication.CreateBuilder(args);
 
 // Register CShells from configuration (default section: CShells)
-// Scans all loaded assemblies for features by default
+// Uses the host-derived default feature assembly set
 builder.AddShells();
 
 var app = builder.Build();
@@ -299,11 +299,36 @@ app.MapShells();
 app.Run();
 ```
 
-You can optionally specify assemblies to scan for features:
+To switch to explicit feature assembly selection, configure it fluently on `CShellsBuilder`:
 
 ```csharp
-builder.AddShells(assemblies: [typeof(Program).Assembly]);
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(Program).Assembly);
+});
 ```
+
+Feature assembly selection is additive:
+
+```csharp
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+
+    // Explicit developer-supplied assemblies
+    cshells.FromAssemblies(typeof(Program).Assembly);
+
+    // Re-include the built-in host-derived default when explicit mode is active
+    cshells.FromHostAssemblies();
+
+    // Append a custom discovery source
+    cshells.WithAssemblyProvider(sp =>
+        new MyFeatureAssemblyProvider(sp.GetRequiredService<IModuleCatalog>()));
+});
+```
+
+If you do not call any assembly-source method, CShells preserves the default host-derived discovery behavior. As soon as you call `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)`, CShells switches to explicit provider mode and scans only the assemblies contributed by those appended providers.
 
 **FluentStorage setup (reads from Shells folder)**:
 

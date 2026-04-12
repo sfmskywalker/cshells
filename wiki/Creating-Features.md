@@ -272,8 +272,16 @@ public class ConditionalFeature(ShellFeatureContext context) : IShellFeature
 
 CShells scans assemblies at startup for any type that implements `IShellFeature` (or one of its sub-interfaces). No explicit registration is required.
 
-By default all loaded assemblies are scanned. Limit the scan by passing specific assemblies:
+If you do not configure an assembly-source method, CShells uses the host-derived default feature assembly set. To switch to explicit feature assembly selection, append providers fluently on `CShellsBuilder`:
 
 ```csharp
-builder.AddShells([typeof(CoreFeature).Assembly, typeof(WeatherFeature).Assembly]);
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(CoreFeature).Assembly, typeof(WeatherFeature).Assembly);
+    cshells.FromHostAssemblies();
+});
 ```
+
+You can also append custom discovery sources with `WithAssemblyProvider(...)`. All configured feature assembly providers compose additively, and duplicate assemblies are scanned only once.
+

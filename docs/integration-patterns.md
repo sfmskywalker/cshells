@@ -108,7 +108,11 @@ using CShells.AspNetCore.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddCShells([typeof(MyFeature)]);
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(MyFeature).Assembly);
+});
 
 var app = builder.Build();
 

@@ -124,11 +124,17 @@ app.MapShells();
 app.Run();
 ```
 
-`AddShells()` scans all loaded assemblies for features by default. To limit the scan:
+`AddShells()` preserves the default host-derived feature assembly discovery behavior. To switch to explicit feature assembly selection:
 
 ```csharp
-builder.AddShells([typeof(CoreFeature).Assembly]);
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(CoreFeature).Assembly);
+});
 ```
+
+You can append `FromHostAssemblies()` to opt the built-in host-derived assembly set back into explicit mode, or `WithAssemblyProvider(...)` to contribute assemblies from a custom `IFeatureAssemblyProvider` implementation.
 
 ---
 

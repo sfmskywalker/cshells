@@ -97,6 +97,25 @@ app.MapShells();
 app.Run();
 ```
 
+**Explicit feature assembly selection:**
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(Program).Assembly);
+    cshells.FromHostAssemblies();
+});
+
+var app = builder.Build();
+app.MapShells();
+app.Run();
+```
+
+If you do not call an assembly-source method, CShells uses the same host-derived feature assembly set as the default discovery behavior. Once you call `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)`, discovery switches to explicit provider mode and uses only the assemblies contributed by those appended providers.
+
 **Advanced setup with custom resolvers:**
 
 ```csharp
