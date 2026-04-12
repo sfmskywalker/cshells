@@ -225,3 +225,7 @@ Task: "Remove rejected or legacy naming from entry-point XML docs in src/CShells
 - `[US1]`, `[US2]`, `[US3]`, and `[US4]` map directly to the prioritized stories in the feature spec.
 - The task order intentionally reflects the finalized design: public `IFeatureAssemblyProvider`, builder-managed ordered provider list, built-in host and explicit providers, public custom-provider entry point, additive composition semantics, explicit-mode/default-host behavior, legacy API removal, tests, docs, and naming consistency.
 - Keep the implementation focused on the listed files; avoid introducing alternative assembly-selection models or compatibility shims for removed overloads.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection

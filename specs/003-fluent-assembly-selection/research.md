@@ -71,3 +71,7 @@ This approach also resolves the empty-input edge case cleanly. An empty explicit
 - Documentation-only validation: rejected because additive composition and explicit-mode behavior are easy to regress without tests.
 - Unit tests only: rejected because the feature spans builder wiring, host registration, and ASP.NET Core entry points.
 - Leave examples unchanged until implementation is complete: rejected because the new public API surface must be unambiguous before the next Speckit step.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection

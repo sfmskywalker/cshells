@@ -69,3 +69,7 @@ dotnet test tests/CShells.Tests/
 - Any explicit assembly-source call switches CShells into explicit-provider mode.
 - Host-derived, explicit, and custom providers compose additively and discover expected features exactly once.
 - Public examples no longer advertise the removed assembly-argument overloads.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection

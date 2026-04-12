@@ -32,3 +32,7 @@
 - Implementation, tests, and docs should not mix “source” and “provider” terminology inconsistently for the same concept.
 - The host-derived path should be described as “host assemblies” rather than “default assemblies” whenever the behavior must be explicit.
 - The old assembly-argument API names remain only in migration context, not as active recommendations.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection

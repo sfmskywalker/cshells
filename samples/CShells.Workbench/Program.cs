@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromHostAssemblies(); // Host assembly is included by default, but we call this to demonstrate fluent configuration.
     cshells.FromAssemblies(typeof(CoreFeature).Assembly);
 });
 

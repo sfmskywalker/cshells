@@ -28,6 +28,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution", "solution", "{CF
 		.gitignore = .gitignore
 		.github\workflows\publish.yml = .github\workflows\publish.yml
 		AGENTS.md = AGENTS.md
+		.github\workflows\publish-wiki.yml = .github\workflows\publish-wiki.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "branding", "branding", "{9386247F-C270-440D-87A9-C7CED3ECA4A3}"

@@ -119,3 +119,7 @@ Represents the approved terminology for the new public API surface.
 
 - One approved naming set must be used consistently across contracts, implementation, tests, and docs.
 - Rejected names must not remain in public examples or documentation after the feature ships.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection

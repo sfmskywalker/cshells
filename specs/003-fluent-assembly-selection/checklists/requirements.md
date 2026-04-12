@@ -35,3 +35,7 @@
 - Explicitly captured breaking-change policy and legacy-removal intent in `FR-014` and assumptions.
 - Included naming-focused work item in `FR-016` per request.
 - Clarifications now require an assembly provider interface, a builder-maintained provider list, and additive provider appends for every fluent assembly-source call.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 003-fluent-assembly-selection
