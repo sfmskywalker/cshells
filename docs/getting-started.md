@@ -95,7 +95,7 @@ using CShells.AspNetCore.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 // Register CShells from configuration
-builder.Services.AddCShells();
+builder.AddShells();
 
 var app = builder.Build();
 
@@ -106,12 +106,23 @@ app.Run();
 
 CShells will:
 
-1. Scan the assembly containing your features for all `[ShellFeature]`-decorated types
+1. Scan the host-derived default feature assembly set for all discovered shell features
 2. Load shell settings from the `CShells` configuration section
 3. Build isolated DI containers per shell, registering only the features each shell enables
 4. Map shell-scoped endpoints into ASP.NET Core's routing system
 
-> Note: the public factory method used in the library to register shells is AddCShells on IServiceCollection (e.g. builder.Services.AddCShells()).
+To switch to explicit feature assembly selection, configure it on the fluent builder:
+
+```csharp
+builder.AddShells(cshells =>
+{
+    cshells.WithConfigurationProvider(builder.Configuration);
+    cshells.FromAssemblies(typeof(BlogFeature).Assembly);
+    cshells.FromHostAssemblies();
+});
+```
+
+Any call to `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)` switches CShells into explicit provider mode. In that mode, only the assemblies returned by those appended providers are scanned, and duplicate assemblies are discovered once in first-seen order.
 
 ### Testing the Result
 
