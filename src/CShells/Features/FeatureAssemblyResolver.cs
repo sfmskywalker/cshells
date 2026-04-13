@@ -5,8 +5,6 @@ namespace CShells.Features;
 
 internal static class FeatureAssemblyResolver
 {
-    public static IReadOnlyCollection<Assembly> ResolveAssemblies(IEnumerable<IFeatureAssemblyProvider> providers, IServiceProvider serviceProvider)
-        => ResolveAssembliesAsync(providers, serviceProvider).ConfigureAwait(false).GetAwaiter().GetResult();
 
     public static async Task<IReadOnlyCollection<Assembly>> ResolveAssembliesAsync(
         IEnumerable<IFeatureAssemblyProvider> providers,

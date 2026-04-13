@@ -18,13 +18,13 @@ public class HostFeatureAssemblyProviderTests
     }
 
     [Fact]
-    public async Task ResolveAssemblies_DeduplicatesRepeatedHostProviderContributions()
+    public async Task ResolveAssembliesAsync_DeduplicatesRepeatedHostProviderContributions()
     {
         IFeatureAssemblyProvider[] providers = [new HostFeatureAssemblyProvider(), new HostFeatureAssemblyProvider()];
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
         var expected = (await new HostFeatureAssemblyProvider().GetAssembliesAsync(serviceProvider)).Select(assembly => assembly.FullName).Distinct().ToArray();
-        var actual = FeatureAssemblyResolver.ResolveAssemblies(providers, serviceProvider).Select(assembly => assembly.FullName).ToArray();
+        var actual = (await FeatureAssemblyResolver.ResolveAssembliesAsync(providers, serviceProvider)).Select(assembly => assembly.FullName).ToArray();
 
         Assert.Equal(expected, actual);
     }

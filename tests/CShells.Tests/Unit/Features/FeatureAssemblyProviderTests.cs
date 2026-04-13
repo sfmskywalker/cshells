@@ -6,7 +6,7 @@ namespace CShells.Tests.Unit.Features;
 public class FeatureAssemblyProviderTests
 {
     [Fact]
-    public void ResolveAssemblies_AggregatesExplicitProviderContributionsInOrder()
+    public async Task ResolveAssembliesAsync_AggregatesExplicitProviderContributionsInOrder()
     {
         var firstAssembly = typeof(FeatureAssemblyProviderTests).Assembly;
         var secondAssembly = typeof(CShells.DependencyInjection.CShellsBuilder).Assembly;
@@ -17,13 +17,13 @@ public class FeatureAssemblyProviderTests
         ];
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        var assemblies = FeatureAssemblyResolver.ResolveAssemblies(providers, serviceProvider);
+        var assemblies = await FeatureAssemblyResolver.ResolveAssembliesAsync(providers, serviceProvider);
 
         Assert.Equal([firstAssembly, secondAssembly], assemblies);
     }
 
     [Fact]
-    public void ResolveAssemblies_DeduplicatesDuplicateAssemblyContributionsUsingFirstSeenOrder()
+    public async Task ResolveAssembliesAsync_DeduplicatesDuplicateAssemblyContributionsUsingFirstSeenOrder()
     {
         var firstAssembly = typeof(FeatureAssemblyProviderTests).Assembly;
         var secondAssembly = typeof(CShells.DependencyInjection.CShellsBuilder).Assembly;
@@ -34,7 +34,7 @@ public class FeatureAssemblyProviderTests
         ];
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        var assemblies = FeatureAssemblyResolver.ResolveAssemblies(providers, serviceProvider);
+        var assemblies = await FeatureAssemblyResolver.ResolveAssembliesAsync(providers, serviceProvider);
 
         Assert.Equal([firstAssembly, secondAssembly], assemblies);
     }

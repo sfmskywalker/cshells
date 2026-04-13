@@ -77,7 +77,7 @@ public static class ServiceCollectionExtensions
             var rootServicesAccessor = sp.GetRequiredService<IRootServiceCollectionAccessor>();
             var featureFactory = sp.GetRequiredService<IShellFeatureFactory>();
             var exclusionRegistry = sp.GetRequiredService<Hosting.IShellServiceExclusionRegistry>();
-            var assembliesToScan = builder.BuildFeatureAssemblies(sp);
+            var assembliesToScan = builder.BuildFeatureAssembliesAsync(sp).GetAwaiter().GetResult();
 
             return new DefaultShellHost(shellCache, assembliesToScan, rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
         });

@@ -27,7 +27,7 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
-    public void FromAssemblies_WithEmptyInput_ActivatesExplicitModeWithoutAssemblies()
+    public async Task FromAssemblies_WithEmptyInput_ActivatesExplicitModeWithoutAssemblies()
     {
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
@@ -35,7 +35,7 @@ public class CShellsBuilderAssemblySourceTests
         CShellsBuilderExtensions.FromAssemblies(builder);
 
         Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
-        Assert.Empty(FeatureAssemblyResolver.ResolveAssemblies(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider));
+        Assert.Empty(await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider));
     }
 
     [Fact]

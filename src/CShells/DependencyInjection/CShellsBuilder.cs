@@ -90,11 +90,6 @@ public class CShellsBuilder
         return providers.AsReadOnly();
     }
 
-    /// <summary>
-    /// Resolves the assemblies that should be scanned for shell feature discovery.
-    /// </summary>
-    internal IReadOnlyCollection<Assembly> BuildFeatureAssemblies(IServiceProvider serviceProvider)
-        => BuildFeatureAssembliesAsync(serviceProvider).ConfigureAwait(false).GetAwaiter().GetResult();
 
     /// <summary>
     /// Resolves the assemblies that should be scanned for shell feature discovery.
