@@ -27,7 +27,7 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
-    public void FromAssemblies_WithEmptyInput_ActivatesExplicitModeWithoutAssemblies()
+    public async Task FromAssemblies_WithEmptyInput_ActivatesExplicitModeWithoutAssemblies()
     {
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
@@ -35,7 +35,7 @@ public class CShellsBuilderAssemblySourceTests
         CShellsBuilderExtensions.FromAssemblies(builder);
 
         Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
-        Assert.Empty(FeatureAssemblyResolver.ResolveAssemblies(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider));
+        Assert.Empty(await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider));
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
-    public void WithAssemblyProvider_FactoryOverloadAppendsProvider()
+    public async Task WithAssemblyProvider_FactoryOverloadAppendsProvider()
     {
         var services = new ServiceCollection();
         services.AddSingleton<MarkerService>();
@@ -112,11 +112,12 @@ public class CShellsBuilderAssemblySourceTests
         CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
 
         var provider = Assert.IsType<DelegateFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
-        Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(provider.GetAssemblies(serviceProvider)));
+        var assemblies = await provider.GetAssembliesAsync(serviceProvider);
+        Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(assemblies));
     }
 
     [Fact]
-    public void WithAssemblyProvider_OverloadsComposeAdditivelyInRegistrationOrder()
+    public async Task WithAssemblyProvider_OverloadsComposeAdditivelyInRegistrationOrder()
     {
         var services = new ServiceCollection();
         services.AddSingleton<TestFeatureAssemblyProvider>();
@@ -128,15 +129,15 @@ public class CShellsBuilderAssemblySourceTests
         CShellsBuilderExtensions.WithAssemblyProvider(builder, instanceProvider);
         CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
 
-        Assert.Collection(
-            builder.BuildFeatureAssemblyProviders(serviceProvider),
-            provider => Assert.Same(serviceProvider.GetRequiredService<TestFeatureAssemblyProvider>(), provider),
-            provider => Assert.Same(instanceProvider, provider),
-            provider =>
-            {
-                var delegateProvider = Assert.IsType<DelegateFeatureAssemblyProvider>(provider);
-                Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(delegateProvider.GetAssemblies(serviceProvider)));
-            });
+        var providers = builder.BuildFeatureAssemblyProviders(serviceProvider);
+
+        Assert.Equal(3, providers.Count);
+        Assert.Same(serviceProvider.GetRequiredService<TestFeatureAssemblyProvider>(), providers[0]);
+        Assert.Same(instanceProvider, providers[1]);
+
+        var delegateProvider = Assert.IsType<DelegateFeatureAssemblyProvider>(providers[2]);
+        var assemblies = await delegateProvider.GetAssembliesAsync(serviceProvider);
+        Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(assemblies));
     }
 
     [Fact]
@@ -176,16 +177,19 @@ public class CShellsBuilderAssemblySourceTests
 
     private sealed class MissingFeatureAssemblyProvider : IFeatureAssemblyProvider
     {
-        public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider) => [];
+        public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IEnumerable<Assembly>>([]);
     }
 
     private sealed class TestFeatureAssemblyProvider : IFeatureAssemblyProvider
     {
-        public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider) => [typeof(CShellsBuilderAssemblySourceTests).Assembly];
+        public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IEnumerable<Assembly>>([typeof(CShellsBuilderAssemblySourceTests).Assembly]);
     }
 
     private sealed class DelegateFeatureAssemblyProvider(Func<IServiceProvider, IEnumerable<Assembly>> getAssemblies) : IFeatureAssemblyProvider
     {
-        public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider) => getAssemblies(serviceProvider);
+        public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default) =>
+            Task.FromResult(getAssemblies(serviceProvider));
     }
 }

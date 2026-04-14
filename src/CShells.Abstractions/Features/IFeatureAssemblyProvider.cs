@@ -20,6 +20,7 @@ public interface IFeatureAssemblyProvider
     /// Gets the assemblies that should be scanned for shell features.
     /// </summary>
     /// <param name="serviceProvider">The root application service provider.</param>
+    /// <param name="cancellationToken">A token to cancel assembly discovery.</param>
     /// <returns>A non-null sequence of assemblies to scan.</returns>
-    IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider);
+    Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default);
 }

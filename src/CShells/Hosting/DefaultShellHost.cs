@@ -35,7 +35,7 @@ namespace CShells.Hosting;
 /// </remarks>
 public class DefaultShellHost : IShellHost, IAsyncDisposable
 {
-    private readonly IReadOnlyDictionary<string, ShellFeatureDescriptor> _featureMap;
+    private readonly Func<CancellationToken, Task<IReadOnlyCollection<Assembly>>>? _assemblyResolver;
     private readonly IShellSettingsCache _shellSettingsCache;
     private readonly IServiceProvider _rootProvider;
     private readonly IServiceCollection _rootServices;
@@ -45,7 +45,10 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     private readonly FeatureDependencyResolver _dependencyResolver = new();
     private readonly ILogger<DefaultShellHost> _logger;
     private readonly object _buildLock = new();
+    private readonly object _featureInitializationLock = new();
     private bool _disposed;
+    private IReadOnlyDictionary<string, ShellFeatureDescriptor>? _featureMap;
+    private Task? _featureInitializationTask;
 
     // Cached copy of root service descriptors for efficient bulk-copy to shell service collections.
     // This avoids re-enumerating the root IServiceCollection for each shell.
@@ -84,19 +87,95 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
         _exclusionRegistry = Guard.Against.Null(exclusionRegistry);
         _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
 
-        // Discover all features from specified assemblies
+        InitializeFeatureMap(Guard.Against.Null(assemblies));
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultShellHost"/> class with a deferred assembly resolver.
+    /// </summary>
+    /// <param name="shellSettingsCache">The cache providing access to shell settings.</param>
+    /// <param name="assemblyResolver">The asynchronous resolver that provides assemblies to scan for features.</param>
+    /// <param name="rootProvider">The application's root service provider.</param>
+    /// <param name="rootServicesAccessor">Accessor for the root service collection.</param>
+    /// <param name="featureFactory">The factory used to create shell feature instances.</param>
+    /// <param name="exclusionRegistry">The registry of service types to exclude from root service inheritance.</param>
+    /// <param name="logger">Optional logger for diagnostic output.</param>
+    public DefaultShellHost(
+        IShellSettingsCache shellSettingsCache,
+        Func<CancellationToken, Task<IReadOnlyCollection<Assembly>>> assemblyResolver,
+        IServiceProvider rootProvider,
+        IRootServiceCollectionAccessor rootServicesAccessor,
+        IShellFeatureFactory featureFactory,
+        IShellServiceExclusionRegistry exclusionRegistry,
+        ILogger<DefaultShellHost>? logger = null)
+    {
+        _shellSettingsCache = Guard.Against.Null(shellSettingsCache);
+        _assemblyResolver = Guard.Against.Null(assemblyResolver);
+        _rootProvider = Guard.Against.Null(rootProvider);
+        _rootServices = Guard.Against.Null(rootServicesAccessor).Services;
+        _featureFactory = Guard.Against.Null(featureFactory);
+        _exclusionRegistry = Guard.Against.Null(exclusionRegistry);
+        _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
+    }
+
+    /// <summary>
+    /// Ensures that feature discovery has completed for this shell host.
+    /// </summary>
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (_featureMap is not null)
+            return Task.CompletedTask;
+
+        if (_assemblyResolver is null)
+            throw new InvalidOperationException("No deferred feature assembly resolver was configured for this shell host.");
+
+        lock (_featureInitializationLock)
+        {
+            if (_featureMap is not null)
+                return Task.CompletedTask;
+
+            _featureInitializationTask ??= InitializeFeatureMapAsync(cancellationToken);
+            return _featureInitializationTask;
+        }
+    }
+
+    private async Task InitializeFeatureMapAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var assemblies = await _assemblyResolver!(cancellationToken).ConfigureAwait(false);
+            InitializeFeatureMap(assemblies);
+        }
+        catch
+        {
+            lock (_featureInitializationLock)
+            {
+                _featureInitializationTask = null;
+            }
+
+            throw;
+        }
+    }
+
+    private void InitializeFeatureMap(IEnumerable<Assembly> assemblies)
+    {
         var features = FeatureDiscovery.DiscoverFeatures(
-            Guard.Against.Null(assemblies), 
-            (assembly, ex) => _logger.LogWarning(ex, "Failed to load types from assembly {AssemblyName}. Features in this assembly will not be available.", assembly.GetName().Name))
+                Guard.Against.Null(assemblies),
+                (assembly, ex) => _logger.LogWarning(ex, "Failed to load types from assembly {AssemblyName}. Features in this assembly will not be available.", assembly.GetName().Name))
             .ToList();
 
         _logger.LogInformation("Discovered {FeatureCount} features: {FeatureNames}",
             features.Count,
             string.Join(", ", features.Select(f => f.Id)));
 
-        // Build feature map for quick lookup
         _featureMap = features.ToDictionary(f => f.Id, f => f, StringComparer.OrdinalIgnoreCase);
     }
+
+    private IReadOnlyDictionary<string, ShellFeatureDescriptor> FeatureMap =>
+        _featureMap ?? throw new InvalidOperationException(
+            "Shell feature discovery has not completed yet. Start the host or await DefaultShellHost.InitializeAsync before accessing shells.");
 
     /// <inheritdoc />
     public ShellContext DefaultShell
@@ -215,7 +294,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     {
         try
         {
-            return _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, _featureMap);
+            return _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, FeatureMap);
         }
         catch (InvalidOperationException ex)
         {
@@ -248,7 +327,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     private void ValidateEnabledFeatures(ShellSettings settings)
     {
         var unknownFeatures = settings.EnabledFeatures
-            .Where(featureName => !_featureMap.ContainsKey(featureName))
+            .Where(featureName => !FeatureMap.ContainsKey(featureName))
             .ToList();
 
         foreach (var featureName in unknownFeatures)
@@ -297,13 +376,13 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
 
         // Step 2: Register shell-specific core services (ShellSettings, ShellId, ShellContext, IConfiguration).
         // These are added after root services, so they override any root registrations.
-        RegisterCoreServices(shellServices, settings, contextHolder, _rootProvider, _featureMap.Values);
+        RegisterCoreServices(shellServices, settings, contextHolder, _rootProvider, FeatureMap.Values);
 
         // Step 3: Configure feature services in dependency order.
         // Features can override root services by registering the same service type.
         // A single ShellFeatureContext is shared across all features so they can
         // exchange data through its Properties bag during construction.
-        var featureContext = new ShellFeatureContext(settings, _featureMap.Values);
+        var featureContext = new ShellFeatureContext(settings, FeatureMap.Values);
         var postConfigureFeatures = new List<IPostConfigureShellServices>();
         if (orderedFeatures.Count > 0)
         {
@@ -428,7 +507,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures, ShellSettings settings, ShellFeatureContext featureContext, List<IPostConfigureShellServices> postConfigureFeatures)
     {
         var featuresWithStartups = orderedFeatures
-            .Select(name => (Name: name, Descriptor: _featureMap[name]))
+            .Select(name => (Name: name, Descriptor: FeatureMap[name]))
             .Where(f => f.Descriptor.StartupType != null);
 
         foreach (var (featureName, descriptor) in featuresWithStartups)

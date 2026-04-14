@@ -58,9 +58,6 @@ public static class ServiceCollectionExtensions
         // This ensures the cache is loaded when the application starts normally (via IHost.Run)
         services.AddHostedService<ShellSettingsCacheInitializer>();
 
-        // Register hosted service for shell lifecycle coordination with app lifecycle
-        services.AddHostedService<ShellStartupHostedService>();
-
         var builder = new CShellsBuilder(services);
 
         // Register IShellHost using the DefaultShellHost.
@@ -70,23 +67,28 @@ public static class ServiceCollectionExtensions
         //
         // Note: The cache may be empty when IShellHost is constructed. This is OK - shells can be
         // loaded later via the hosted service or dynamically at runtime via the cache.
-        services.AddSingleton<IShellHost>(sp =>
+        services.AddSingleton<DefaultShellHost>(sp =>
         {
             var shellCache = sp.GetRequiredService<ShellSettingsCache>();
             var logger = sp.GetService<ILogger<DefaultShellHost>>();
             var rootServicesAccessor = sp.GetRequiredService<IRootServiceCollectionAccessor>();
             var featureFactory = sp.GetRequiredService<IShellFeatureFactory>();
             var exclusionRegistry = sp.GetRequiredService<Hosting.IShellServiceExclusionRegistry>();
-            var assembliesToScan = builder.BuildFeatureAssemblies(sp);
 
-            return new DefaultShellHost(shellCache, assembliesToScan, rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
+            return new DefaultShellHost(shellCache, ct => builder.BuildFeatureAssembliesAsync(sp, ct), rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
         });
+        services.AddSingleton<IShellHost>(sp => sp.GetRequiredService<DefaultShellHost>());
 
         // Register the default shell context scope factory.
         services.AddSingleton<IShellContextScopeFactory, DefaultShellContextScopeFactory>();
 
         // Register the shell manager for runtime shell lifecycle management
         services.TryAddSingleton<IShellManager, DefaultShellManager>();
+
+        // Register hosted services for feature discovery and shell lifecycle coordination.
+        // Feature discovery must complete before shells are activated.
+        services.AddHostedService<ShellFeatureInitializationHostedService>();
+        services.AddHostedService<ShellStartupHostedService>();
         
         // Register the composite shell settings provider factory immediately
         // This must be done BEFORE configure is called so that DefaultShellManager can be constructed

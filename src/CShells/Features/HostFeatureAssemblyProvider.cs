@@ -4,9 +4,9 @@ namespace CShells.Features;
 
 internal sealed class HostFeatureAssemblyProvider : IFeatureAssemblyProvider
 {
-    public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider)
+    public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(serviceProvider);
-        return FeatureAssemblyResolver.ResolveHostAssemblies();
+        return Task.FromResult<IEnumerable<Assembly>>(FeatureAssemblyResolver.ResolveHostAssemblies());
     }
 }

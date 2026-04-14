@@ -14,9 +14,9 @@ internal sealed class ExplicitFeatureAssemblyProvider : IFeatureAssemblyProvider
             .ToArray();
     }
 
-    public IEnumerable<Assembly> GetAssemblies(IServiceProvider serviceProvider)
+    public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(serviceProvider);
-        return _assemblies;
+        return Task.FromResult<IEnumerable<Assembly>>(_assemblies);
     }
 }
