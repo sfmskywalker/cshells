@@ -22,6 +22,9 @@ public class ShellStartupHostedService : IHostedService
     private readonly IShellHostInitializer _shellHostInitializer;
     private readonly INotificationPublisher _notificationPublisher;
     private readonly ILogger<ShellStartupHostedService> _logger;
+    private readonly object _lifecycleLock = new();
+    private Task? _startTask;
+    private Task? _stopTask;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ShellStartupHostedService"/> class.
@@ -43,7 +46,16 @@ public class ShellStartupHostedService : IHostedService
     }
 
     /// <inheritdoc />
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        lock (_lifecycleLock)
+        {
+            _startTask ??= StartCoreAsync(cancellationToken);
+            return _startTask;
+        }
+    }
+
+    private async Task StartCoreAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Activating all shells on application startup");
 
@@ -78,7 +90,16 @@ public class ShellStartupHostedService : IHostedService
     }
 
     /// <inheritdoc />
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        lock (_lifecycleLock)
+        {
+            _stopTask ??= StopCoreAsync(cancellationToken);
+            return _stopTask;
+        }
+    }
+
+    private async Task StopCoreAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Deactivating all shells on application shutdown");
 
