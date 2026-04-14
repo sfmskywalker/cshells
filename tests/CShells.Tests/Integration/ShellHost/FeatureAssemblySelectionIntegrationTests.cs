@@ -12,13 +12,13 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
     private readonly List<IAsyncDisposable> _disposables = [];
 
     [Fact]
-    public void DefaultHostDiscovery_MatchesFromHostAssemblies()
+    public async Task DefaultHostDiscovery_MatchesFromHostAssemblies()
     {
-        var defaultProvider = BuildRootProvider(builder =>
+        var defaultProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
         });
-        var explicitHostProvider = BuildRootProvider(builder =>
+        var explicitHostProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
             CShellsBuilderExtensions.FromHostAssemblies(builder);
@@ -35,9 +35,9 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void ExplicitAssemblyMode_DoesNotImplicitlyIncludeHostAssemblies()
+    public async Task ExplicitAssemblyMode_DoesNotImplicitlyIncludeHostAssemblies()
     {
-        var serviceProvider = BuildRootProvider(builder =>
+        var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
             CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
@@ -50,11 +50,11 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void CustomAssemblyProvider_ComposesAdditivelyAndReceivesRootServiceProviderContext()
+    public async Task CustomAssemblyProvider_ComposesAdditivelyAndReceivesRootServiceProviderContext()
     {
         TrackingFeatureAssemblyProvider.CreatedProviders.Clear();
         var marker = new RootMarkerService();
-        var serviceProvider = BuildRootProvider(
+        var serviceProvider = await BuildRootProviderAsync(
             builder =>
             {
                 builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
@@ -76,10 +76,10 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void CustomAssemblyProvider_ComposesWithBuiltInProvidersUsingDeduplicatedDiscovery()
+    public async Task CustomAssemblyProvider_ComposesWithBuiltInProvidersUsingDeduplicatedDiscovery()
     {
         TrackingFeatureAssemblyProvider.CreatedProviders.Clear();
-        var serviceProvider = BuildRootProvider(builder =>
+        var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
             CShellsBuilderExtensions.FromAssemblies(builder, typeof(TestFixtures).Assembly);
@@ -95,7 +95,7 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         Assert.Single(features, feature => feature.Id == "Weather");
     }
 
-    private ServiceProvider BuildRootProvider(Action<CShellsBuilder> configure, Action<IServiceCollection>? configureServices = null)
+    private async Task<ServiceProvider> BuildRootProviderAsync(Action<CShellsBuilder> configure, Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -105,7 +105,8 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var serviceProvider = services.BuildServiceProvider();
         var shellSettingsProvider = serviceProvider.GetRequiredService<CShells.Configuration.IShellSettingsProvider>();
         var shellSettingsCache = serviceProvider.GetRequiredService<CShells.Configuration.ShellSettingsCache>();
-        shellSettingsCache.Load(shellSettingsProvider.GetShellSettingsAsync().GetAwaiter().GetResult().ToList());
+        shellSettingsCache.Load((await shellSettingsProvider.GetShellSettingsAsync()).ToList());
+        await serviceProvider.GetRequiredService<CShells.Hosting.DefaultShellHost>().InitializeAsync();
         _disposables.Add(serviceProvider);
         return serviceProvider;
     }

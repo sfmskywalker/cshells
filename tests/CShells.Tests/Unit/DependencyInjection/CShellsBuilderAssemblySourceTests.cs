@@ -117,7 +117,7 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
-    public void WithAssemblyProvider_OverloadsComposeAdditivelyInRegistrationOrder()
+    public async Task WithAssemblyProvider_OverloadsComposeAdditivelyInRegistrationOrder()
     {
         var services = new ServiceCollection();
         services.AddSingleton<TestFeatureAssemblyProvider>();
@@ -129,16 +129,15 @@ public class CShellsBuilderAssemblySourceTests
         CShellsBuilderExtensions.WithAssemblyProvider(builder, instanceProvider);
         CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
 
-        Assert.Collection(
-            builder.BuildFeatureAssemblyProviders(serviceProvider),
-            provider => Assert.Same(serviceProvider.GetRequiredService<TestFeatureAssemblyProvider>(), provider),
-            provider => Assert.Same(instanceProvider, provider),
-            provider =>
-            {
-                var delegateProvider = Assert.IsType<DelegateFeatureAssemblyProvider>(provider);
-                var assemblies = delegateProvider.GetAssembliesAsync(serviceProvider).GetAwaiter().GetResult();
-                Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(assemblies));
-            });
+        var providers = builder.BuildFeatureAssemblyProviders(serviceProvider);
+
+        Assert.Equal(3, providers.Count);
+        Assert.Same(serviceProvider.GetRequiredService<TestFeatureAssemblyProvider>(), providers[0]);
+        Assert.Same(instanceProvider, providers[1]);
+
+        var delegateProvider = Assert.IsType<DelegateFeatureAssemblyProvider>(providers[2]);
+        var assemblies = await delegateProvider.GetAssembliesAsync(serviceProvider);
+        Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(assemblies));
     }
 
     [Fact]
