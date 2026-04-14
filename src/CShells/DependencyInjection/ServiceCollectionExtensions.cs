@@ -54,10 +54,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ShellSettingsCache>(cache);
         services.TryAddSingleton<IShellSettingsCache>(cache);
 
-        // Register a hosted service that will populate the cache at startup
-        // This ensures the cache is loaded when the application starts normally (via IHost.Run)
-        services.AddHostedService<ShellSettingsCacheInitializer>();
-
         var builder = new CShellsBuilder(services);
 
         // Register IShellHost using the DefaultShellHost.
@@ -86,8 +82,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IShellManager, DefaultShellManager>();
 
         // Register hosted services for feature discovery and shell lifecycle coordination.
-        // Feature discovery must complete before shells are activated.
+        // Feature discovery must complete before shell settings are loaded and before shells are activated.
         services.AddHostedService<ShellFeatureInitializationHostedService>();
+        services.AddHostedService<ShellSettingsCacheInitializer>();
         services.AddHostedService<ShellStartupHostedService>();
         
         // Register the composite shell settings provider factory immediately
