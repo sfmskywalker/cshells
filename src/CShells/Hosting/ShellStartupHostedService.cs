@@ -12,6 +12,7 @@ namespace CShells.Hosting;
 /// This hosted service coordinates shell lifecycle with the application lifecycle by:
 /// <list type="bullet">
 ///   <item><description>Publishing <see cref="ShellActivated"/> notifications for all configured shells on startup</description></item>
+///   <item><description>Publishing <see cref="ShellsReloaded"/> after startup activation so shell-dependent projections can synchronize once</description></item>
 ///   <item><description>Publishing <see cref="ShellDeactivating"/> notifications for all shells on shutdown</description></item>
 /// </list>
 /// </remarks>
@@ -67,6 +68,11 @@ public class ShellStartupHostedService : IHostedService
                 throw;
             }
         }
+
+        await _notificationPublisher.PublishAsync(
+            new ShellsReloaded(shells.Select(shell => shell.Settings).ToList().AsReadOnly()),
+            strategy: null,
+            cancellationToken);
 
         _logger.LogInformation("Successfully activated {ShellCount} shell(s)", shells.Count);
     }

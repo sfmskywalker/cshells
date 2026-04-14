@@ -1,5 +1,4 @@
 using CShells.Configuration;
-using CShells.Management;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Tests.Unit.Configuration;
@@ -96,44 +95,47 @@ public class ShellSettingsCacheInitializerTests
     public async Task Initializer_LoadsShellsFromProvider()
     {
         // Arrange
-        var shellManager = new TestShellManager();
-        var initializer = new ShellSettingsCacheInitializer(shellManager, NullLogger<ShellSettingsCacheInitializer>.Instance);
+        var provider = new TestShellSettingsProvider([
+            new ShellSettings(new("Default")),
+            new ShellSettings(new("Contoso"), ["Core"]) 
+        ]);
+        var cache = new ShellSettingsCache();
+        var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
 
         // Act
         await initializer.StartAsync(CancellationToken.None);
 
         // Assert
-        Assert.True(shellManager.ReloadAllShellsAsyncCalled);
+        Assert.Collection(
+            cache.GetAll(),
+            shell => Assert.Equal(new ShellId("Default"), shell.Id),
+            shell => Assert.Equal(new ShellId("Contoso"), shell.Id));
     }
 
-    private class TestShellManager : IShellManager
+    [Fact(DisplayName = "Initializer replaces existing cached shells with provider state")]
+    public async Task Initializer_ReplacesExistingCacheContents()
     {
-        public bool ReloadAllShellsAsyncCalled { get; private set; }
+        // Arrange
+        var provider = new TestShellSettingsProvider([new ShellSettings(new("Tenant2"), ["FeatureB"])]);
+        var cache = new ShellSettingsCache();
+        cache.Load([new ShellSettings(new("Tenant1"), ["FeatureA"])]);
+        var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
 
-        public Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
-        {
-            ReloadAllShellsAsyncCalled = true;
-            return Task.CompletedTask;
-        }
+        // Act
+        await initializer.StartAsync(CancellationToken.None);
 
-        public Task AddShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
+        // Assert
+        var allShells = cache.GetAll();
+        Assert.Single(allShells);
+        Assert.Equal(new ShellId("Tenant2"), allShells.Single().Id);
+    }
 
-        public Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
+    private sealed class TestShellSettingsProvider(IReadOnlyCollection<ShellSettings> shells) : IShellSettingsProvider
+    {
+        public Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IEnumerable<ShellSettings>>(shells);
 
-        public Task UpdateShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
+        public Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(shells.FirstOrDefault(shell => shell.Id.Equals(shellId)));
     }
 }

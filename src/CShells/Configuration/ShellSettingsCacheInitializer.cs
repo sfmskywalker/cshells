@@ -1,13 +1,16 @@
-using CShells.Management;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace CShells.Configuration;
 
 /// <summary>
-/// Background service that initializes the <see cref="ShellSettingsCache"/> at application startup.
+/// Background service that loads <see cref="ShellSettings"/> into the <see cref="ShellSettingsCache"/>
+/// at application startup without activating shells.
 /// </summary>
-public class ShellSettingsCacheInitializer(IShellManager shellManager, ILogger<ShellSettingsCacheInitializer> logger) : IHostedService
+public class ShellSettingsCacheInitializer(
+    IShellSettingsProvider provider,
+    IShellSettingsCache cache,
+    ILogger<ShellSettingsCacheInitializer> logger) : IHostedService
 {
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -16,7 +19,11 @@ public class ShellSettingsCacheInitializer(IShellManager shellManager, ILogger<S
 
         try
         {
-            await shellManager.ReloadAllShellsAsync(cancellationToken);
+            var settings = await provider.GetShellSettingsAsync(cancellationToken);
+            var settingsList = settings.ToList();
+            cache.Load(settingsList);
+
+            logger.LogInformation("Loaded {Count} shell setting(s) into cache", settingsList.Count);
         }
         catch (Exception ex)
         {
