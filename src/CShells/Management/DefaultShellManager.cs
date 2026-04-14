@@ -188,6 +188,9 @@ public class DefaultShellManager : IShellManager
     /// <inheritdoc />
     public async Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
     {
+        if (_shellHost is Hosting.DefaultShellHost defaultShellHost)
+            await defaultShellHost.InitializeAsync(cancellationToken);
+
         _logger.LogInformation("Reloading all shells from provider");
 
         // Emit aggregate ShellReloading (null ShellId = full reload)
