@@ -174,7 +174,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var host = fixture.CreateHost(cache, typeof(TestFixtures).Assembly);
         var provider = new InMemoryShellSettingsProvider([settings]);
         var notifications = new RecordingNotificationPublisher();
-        var manager = new DefaultShellManager(host, cache, provider, notifications);
+        var manager = new DefaultShellManager(host, host, cache, provider, notifications);
 
         // Build the shell initially
         _ = host.GetShell(shellId);
@@ -208,7 +208,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var host = fixture.CreateHost(cache, typeof(TestFixtures).Assembly);
         var provider = new InMemoryShellSettingsProvider([settings1, settings2]);
         var notifications = new RecordingNotificationPublisher();
-        var manager = new DefaultShellManager(host, cache, provider, notifications);
+        var manager = new DefaultShellManager(host, host, cache, provider, notifications);
 
         // Build shells initially
         var ctx1Before = host.GetShell(tenant1);
@@ -245,7 +245,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var host = fixture.CreateHost(cache, typeof(TestFixtures).Assembly);
         var provider = new InMemoryShellSettingsProvider([settings]);
         var notifications = new RecordingNotificationPublisher();
-        var manager = new DefaultShellManager(host, cache, provider, notifications);
+        var manager = new DefaultShellManager(host, host, cache, provider, notifications);
 
         // Build shell initially
         _ = host.GetShell(shellId);

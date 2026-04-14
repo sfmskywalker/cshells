@@ -18,6 +18,7 @@ namespace CShells.Hosting;
 public class ShellStartupHostedService : IHostedService
 {
     private readonly IShellHost _shellHost;
+    private readonly IShellHostInitializer _shellHostInitializer;
     private readonly INotificationPublisher _notificationPublisher;
     private readonly ILogger<ShellStartupHostedService> _logger;
 
@@ -25,14 +26,17 @@ public class ShellStartupHostedService : IHostedService
     /// Initializes a new instance of the <see cref="ShellStartupHostedService"/> class.
     /// </summary>
     /// <param name="shellHost">The shell host containing all configured shells.</param>
+    /// <param name="shellHostInitializer">Ensures deferred shell host initialization completes before startup activation runs.</param>
     /// <param name="notificationPublisher">The notification publisher for shell lifecycle events.</param>
     /// <param name="logger">Optional logger for diagnostic output.</param>
     public ShellStartupHostedService(
         IShellHost shellHost,
+        IShellHostInitializer shellHostInitializer,
         INotificationPublisher notificationPublisher,
         ILogger<ShellStartupHostedService>? logger = null)
     {
         _shellHost = Guard.Against.Null(shellHost);
+        _shellHostInitializer = Guard.Against.Null(shellHostInitializer);
         _notificationPublisher = Guard.Against.Null(notificationPublisher);
         _logger = logger ?? NullLogger<ShellStartupHostedService>.Instance;
     }
@@ -41,6 +45,8 @@ public class ShellStartupHostedService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Activating all shells on application startup");
+
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
 
         var shells = _shellHost.AllShells;
         _logger.LogInformation("Found {ShellCount} shell(s) to activate", shells.Count);

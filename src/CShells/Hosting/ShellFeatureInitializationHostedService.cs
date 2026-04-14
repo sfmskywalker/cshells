@@ -9,21 +9,21 @@ namespace CShells.Hosting;
 /// </summary>
 public class ShellFeatureInitializationHostedService : IHostedService
 {
-    private readonly DefaultShellHost _shellHost;
+    private readonly IShellHostInitializer _shellHostInitializer;
     private readonly ILogger<ShellFeatureInitializationHostedService> _logger;
 
     public ShellFeatureInitializationHostedService(
-        DefaultShellHost shellHost,
+        IShellHostInitializer shellHostInitializer,
         ILogger<ShellFeatureInitializationHostedService>? logger = null)
     {
-        _shellHost = Guard.Against.Null(shellHost);
+        _shellHostInitializer = Guard.Against.Null(shellHostInitializer);
         _logger = logger ?? NullLogger<ShellFeatureInitializationHostedService>.Instance;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Initializing shell feature discovery");
-        await _shellHost.InitializeAsync(cancellationToken);
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -13,6 +13,7 @@ namespace CShells.Management;
 public class DefaultShellManager : IShellManager
 {
     private readonly IShellHost _shellHost;
+    private readonly IShellHostInitializer _shellHostInitializer;
     private readonly IShellSettingsCache _cache;
     private readonly IShellSettingsProvider _provider;
     private readonly INotificationPublisher _notificationPublisher;
@@ -24,12 +25,14 @@ public class DefaultShellManager : IShellManager
     /// </summary>
     public DefaultShellManager(
         IShellHost shellHost,
+        IShellHostInitializer shellHostInitializer,
         IShellSettingsCache cache,
         IShellSettingsProvider provider,
         INotificationPublisher notificationPublisher,
         ILogger<DefaultShellManager>? logger = null)
     {
         _shellHost = shellHost;
+        _shellHostInitializer = shellHostInitializer;
         _cache = cache;
         _provider = provider;
         _notificationPublisher = notificationPublisher;
@@ -40,6 +43,8 @@ public class DefaultShellManager : IShellManager
     public async Task AddShellAsync(ShellSettings settings, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(settings);
+
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
 
         ShellContext shellContext;
 
@@ -65,6 +70,8 @@ public class DefaultShellManager : IShellManager
     /// <inheritdoc />
     public async Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
     {
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
+
         ShellContext? shellContext = null;
 
         // Get shell context BEFORE removing from cache so handlers can access it during deactivation
@@ -119,6 +126,8 @@ public class DefaultShellManager : IShellManager
     public async Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Reloading shell '{ShellId}' from provider", shellId);
+
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
 
         // Emit ShellReloading before any state mutation
         await _notificationPublisher.PublishAsync(new ShellReloading(shellId), strategy: null, cancellationToken);
@@ -188,8 +197,7 @@ public class DefaultShellManager : IShellManager
     /// <inheritdoc />
     public async Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
     {
-        if (_shellHost is Hosting.DefaultShellHost defaultShellHost)
-            await defaultShellHost.InitializeAsync(cancellationToken);
+        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
 
         _logger.LogInformation("Reloading all shells from provider");
 

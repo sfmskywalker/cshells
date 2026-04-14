@@ -82,7 +82,7 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
 
         var exception = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("Default")));
 
-        Assert.Contains("InitializeAsync", exception.Message);
+        Assert.Contains("ensure the shell host is initialized", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact(DisplayName = "Deferred constructor builds shells after async initialization")]

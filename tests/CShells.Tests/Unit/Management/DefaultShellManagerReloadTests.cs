@@ -243,6 +243,29 @@ public class DefaultShellManagerReloadTests
         Assert.Contains(notifications.Notifications, n => n is ShellsReloaded);
     }
 
+    [Fact(DisplayName = "ReloadAllShellsAsync ensures shell host initialization before enumerating shells")]
+    public async Task ReloadAllShellsAsync_EnsuresShellHostInitialized()
+    {
+        // Arrange
+        var settings = CreateShell("Tenant1", ["FeatureA"]);
+
+        var provider = new StubShellSettingsProvider();
+        provider.SetShell(new("Tenant1"), settings);
+
+        var cache = new ShellSettingsCache();
+        cache.Load([settings]);
+
+        var notifications = new RecordingNotificationPublisher();
+        var host = new StubShellHost(cache);
+        var manager = new DefaultShellManager(host, host, cache, provider, notifications);
+
+        // Act
+        await manager.ReloadAllShellsAsync();
+
+        // Assert
+        Assert.Equal(1, host.InitializeCalls);
+    }
+
     #endregion
 
     #region US3 - Reload Notification Ordering and Scope
@@ -729,7 +752,7 @@ public class DefaultShellManagerReloadTests
         RecordingNotificationPublisher notifications)
     {
         var host = new StubShellHost(cache);
-        return new DefaultShellManager(host, cache, provider, notifications);
+        return new DefaultShellManager(host, host, cache, provider, notifications);
     }
 
     private static ShellSettings CreateShell(string id, string[] features) => new()
@@ -742,12 +765,14 @@ public class DefaultShellManagerReloadTests
     /// A minimal stub shell host for unit testing.
     /// Creates lightweight <see cref="ShellContext"/> instances backed by the cache.
     /// </summary>
-    private sealed class StubShellHost(ShellSettingsCache cache) : IShellHost
+    private sealed class StubShellHost(ShellSettingsCache cache) : IShellHost, IShellHostInitializer
     {
         private readonly Dictionary<ShellId, ShellContext> _contexts = new();
+        private bool _initialized;
 
         public List<ShellId> EvictedShells { get; } = [];
         public bool AllShellsEvicted { get; private set; }
+        public int InitializeCalls { get; private set; }
 
         public ShellContext DefaultShell => throw new NotImplementedException();
 
@@ -755,6 +780,8 @@ public class DefaultShellManagerReloadTests
         {
             get
             {
+                EnsureInitialized();
+
                 foreach (var settings in cache.GetAll())
                 {
                     if (!_contexts.ContainsKey(settings.Id))
@@ -767,6 +794,8 @@ public class DefaultShellManagerReloadTests
 
         public ShellContext GetShell(ShellId id)
         {
+            EnsureInitialized();
+
             if (_contexts.TryGetValue(id, out var context))
                 return context;
 
@@ -776,6 +805,13 @@ public class DefaultShellManagerReloadTests
             var newContext = CreateContext(settings);
             _contexts[id] = newContext;
             return newContext;
+        }
+
+        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
+        {
+            InitializeCalls++;
+            _initialized = true;
+            return Task.CompletedTask;
         }
 
         public ValueTask EvictShellAsync(ShellId shellId)
@@ -790,6 +826,12 @@ public class DefaultShellManagerReloadTests
             AllShellsEvicted = true;
             _contexts.Clear();
             return ValueTask.CompletedTask;
+        }
+
+        private void EnsureInitialized()
+        {
+            if (!_initialized)
+                throw new InvalidOperationException("Shell host must be initialized before accessing shells.");
         }
 
         private static ShellContext CreateContext(ShellSettings settings) =>

@@ -33,7 +33,7 @@ namespace CShells.Hosting;
 ///   </item>
 /// </list>
 /// </remarks>
-public class DefaultShellHost : IShellHost, IAsyncDisposable
+public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposable
 {
     private readonly Func<CancellationToken, Task<IReadOnlyCollection<Assembly>>>? _assemblyResolver;
     private readonly IShellSettingsCache _shellSettingsCache;
@@ -121,7 +121,11 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
     /// <summary>
     /// Ensures that feature discovery has completed for this shell host.
     /// </summary>
-    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+        EnsureInitializedAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
 
@@ -175,7 +179,7 @@ public class DefaultShellHost : IShellHost, IAsyncDisposable
 
     private IReadOnlyDictionary<string, ShellFeatureDescriptor> FeatureMap =>
         _featureMap ?? throw new InvalidOperationException(
-            "Shell feature discovery has not completed yet. Start the host or await DefaultShellHost.InitializeAsync before accessing shells.");
+            "Shell feature discovery has not completed yet. Start the application or ensure the shell host is initialized before accessing shells.");
 
     /// <inheritdoc />
     public ShellContext DefaultShell

@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
             return new DefaultShellHost(shellCache, ct => builder.BuildFeatureAssembliesAsync(sp, ct), rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
         });
         services.AddSingleton<IShellHost>(sp => sp.GetRequiredService<DefaultShellHost>());
+        services.AddSingleton<IShellHostInitializer>(sp => sp.GetRequiredService<DefaultShellHost>());
 
         // Register the default shell context scope factory.
         services.AddSingleton<IShellContextScopeFactory, DefaultShellContextScopeFactory>();
@@ -82,7 +83,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IShellManager, DefaultShellManager>();
 
         // Register hosted services for feature discovery and shell lifecycle coordination.
-        // Feature discovery must complete before shell settings are loaded and before shells are activated.
         services.AddHostedService<ShellFeatureInitializationHostedService>();
         services.AddHostedService<ShellSettingsCacheInitializer>();
         services.AddHostedService<ShellStartupHostedService>();
