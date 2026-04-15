@@ -46,7 +46,7 @@ public static class ShellExtensions
         /// <param name="configureCShells">Callback used to configure the CShells builder.</param>
         /// <returns>The same <see cref="WebApplicationBuilder"/> instance for chaining.</returns>
         /// <remarks>
-        /// Configure feature discovery assemblies through <c>FromAssemblies(...)</c> or <c>FromHostAssemblies()</c>
+        /// Configure feature discovery assemblies through <c>FromAssemblies(...)</c>, <c>FromAssemblyContaining&lt;TMarker&gt;()</c>, or <c>FromHostAssemblies()</c>
         /// to select discovery sources, and <c>WithAssemblyProvider(...)</c> to attach provider-based sources,
         /// inside <paramref name="configureCShells"/>.
         /// </remarks>

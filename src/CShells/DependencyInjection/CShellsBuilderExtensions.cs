@@ -125,6 +125,18 @@ public static class CShellsBuilderExtensions
     }
 
     /// <summary>
+    /// Appends the assembly containing <typeparamref name="TMarker"/> as an explicit assembly contribution for shell feature discovery.
+    /// </summary>
+    /// <typeparam name="TMarker">Any marker type defined in the assembly to scan for shell features.</typeparam>
+    /// <param name="builder">The CShells builder.</param>
+    /// <returns>The updated CShells builder.</returns>
+    /// <remarks>
+    /// This is a convenience wrapper over <see cref="FromAssemblies(CShellsBuilder,System.Reflection.Assembly[])"/> for the common marker-type pattern.
+    /// </remarks>
+    public static CShellsBuilder FromAssemblyContaining<TMarker>(this CShellsBuilder builder) =>
+        FromAssemblies(builder, typeof(TMarker).Assembly);
+
+    /// <summary>
     /// Appends the built-in host-derived assembly contribution for shell feature discovery.
     /// </summary>
     /// <param name="builder">The CShells builder.</param>

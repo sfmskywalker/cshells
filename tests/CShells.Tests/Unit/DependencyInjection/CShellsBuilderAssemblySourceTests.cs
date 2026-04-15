@@ -50,6 +50,36 @@ public class CShellsBuilderAssemblySourceTests
     }
 
     [Fact]
+    public async Task FromAssemblyContaining_UsesMarkerTypeAssemblyAndActivatesExplicitMode()
+    {
+        var builder = new CShellsBuilder(new ServiceCollection());
+        using var serviceProvider = new ServiceCollection().BuildServiceProvider();
+
+        CShellsBuilderExtensions.FromAssemblyContaining<MarkerService>(builder);
+
+        Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
+        Assert.IsType<ExplicitFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
+
+        var assemblies = await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider);
+        Assert.Equal(typeof(MarkerService).Assembly, Assert.Single(assemblies));
+    }
+
+    [Fact]
+    public async Task FromAssemblyContaining_ComposesAdditivelyInRegistrationOrder()
+    {
+        var builder = new CShellsBuilder(new ServiceCollection());
+        var secondAssembly = typeof(CShellsBuilder).Assembly;
+        using var serviceProvider = new ServiceCollection().BuildServiceProvider();
+
+        CShellsBuilderExtensions.FromAssemblyContaining<MarkerService>(builder);
+        CShellsBuilderExtensions.FromAssemblies(builder, secondAssembly);
+
+        var assemblies = await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider);
+
+        Assert.Equal([typeof(MarkerService).Assembly, secondAssembly], assemblies);
+    }
+
+    [Fact]
     public void FromHostAssemblies_AppendsHostProviderAndActivatesExplicitMode()
     {
         var builder = new CShellsBuilder(new ServiceCollection());
