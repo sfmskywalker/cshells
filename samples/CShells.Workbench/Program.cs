@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Management;
 using CShells.Workbench.Background;
 using CShells.Workbench.Features.Core;
 
@@ -22,6 +23,22 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 app.UseRouting();
+
+// Host-level diagnostics stay available even when a shell's newest desired state is deferred.
+// Shell-owned routes are still exposed only for committed applied runtimes via MapShells().
+app.MapGet("/_shells/status", (IShellRuntimeStateAccessor runtimeState) =>
+    Results.Ok(runtimeState.GetAllShells().Select(status => new
+    {
+        shellId = status.ShellId.Name,
+        status.DesiredGeneration,
+        status.AppliedGeneration,
+        outcome = status.Outcome.ToString(),
+        status.IsInSync,
+        status.IsRoutable,
+        status.BlockingReason,
+        missingFeatures = status.MissingFeatures
+    })));
+
 app.MapShells();
 app.Run();
 

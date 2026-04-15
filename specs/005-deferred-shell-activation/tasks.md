@@ -30,8 +30,8 @@
 
 **Purpose**: Lock the exact runtime, web, and test seams that the deferred-activation redesign will change before introducing new abstractions or reconciliation flow.
 
-- [ ] T001 [P] Audit the current single-truth runtime seams in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Configuration/ShellSettingsCache.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/ShellStartupHostedService.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
-- [ ] T002 [P] Audit the current routing/endpoint/test touchpoints in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Resolution/WebRoutingShellResolver.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Notifications/ShellEndpointRegistrationHandler.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Routing/DynamicShellEndpointDataSource.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/ReloadBehaviorTests.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/WebRoutingShellResolverTests.cs`
+- [X] T001 [P] Audit the current single-truth runtime seams in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Configuration/ShellSettingsCache.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/ShellStartupHostedService.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
+- [X] T002 [P] Audit the current routing/endpoint/test touchpoints in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Resolution/WebRoutingShellResolver.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Notifications/ShellEndpointRegistrationHandler.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Routing/DynamicShellEndpointDataSource.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/ReloadBehaviorTests.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/WebRoutingShellResolverTests.cs`
 
 ---
 
@@ -41,10 +41,10 @@
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T003 Create the public runtime-state inspection contracts in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/IShellRuntimeStateAccessor.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/ShellRuntimeStatus.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/ShellReconciliationOutcome.cs`
-- [ ] T004 [P] Add the internal desired/applied runtime records and state store in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeRecord.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateStore.cs`
-- [ ] T005 [P] Add the refreshable runtime feature catalog snapshot/validation seam in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/RuntimeFeatureCatalog.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureDiscovery.cs`
-- [ ] T006 Wire the shared runtime-state and catalog services through `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/ServiceCollectionExtensions.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
+- [X] T003 Create the public runtime-state inspection contracts in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/IShellRuntimeStateAccessor.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/ShellRuntimeStatus.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Management/ShellReconciliationOutcome.cs`
+- [X] T004 [P] Add the internal desired/applied runtime records and state store in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeRecord.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateStore.cs`
+- [X] T005 [P] Add the refreshable runtime feature catalog snapshot/validation seam in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/RuntimeFeatureCatalog.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureDiscovery.cs`
+- [X] T006 Wire the shared runtime-state and catalog services through `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/ServiceCollectionExtensions.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
 
 **Checkpoint**: The desired/applied read model, internal state storage, and refreshable catalog seam exist so user stories can build on one reconciliation architecture.
 
@@ -60,15 +60,15 @@
 
 > **NOTE**: Add these tests before finalizing implementation so the desired-vs-applied split, last-known-good preservation, and explicit `Default` behavior are locked by failing coverage first.
 
-- [ ] T007 [P] [US1] Add desired-versus-applied status projection coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Management/ShellRuntimeStateAccessorTests.cs`
-- [ ] T008 [P] [US1] Extend deferred/failed last-known-good preservation coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Management/DefaultShellManagerReloadTests.cs`
-- [ ] T009 [P] [US1] Add explicit configured `Default` unavailable fallback coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/ShellHost/DefaultShellFallbackIntegrationTests.cs`
+- [X] T007 [P] [US1] Add desired-versus-applied status projection coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Management/ShellRuntimeStateAccessorTests.cs`
+- [X] T008 [P] [US1] Extend deferred/failed last-known-good preservation coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Management/DefaultShellManagerReloadTests.cs`
+- [X] T009 [P] [US1] Add explicit configured `Default` unavailable fallback coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/ShellHost/DefaultShellFallbackIntegrationTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Separate desired-state recording from applied-runtime commit in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Configuration/ShellSettingsCache.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/ShellStartupHostedService.cs`
-- [ ] T011 [US1] Implement candidate-build outcomes, blocking-reason capture, and last-known-good preservation in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateStore.cs`
-- [ ] T012 [US1] Enforce explicit `Default` applied-runtime semantics in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/IShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`
+- [X] T010 [US1] Separate desired-state recording from applied-runtime commit in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Configuration/ShellSettingsCache.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/ShellStartupHostedService.cs`
+- [X] T011 [US1] Implement candidate-build outcomes, blocking-reason capture, and last-known-good preservation in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateStore.cs`
+- [X] T012 [US1] Enforce explicit `Default` applied-runtime semantics in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/IShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`
 
 **Checkpoint**: Desired shell definitions remain authoritative, last-known-good runtimes stay active through deferred/failed successors, and explicit `Default` never silently falls through to another shell.
 
@@ -82,14 +82,14 @@
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T013 [P] [US2] Add repeated provider-refresh and duplicate-feature-ID rollback coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/RuntimeFeatureCatalogTests.cs`
-- [ ] T014 [P] [US2] Extend mixed-shell reconciliation and atomic replacement coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/LifecycleTests.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/ReloadBehaviorTests.cs`
+- [X] T013 [P] [US2] Add repeated provider-refresh and duplicate-feature-ID rollback coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/RuntimeFeatureCatalogTests.cs`
+- [X] T014 [P] [US2] Extend mixed-shell reconciliation and atomic replacement coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/LifecycleTests.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/DefaultShellHost/ReloadBehaviorTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement candidate catalog refresh, provider re-evaluation, and duplicate-ID abort behavior in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/RuntimeFeatureCatalog.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureAssemblyResolver.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/HostFeatureAssemblyProvider.cs`
-- [ ] T016 [US2] Move `ReloadShellAsync(...)` and `ReloadAllShellsAsync()` onto refresh-first shell-agnostic reconciliation in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
-- [ ] T017 [US2] Implement atomic per-shell candidate commit and applied-runtime lifecycle notifications in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellActivated.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellDeactivating.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellReloading.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellReloaded.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellsReloaded.cs`
+- [X] T015 [US2] Implement candidate catalog refresh, provider re-evaluation, and duplicate-ID abort behavior in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/RuntimeFeatureCatalog.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureAssemblyResolver.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/HostFeatureAssemblyProvider.cs`
+- [X] T016 [US2] Move `ReloadShellAsync(...)` and `ReloadAllShellsAsync()` onto refresh-first shell-agnostic reconciliation in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`
+- [X] T017 [US2] Implement atomic per-shell candidate commit and applied-runtime lifecycle notifications in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellActivated.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellDeactivating.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellReloading.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellReloaded.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Notifications/ShellsReloaded.cs`
 
 **Checkpoint**: Runtime feature discovery refreshes safely per reconciliation pass, duplicate IDs fail fast without mutating applied state, and newly satisfiable shells advance only through candidate-build then atomic commit.
 
@@ -103,16 +103,16 @@
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T018 [P] [US3] Add applied-active routing and unapplied-shell resolution coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/WebRoutingShellResolverTests.cs`
-- [ ] T019 [P] [US3] Add committed-runtime-only endpoint exposure coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/ApplicationBuilderExtensionsTests.cs`
-- [ ] T020 [P] [US3] Add mixed-state runtime status and strict explicit `Default` end-to-end coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/ShellHost/ShellRuntimeStatusIntegrationTests.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests.EndToEnd/WebRoutingShellResolutionTests.cs`
+- [X] T018 [P] [US3] Add applied-active routing and unapplied-shell resolution coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/WebRoutingShellResolverTests.cs`
+- [X] T019 [P] [US3] Add committed-runtime-only endpoint exposure coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/AspNetCore/ApplicationBuilderExtensionsTests.cs`
+- [X] T020 [P] [US3] Add mixed-state runtime status and strict explicit `Default` end-to-end coverage in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Integration/ShellHost/ShellRuntimeStatusIntegrationTests.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests.EndToEnd/WebRoutingShellResolutionTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Restrict shell retrieval, `AllShells`, and default-shell enumeration to committed applied runtimes in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/IShellHost.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`
-- [ ] T022 [US3] Align request resolution to applied-active shells only in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Resolution/WebRoutingShellResolver.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`
-- [ ] T023 [US3] Align endpoint registration and dynamic routing refresh to applied-runtime commit events in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Notifications/ShellEndpointRegistrationHandler.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Routing/DynamicShellEndpointDataSource.cs`
-- [ ] T024 [US3] Implement the operator-facing runtime status accessor in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateAccessor.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`
+- [X] T021 [US3] Restrict shell retrieval, `AllShells`, and default-shell enumeration to committed applied runtimes in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/IShellHost.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`
+- [X] T022 [US3] Align request resolution to applied-active shells only in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Resolution/WebRoutingShellResolver.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Resolution/DefaultShellResolverStrategy.cs`
+- [X] T023 [US3] Align endpoint registration and dynamic routing refresh to applied-runtime commit events in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Notifications/ShellEndpointRegistrationHandler.cs` and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.AspNetCore/Routing/DynamicShellEndpointDataSource.cs`
+- [X] T024 [US3] Implement the operator-facing runtime status accessor in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/ShellRuntimeStateAccessor.cs`, `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Management/DefaultShellManager.cs`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Hosting/DefaultShellHost.cs`
 
 **Checkpoint**: Only committed applied runtimes are routable or endpoint-visible, and operators can inspect desired-versus-applied drift for every configured shell.
 
@@ -122,9 +122,9 @@
 
 **Purpose**: Update the in-scope guidance assets and validate the final architecture against the quickstart scenarios and targeted test suites.
 
-- [ ] T025 [P] Update desired-vs-applied lifecycle and runtime-management guidance in `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/shell-lifecycle.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Runtime-Shell-Management.md`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Shell-Lifecycle.md`
-- [ ] T026 [P] Update active-only routing and explicit `Default` guidance in `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/shell-resolution.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Shell-Resolution.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/samples/CShells.Workbench/README.md`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/samples/CShells.Workbench/Program.cs`
-- [ ] T027 Run the quickstart validation flow from `/Users/sipke/Projects/ValenceWorks/cshells/main/specs/005-deferred-shell-activation/quickstart.md` against `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests.EndToEnd/`
+- [X] T025 [P] Update desired-vs-applied lifecycle and runtime-management guidance in `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/shell-lifecycle.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Runtime-Shell-Management.md`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Shell-Lifecycle.md`
+- [X] T026 [P] Update active-only routing and explicit `Default` guidance in `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/shell-resolution.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/wiki/Shell-Resolution.md`, `/Users/sipke/Projects/ValenceWorks/cshells/main/samples/CShells.Workbench/README.md`, and `/Users/sipke/Projects/ValenceWorks/cshells/main/samples/CShells.Workbench/Program.cs`
+- [X] T027 Run the quickstart validation flow from `/Users/sipke/Projects/ValenceWorks/cshells/main/specs/005-deferred-shell-activation/quickstart.md` against `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/` and `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests.EndToEnd/`
 
 ---
 

@@ -1,3 +1,4 @@
+using CShells.Management;
 using CShells.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,115 +7,85 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace CShells.Hosting;
 
 /// <summary>
-/// Ensures all shells are activated during application startup and deactivated during shutdown.
+/// Ensures shells are reconciled into applied runtimes during application startup and deactivated during shutdown.
 /// </summary>
-/// <remarks>
-/// This hosted service coordinates shell lifecycle with the application lifecycle by:
-/// <list type="bullet">
-///   <item><description>Publishing <see cref="ShellActivated"/> notifications for all configured shells on startup</description></item>
-///   <item><description>Publishing <see cref="ShellsReloaded"/> after startup activation so shell-dependent projections can synchronize once</description></item>
-///   <item><description>Publishing <see cref="ShellDeactivating"/> notifications for all shells on shutdown</description></item>
-/// </list>
-/// </remarks>
 public class ShellStartupHostedService : IHostedService
 {
-    private readonly IShellHost _shellHost;
-    private readonly IShellHostInitializer _shellHostInitializer;
-    private readonly INotificationPublisher _notificationPublisher;
-    private readonly ILogger<ShellStartupHostedService> _logger;
-    private readonly object _lifecycleLock = new();
-    private Task? _startTask;
-    private Task? _stopTask;
+    private readonly IShellHost shellHost;
+    private readonly DefaultShellManager shellManager;
+    private readonly IShellRuntimeStateAccessor runtimeStateAccessor;
+    private readonly INotificationPublisher notificationPublisher;
+    private readonly ILogger<ShellStartupHostedService> logger;
+    private readonly object lifecycleLock = new();
+    private Task? startTask;
+    private Task? stopTask;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ShellStartupHostedService"/> class.
     /// </summary>
-    /// <param name="shellHost">The shell host containing all configured shells.</param>
-    /// <param name="shellHostInitializer">Ensures deferred shell host initialization completes before startup activation runs.</param>
-    /// <param name="notificationPublisher">The notification publisher for shell lifecycle events.</param>
-    /// <param name="logger">Optional logger for diagnostic output.</param>
     public ShellStartupHostedService(
         IShellHost shellHost,
-        IShellHostInitializer shellHostInitializer,
+        DefaultShellManager shellManager,
+        IShellRuntimeStateAccessor runtimeStateAccessor,
         INotificationPublisher notificationPublisher,
         ILogger<ShellStartupHostedService>? logger = null)
     {
-        _shellHost = Guard.Against.Null(shellHost);
-        _shellHostInitializer = Guard.Against.Null(shellHostInitializer);
-        _notificationPublisher = Guard.Against.Null(notificationPublisher);
-        _logger = logger ?? NullLogger<ShellStartupHostedService>.Instance;
+        this.shellHost = Guard.Against.Null(shellHost);
+        this.shellManager = Guard.Against.Null(shellManager);
+        this.runtimeStateAccessor = Guard.Against.Null(runtimeStateAccessor);
+        this.notificationPublisher = Guard.Against.Null(notificationPublisher);
+        this.logger = logger ?? NullLogger<ShellStartupHostedService>.Instance;
     }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        lock (_lifecycleLock)
+        lock (lifecycleLock)
         {
-            _startTask ??= StartCoreAsync(cancellationToken);
-            return _startTask;
+            startTask ??= StartCoreAsync(cancellationToken);
+            return startTask;
         }
     }
 
     private async Task StartCoreAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Activating all shells on application startup");
+        logger.LogInformation("Reconciling shells on application startup");
 
-        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
+        await shellManager.InitializeRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        var statuses = runtimeStateAccessor.GetAllShells();
 
-        var shells = _shellHost.AllShells;
-        _logger.LogInformation("Found {ShellCount} shell(s) to activate", shells.Count);
+        await notificationPublisher.PublishAsync(new ShellsReloaded(statuses), strategy: null, cancellationToken).ConfigureAwait(false);
 
-        foreach (var shell in shells)
-        {
-            try
-            {
-                _logger.LogDebug("Publishing ShellActivated notification for shell '{ShellId}'", shell.Id);
-                await _notificationPublisher.PublishAsync(
-                    new ShellActivated(shell),
-                    strategy: null,
-                    cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to activate shell '{ShellId}' during application startup", shell.Id);
-                throw;
-            }
-        }
-
-        await _notificationPublisher.PublishAsync(
-            new ShellsReloaded(shells.Select(shell => shell.Settings).ToList().AsReadOnly()),
-            strategy: null,
-            cancellationToken);
-
-        _logger.LogInformation("Successfully activated {ShellCount} shell(s)", shells.Count);
+        logger.LogInformation(
+            "Startup reconciliation completed for {ShellCount} configured shell(s); {ActiveCount} shell(s) are currently applied",
+            statuses.Count,
+            statuses.Count(status => status.IsRoutable));
     }
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        lock (_lifecycleLock)
+        lock (lifecycleLock)
         {
-            _stopTask ??= StopCoreAsync(cancellationToken);
-            return _stopTask;
+            stopTask ??= StopCoreAsync(cancellationToken);
+            return stopTask;
         }
     }
 
     private async Task StopCoreAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Deactivating all shells on application shutdown");
+        logger.LogInformation("Deactivating applied shells on application shutdown");
 
         IReadOnlyCollection<ShellContext> shells;
         try
         {
-            shells = _shellHost.AllShells;
+            shells = shellHost.AllShells;
         }
         catch (ObjectDisposedException)
         {
-            _logger.LogDebug("Shell host already disposed, skipping deactivation");
+            logger.LogDebug("Shell host already disposed, skipping deactivation");
             return;
         }
-
-        _logger.LogInformation("Found {ShellCount} shell(s) to deactivate", shells.Count);
 
         var failedCount = 0;
 
@@ -122,28 +93,26 @@ public class ShellStartupHostedService : IHostedService
         {
             try
             {
-                _logger.LogDebug("Publishing ShellDeactivating notification for shell '{ShellId}'", shell.Id);
-                await _notificationPublisher.PublishAsync(
-                    new ShellDeactivating(shell),
-                    strategy: null,
-                    cancellationToken);
+                await notificationPublisher.PublishAsync(new ShellDeactivating(shell), strategy: null, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 failedCount++;
-                // Log but don't throw during shutdown - attempt to deactivate all shells
-                _logger.LogError(ex, "Failed to deactivate shell '{ShellId}' during application shutdown", shell.Id);
+                logger.LogError(ex, "Failed to deactivate shell '{ShellId}' during application shutdown", shell.Id);
             }
         }
 
         if (failedCount > 0)
         {
-            _logger.LogWarning("Deactivated {SuccessCount}/{TotalCount} shell(s) ({FailedCount} failed)",
-                shells.Count - failedCount, shells.Count, failedCount);
+            logger.LogWarning(
+                "Deactivated {SuccessCount}/{TotalCount} shell(s) ({FailedCount} failed)",
+                shells.Count - failedCount,
+                shells.Count,
+                failedCount);
         }
         else
         {
-            _logger.LogInformation("Successfully deactivated {ShellCount} shell(s)", shells.Count);
+            logger.LogInformation("Successfully deactivated {ShellCount} shell(s)", shells.Count);
         }
     }
 }

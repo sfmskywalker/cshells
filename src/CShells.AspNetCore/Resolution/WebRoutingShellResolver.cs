@@ -1,5 +1,7 @@
 using CShells.Configuration;
+using CShells.Hosting;
 using CShells.Resolution;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.AspNetCore.Resolution;
 
@@ -8,10 +10,27 @@ namespace CShells.AspNetCore.Resolution;
 /// URL path, HTTP host, custom headers, and user claims.
 /// </summary>
 [ResolverOrder(0)]
-public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellResolverOptions options) : IShellResolverStrategy
+public class WebRoutingShellResolver : IShellResolverStrategy
 {
-    private readonly IShellSettingsCache _cache = Guard.Against.Null(cache);
-    private readonly WebRoutingShellResolverOptions _options = Guard.Against.Null(options);
+    private readonly IShellHost _shellHost;
+    private readonly WebRoutingShellResolverOptions _options;
+
+    [ActivatorUtilitiesConstructor]
+    public WebRoutingShellResolver(IShellHost shellHost, WebRoutingShellResolverOptions options)
+    {
+        _shellHost = Guard.Against.Null(shellHost);
+        _options = Guard.Against.Null(options);
+    }
+
+    /// <summary>
+    /// Initializes a new resolver against a static shell settings cache.
+    /// This overload exists for compatibility with tests and non-DI callers; the runtime pipeline
+    /// should prefer the <see cref="IShellHost"/>-based constructor so only applied shells participate.
+    /// </summary>
+    public WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellResolverOptions options)
+        : this(new CacheBackedShellHost(cache), options)
+    {
+    }
 
     /// <inheritdoc />
     public ShellId? Resolve(ShellResolutionContext context)
@@ -75,9 +94,9 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
 
     private ShellId? FindMatchingShell(string valueToMatch, string configKey)
     {
-        foreach (var shell in _cache.GetAll())
+        foreach (var shell in _shellHost.AllShells)
         {
-            var routeValue = shell.GetConfiguration($"WebRouting:{configKey}");
+            var routeValue = shell.Settings.GetConfiguration($"WebRouting:{configKey}");
             
             // If the path starts with a slash, throw a configuration exception:
             if (routeValue?.StartsWith('/') == true)
@@ -91,9 +110,9 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
 
     private ShellId? FindMatchingShellByIdentifier(string identifierValue, string configuredKey, string configKey)
     {
-        foreach (var shell in _cache.GetAll())
+        foreach (var shell in _shellHost.AllShells)
         {
-            var shellConfigKey = shell.GetConfiguration($"WebRouting:{configKey}");
+            var shellConfigKey = shell.Settings.GetConfiguration($"WebRouting:{configKey}");
             if (string.IsNullOrEmpty(shellConfigKey))
                 continue;
 
@@ -136,9 +155,9 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
 
         ShellId? rootShellId = null;
 
-        foreach (var shell in _cache.GetAll())
+        foreach (var shell in _shellHost.AllShells)
         {
-            var routeValue = shell.GetConfiguration("WebRouting:Path");
+            var routeValue = shell.Settings.GetConfiguration("WebRouting:Path");
 
             // Only match a shell that explicitly set WebRouting:Path = "" (not null/absent).
             // A null value means the shell simply has no path routing configured.
@@ -156,5 +175,25 @@ public class WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellR
         }
 
         return rootShellId;
+    }
+
+    private sealed class CacheBackedShellHost(IShellSettingsCache cache) : IShellHost
+    {
+        private readonly IShellSettingsCache cache = Guard.Against.Null(cache);
+
+        public ShellContext DefaultShell => AllShells.FirstOrDefault()
+            ?? throw new InvalidOperationException("No shells are configured.");
+
+        public IReadOnlyCollection<ShellContext> AllShells => cache.GetAll()
+            .Select(settings => new ShellContext(settings, new ServiceCollection().BuildServiceProvider(), settings.EnabledFeatures))
+            .ToList()
+            .AsReadOnly();
+
+        public ShellContext GetShell(ShellId id) => AllShells.FirstOrDefault(shell => shell.Id.Equals(id))
+            ?? throw new KeyNotFoundException($"Shell '{id}' was not found.");
+
+        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
+
+        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
     }
 }

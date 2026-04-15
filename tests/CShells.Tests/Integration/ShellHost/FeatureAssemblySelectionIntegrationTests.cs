@@ -2,6 +2,7 @@ using System.Reflection;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Hosting;
+using CShells.Management;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,11 +22,11 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var explicitHostProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            CShellsBuilderExtensions.FromHostAssemblies(builder);
+            DependencyInjection.CShellsBuilderExtensions.FromHostAssemblies(builder);
         });
 
-        var defaultShell = GetShell(defaultProvider, new("Default"));
-        var explicitHostShell = GetShell(explicitHostProvider, new("Default"));
+        var defaultShell = GetShell(defaultProvider, new ShellId("Default"));
+        var explicitHostShell = GetShell(explicitHostProvider, new ShellId("Default"));
         var defaultFeatures = defaultShell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
         var explicitHostFeatures = explicitHostShell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
@@ -40,13 +41,13 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
+            DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
         });
 
         var shellHost = serviceProvider.GetRequiredService<IShellHost>();
-        var exception = Assert.Throws<InvalidOperationException>(() => shellHost.GetShell(new("Default")));
+        var exception = Assert.Throws<KeyNotFoundException>(() => shellHost.GetShell(new ShellId("Default")));
 
-        Assert.Contains("Weather", exception.Message);
+        Assert.Contains("does not have a committed applied runtime", exception.Message);
     }
 
     [Fact]
@@ -58,8 +59,8 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
             builder =>
             {
                 builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-                CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
-                CShellsBuilderExtensions.WithAssemblyProvider(builder, sp =>
+                DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
+                DependencyInjection.CShellsBuilderExtensions.WithAssemblyProvider(builder, sp =>
                 {
                     var resolvedMarker = sp.GetRequiredService<RootMarkerService>();
                     return new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly], resolvedMarker);
@@ -67,7 +68,7 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
             },
             services => services.AddSingleton(marker));
 
-        var shell = GetShell(serviceProvider, new("Default"));
+        var shell = GetShell(serviceProvider, new ShellId("Default"));
         var features = shell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
         Assert.Contains(TrackingFeatureAssemblyProvider.CreatedProviders, provider => ReferenceEquals(provider.ResolvedMarker, marker));
@@ -82,11 +83,11 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            CShellsBuilderExtensions.FromAssemblies(builder, typeof(TestFixtures).Assembly);
-            CShellsBuilderExtensions.WithAssemblyProvider(builder, new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly]));
+            DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(TestFixtures).Assembly);
+            DependencyInjection.CShellsBuilderExtensions.WithAssemblyProvider(builder, new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly]));
         });
 
-        var shell = GetShell(serviceProvider, new("Default"));
+        var shell = GetShell(serviceProvider, new ShellId("Default"));
         var features = shell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
         Assert.Contains(features, feature => feature.Id == "Core");
@@ -106,7 +107,7 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var shellSettingsProvider = serviceProvider.GetRequiredService<CShells.Configuration.IShellSettingsProvider>();
         var shellSettingsCache = serviceProvider.GetRequiredService<CShells.Configuration.ShellSettingsCache>();
         shellSettingsCache.Load((await shellSettingsProvider.GetShellSettingsAsync()).ToList());
-        await serviceProvider.GetRequiredService<CShells.Hosting.DefaultShellHost>().InitializeAsync();
+        await serviceProvider.GetRequiredService<DefaultShellManager>().InitializeRuntimeAsync();
         _disposables.Add(serviceProvider);
         return serviceProvider;
     }

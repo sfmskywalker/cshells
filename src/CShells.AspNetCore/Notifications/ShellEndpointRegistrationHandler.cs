@@ -16,9 +16,9 @@ namespace CShells.AspNetCore.Notifications;
 /// Handles shell lifecycle notifications by registering/removing endpoints and middleware in the dynamic endpoint data source.
 /// </summary>
 public class ShellEndpointRegistrationHandler :
-    INotificationHandler<ShellAdded>,
+    INotificationHandler<ShellActivated>,
+    INotificationHandler<ShellDeactivating>,
     INotificationHandler<ShellRemoved>,
-    INotificationHandler<ShellReloaded>,
     INotificationHandler<ShellsReloaded>
 {
     private readonly DynamicShellEndpointDataSource _endpointDataSource;
@@ -51,17 +51,26 @@ public class ShellEndpointRegistrationHandler :
     }
 
     /// <inheritdoc />
-    public Task HandleAsync(ShellAdded notification, CancellationToken cancellationToken = default)
+    public Task HandleAsync(ShellActivated notification, CancellationToken cancellationToken = default)
     {
         if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
         {
             _logger.LogWarning("Cannot register endpoints for shell '{ShellId}': IEndpointRouteBuilder not available. " +
-                               "Endpoints will be registered on next application start.", notification.Settings.Id);
+                               "Endpoints will be registered on next application start.", notification.Context.Id);
             return Task.CompletedTask;
         }
 
-        _logger.LogInformation("Registering endpoints for shell '{ShellId}'", notification.Settings.Id);
-        RegisterShellEndpoints(notification.Settings);
+        _logger.LogInformation("Registering endpoints for applied shell '{ShellId}'", notification.Context.Id);
+        _endpointDataSource.RemoveEndpoints(notification.Context.Id);
+        RegisterShellEndpoints(notification.Context);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task HandleAsync(ShellDeactivating notification, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Removing endpoints for deactivating shell '{ShellId}'", notification.Context.Id);
+        _endpointDataSource.RemoveEndpoints(notification.Context.Id);
         return Task.CompletedTask;
     }
 
@@ -70,41 +79,6 @@ public class ShellEndpointRegistrationHandler :
     {
         _logger.LogInformation("Removing endpoints for shell '{ShellId}'", notification.ShellId);
         _endpointDataSource.RemoveEndpoints(notification.ShellId);
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public Task HandleAsync(ShellReloaded notification, CancellationToken cancellationToken = default)
-    {
-        // Only handle per-shell reload notifications (non-null ShellId).
-        // Aggregate (null ShellId) reloads are handled by ShellsReloaded.
-        if (notification.ShellId is not { } shellId)
-            return Task.CompletedTask;
-
-        if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
-        {
-            _logger.LogWarning("Cannot re-register endpoints for shell '{ShellId}': IEndpointRouteBuilder not available.", shellId);
-            return Task.CompletedTask;
-        }
-
-        _logger.LogInformation("Re-registering endpoints for reloaded shell '{ShellId}'", shellId);
-
-        // Remove stale endpoints for the reloaded shell
-        _endpointDataSource.RemoveEndpoints(shellId);
-
-        // Re-register endpoints from the refreshed shell context.
-        // The shell may have been removed during a full reload; in that case
-        // we only need to remove the endpoints (already done above).
-        try
-        {
-            var shellContext = _shellHost.GetShell(shellId);
-            RegisterShellEndpoints(shellContext.Settings);
-        }
-        catch (KeyNotFoundException)
-        {
-            _logger.LogDebug("Shell '{ShellId}' no longer exists after reload; endpoints removed", shellId);
-        }
-
         return Task.CompletedTask;
     }
 
@@ -118,15 +92,22 @@ public class ShellEndpointRegistrationHandler :
             return Task.CompletedTask;
         }
 
-        _logger.LogInformation("Registering endpoints for {Count} shell(s)", notification.AllShells.Count);
+        _logger.LogInformation("Registering endpoints for {Count} applied shell(s)", notification.Statuses.Count(status => status.IsRoutable));
 
         // Clear existing endpoints
         _endpointDataSource.Clear();
 
         // Register endpoints for all shells
-        foreach (var settings in notification.AllShells)
+        foreach (var status in notification.Statuses.Where(status => status.IsRoutable))
         {
-            RegisterShellEndpoints(settings);
+            try
+            {
+                RegisterShellEndpoints(_shellHost.GetShell(status.ShellId));
+            }
+            catch (KeyNotFoundException)
+            {
+                _logger.LogDebug("Shell '{ShellId}' is no longer applied while rebuilding endpoints; skipping", status.ShellId);
+            }
         }
 
         return Task.CompletedTask;
@@ -135,11 +116,13 @@ public class ShellEndpointRegistrationHandler :
     /// <summary>
     /// Registers endpoints for a single shell.
     /// </summary>
-    private void RegisterShellEndpoints(ShellSettings settings)
+    private void RegisterShellEndpoints(ShellContext shellContext)
     {
         var endpointRouteBuilder = _endpointRouteBuilderAccessor.EndpointRouteBuilder;
         if (endpointRouteBuilder == null)
             return;
+
+        var settings = shellContext.Settings;
 
         _logger.LogDebug("Registering endpoints for shell '{ShellId}'", settings.Id);
 
@@ -158,8 +141,6 @@ public class ShellEndpointRegistrationHandler :
             routePrefix ?? "(none)",
             combinedPrefix ?? "(none)");
 
-        // Get the shell context for accessing service provider and feature descriptors
-        var shellContext = _shellHost.GetShell(settings.Id);
 
         // Create shell-scoped endpoint builder with the combined prefix
         // This ensures that endpoint mapping (e.g., FastEndpoints) can resolve shell-scoped services

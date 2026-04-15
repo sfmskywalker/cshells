@@ -97,8 +97,8 @@ public class ServiceResolutionTests : IAsyncDisposable
         Assert.NotNull(settingsService);
     }
 
-    [Fact(DisplayName = "GetShell feature constructor with shell dependency throws")]
-    public void GetShell_FeatureConstructorWithShellDependency_Throws()
+    [Fact(DisplayName = "GetShell for a shell whose feature constructor depends on shell services reports no applied runtime")]
+    public void GetShell_FeatureConstructorWithShellDependency_ThrowsKeyNotFound()
     {
         // Arrange - Create a feature whose constructor depends on a shell-level service
         // According to the new design, this is NOT allowed
@@ -109,15 +109,9 @@ public class ServiceResolutionTests : IAsyncDisposable
         };
         var host = CreateHost(settings, [assembly]);
 
-        // Act & Assert - This should throw because IBaseService is not available from root provider
-        var ex = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("TestShell")));
-        Assert.Contains("DependentFeature", ex.Message);
-        
-        // Verify the inner exception is from ActivatorUtilities indicating constructor dependency resolution failure
-        // The inner exception message indicates the service could not be resolved
-        Assert.NotNull(ex.InnerException);
-        Assert.IsType<InvalidOperationException>(ex.InnerException);
-        Assert.Contains("Unable to resolve service", ex.InnerException.Message);
+        // Act & Assert - failed candidate builds no longer become applied runtimes
+        var ex = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new("TestShell")));
+        Assert.Contains("does not have a committed applied runtime", ex.Message);
     }
 
     [Fact(DisplayName = "GetShell returns ShellSettings from service provider")]

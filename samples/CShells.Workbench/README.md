@@ -50,6 +50,18 @@ The Analytics feature demonstrates `IConfigurableFeature<AnalyticsOptions>` with
 
 `ShellDemoWorker` demonstrates running background tasks within each shell's service scope using `IShellHost` and `IShellContextScopeFactory`.
 
+### 6. Desired vs. Applied Runtime Status
+
+The sample now exposes a host-level diagnostic endpoint at `GET /_shells/status`. It shows, for each configured shell:
+
+- the latest desired generation
+- the currently applied generation (if any)
+- whether the shell is in sync
+- whether it is currently routable
+- any blocking reason / missing features
+
+This helps demonstrate the deferred-activation behavior: configured shells can exist without exposing shell-owned routes until an applied runtime is committed.
+
 ## Running
 
 ```bash
@@ -60,6 +72,9 @@ dotnet run
 ## Example Requests
 
 ```bash
+# Desired vs. applied runtime status for all configured shells
+curl http://localhost:5031/_shells/status
+
 # Default shell (Free plan) — info
 curl http://localhost:5031/
 
@@ -86,6 +101,12 @@ curl http://localhost:5031/acme/posts/1/comments
 # Analytics — only available on Enterprise
 curl http://localhost:5031/contoso/analytics
 ```
+
+## Applied-Only Routing Notes
+
+- Shell-owned routes such as `/`, `/acme/*`, and `/contoso/*` are exposed only for **applied** shells.
+- If the explicit `Default` shell is configured but cannot currently be applied, CShells does **not** silently route `/` to another tenant.
+- The `/_shells/status` endpoint is host-owned, so you can still inspect desired-vs-applied state while a shell is deferred.
 
 ## Project Structure
 

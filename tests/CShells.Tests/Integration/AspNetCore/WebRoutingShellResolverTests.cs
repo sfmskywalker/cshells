@@ -1,7 +1,11 @@
 using CShells.AspNetCore;
 using CShells.AspNetCore.Resolution;
 using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Hosting;
 using CShells.Resolution;
+using CShells.Tests.Integration.ShellHost;
 
 namespace CShells.Tests.Integration.AspNetCore;
 
@@ -50,6 +54,20 @@ public class WebRoutingShellResolverTests
 
         // Assert
         Assert.Equal(new ShellId(Tenant1Name), result);
+    }
+
+    [Fact(DisplayName = "WebRoutingShellResolver only resolves path-routed shells that currently have an applied runtime")]
+    public async Task WebRoutingShellResolver_PathRouting_OnlyUsesAppliedShells()
+    {
+        // Arrange
+        var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["Core"]);
+        var deferredSettings = CreateShell("Deferred", new WebRoutingShellOptions { Path = "deferred" }, ["MissingFeature"]);
+        await using var host = CreateAppliedHost(defaultSettings, deferredSettings);
+        var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
+
+        // Act & Assert
+        Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/deferred/api")));
+        Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/")));
     }
 
     [Fact(DisplayName = "WebRoutingShellResolver respects excluded paths")]
@@ -249,6 +267,20 @@ public class WebRoutingShellResolverTests
         Assert.Null(result);
     }
 
+    [Fact(DisplayName = "WebRoutingShellResolver does not use an unapplied explicit Default shell as the root-path fallback")]
+    public async Task WebRoutingShellResolver_ExplicitDefaultUnapplied_DoesNotResolveRootFallback()
+    {
+        // Arrange
+        var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["MissingFeature"]);
+        var contosoSettings = CreateShell("Contoso", new WebRoutingShellOptions { Path = "contoso" }, ["Core"]);
+        await using var host = CreateAppliedHost(defaultSettings, contosoSettings);
+        var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
+
+        // Act & Assert
+        Assert.Null(resolver.Resolve(CreateContext(path: "/")));
+        Assert.Equal(new ShellId("Contoso"), resolver.Resolve(CreateContext(path: "/contoso/posts")));
+    }
+
     #endregion
 
     #region Multi-Method Tests
@@ -310,7 +342,7 @@ public class WebRoutingShellResolverTests
         var options = new WebRoutingShellResolverOptions();
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new WebRoutingShellResolver(null!, options));
+        var ex = Assert.Throws<ArgumentNullException>(() => new WebRoutingShellResolver((IShellSettingsCache)null!, options));
         Assert.Equal("cache", ex.ParamName);
     }
 
@@ -375,12 +407,12 @@ public class WebRoutingShellResolverTests
         return new TestShellSettingsCache([CreateShell(Tenant3Name, routingOptions)]);
     }
 
-    private static ShellSettings CreateShell(string name, WebRoutingShellOptions routingOptions)
+    private static ShellSettings CreateShell(string name, WebRoutingShellOptions routingOptions, IReadOnlyCollection<string>? enabledFeatures = null)
     {
         var settings = new ShellSettings
         {
             Id = new(name),
-            EnabledFeatures = [],
+            EnabledFeatures = [.. enabledFeatures ?? []],
             ConfigurationData = new Dictionary<string, object>()
         };
 
@@ -395,6 +427,19 @@ public class WebRoutingShellResolverTests
             settings.ConfigurationData["WebRouting:ClaimKey"] = routingOptions.ClaimKey;
 
         return settings;
+    }
+
+    private static Hosting.DefaultShellHost CreateAppliedHost(params ShellSettings[] shells)
+    {
+        var cache = new ShellSettingsCache();
+        cache.Load(shells);
+
+        var (services, provider) = TestFixtures.CreateRootServices();
+        var accessor = TestFixtures.CreateRootServicesAccessor(services);
+        var featureFactory = new DefaultShellFeatureFactory(provider);
+        var exclusionRegistry = new ShellServiceExclusionRegistry([]);
+
+        return new Hosting.DefaultShellHost(cache, [typeof(TestFixtures).Assembly], provider, accessor, featureFactory, exclusionRegistry);
     }
 
     private class TestShellSettingsCache(List<ShellSettings> shells) : IShellSettingsCache

@@ -1,10 +1,16 @@
 # Shell Resolution
 
-Shell resolution determines which shell handles an incoming HTTP request. CShells provides a configurable resolver pipeline.
+Shell resolution determines which shell handles an incoming HTTP request. CShells provides a configurable resolver pipeline, but only **committed applied runtimes** participate in routing and endpoint exposure.
 
 ## Overview
 
-When a request arrives, the `ShellMiddleware` runs it through an ordered list of `IShellResolverStrategy` implementations. The first strategy that returns a match wins. If none match, the `DefaultShellResolverStrategy` falls back to the shell named `"Default"`.
+When a request arrives, the `ShellMiddleware` runs it through an ordered list of `IShellResolverStrategy` implementations. The first strategy that returns a match wins. Desired-only shells do not participate until they have an applied runtime.
+
+If none of the earlier strategies match, the `DefaultShellResolverStrategy` behaves as follows:
+
+- if an explicit shell named `"Default"` is configured **and currently applied**, it is used
+- if an explicit `"Default"` shell is configured but **not applied**, the resolver returns no shell instead of silently substituting another shell
+- if no explicit `"Default"` shell exists, fallback can choose only from currently applied shells
 
 Important: the middleware gives precedence to the shell that owns a matched endpoint (via `ShellEndpointMetadata` applied to endpoints). If routing has selected an endpoint that was registered by a shell, that endpoint will execute inside the service scope of the shell that registered it — even if the resolver pipeline would otherwise pick a different shell. For this to work the routing middleware must run before the shell middleware (i.e., `UseRouting()` / endpoint routing must be in place before the shell middleware).
 
@@ -101,7 +107,7 @@ Configure a path prefix per shell in `appsettings.json`:
 }
 ```
 
-Result:
+Result (assuming both shells are currently applied):
 
 - `GET /` → Default shell
 - `GET /acme/` → Acme shell
@@ -156,7 +162,14 @@ Result: if the authenticated user has claim `tenant_id = "Acme"`, the request ro
 
 ## Default Shell Fallback
 
-If no strategy matches, `DefaultShellResolverStrategy` resolves to the shell named `"Default"` (case-insensitive).
+If no strategy matches, `DefaultShellResolverStrategy` resolves to the shell named `"Default"` only when that explicit default shell currently has an applied runtime. If an explicit `Default` shell is configured but deferred or failed, fallback returns no shell rather than routing to another tenant.
+
+## Applied-Only Routing and Endpoints
+
+- `WebRoutingShellResolver` evaluates only applied shells.
+- Desired shells that are deferred or failed contribute **no** shell resolution result.
+- `ShellEndpointRegistrationHandler` and dynamic endpoint routing expose endpoints only for applied shells.
+- Operator tooling can still inspect deferred/failed shells through `IShellRuntimeStateAccessor`.
 
 ## Excluding Paths
 
