@@ -47,6 +47,7 @@ internal sealed class ShellRuntimeStateStore
                     ? existing.DesiredGeneration
                     : existing.DesiredGeneration + 1;
 
+            var isGenerationAdvanced = existing is not null && desiredGeneration > existing.DesiredGeneration;
             var record = existing is null
                 ? new ShellRuntimeRecord(
                     clonedSettings.Id,
@@ -63,8 +64,8 @@ internal sealed class ShellRuntimeStateStore
                 {
                     DesiredGeneration = desiredGeneration,
                     DesiredSettings = clonedSettings,
-                    BlockingReason = existing.HasAppliedRuntime ? "Awaiting reconciliation." : existing.BlockingReason,
-                    MissingFeatures = existing.HasAppliedRuntime ? [] : existing.MissingFeatures
+                    BlockingReason = isGenerationAdvanced ? "Awaiting reconciliation." : existing.BlockingReason,
+                    MissingFeatures = isGenerationAdvanced ? [] : existing.MissingFeatures
                 };
 
             records[settings.Id] = record;

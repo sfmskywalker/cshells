@@ -21,6 +21,6 @@ namespace CShells.Notifications;
 /// before this notification.</para>
 /// </remarks>
 public record ShellReloaded(
-	ShellId? ShellId,
-	IReadOnlyCollection<ShellId> ChangedShells,
-	IReadOnlyCollection<ShellRuntimeStatus> Statuses) : INotification;
+    ShellId? ShellId,
+    IReadOnlyCollection<ShellId> ChangedShells,
+    IReadOnlyCollection<ShellRuntimeStatus> Statuses) : INotification;

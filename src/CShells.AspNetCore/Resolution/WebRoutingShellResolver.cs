@@ -179,21 +179,50 @@ public class WebRoutingShellResolver : IShellResolverStrategy
 
     private sealed class CacheBackedShellHost(IShellSettingsCache cache) : IShellHost
     {
+        // Empty providers hold no resources; disposal is a no-op.
+        private static readonly IServiceProvider emptyServiceProvider = new ServiceCollection().BuildServiceProvider();
+
         private readonly IShellSettingsCache cache = Guard.Against.Null(cache);
+        private readonly object allShellsLock = new();
+        private IReadOnlyCollection<ShellContext>? allShells;
 
         public ShellContext DefaultShell => AllShells.FirstOrDefault()
             ?? throw new InvalidOperationException("No shells are configured.");
 
-        public IReadOnlyCollection<ShellContext> AllShells => cache.GetAll()
-            .Select(settings => new ShellContext(settings, new ServiceCollection().BuildServiceProvider(), settings.EnabledFeatures))
-            .ToList()
-            .AsReadOnly();
+        public IReadOnlyCollection<ShellContext> AllShells => GetAllShells();
 
         public ShellContext GetShell(ShellId id) => AllShells.FirstOrDefault(shell => shell.Id.Equals(id))
             ?? throw new KeyNotFoundException($"Shell '{id}' was not found.");
 
-        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
+        public ValueTask EvictShellAsync(ShellId shellId)
+        {
+            InvalidateAllShells();
+            return ValueTask.CompletedTask;
+        }
 
-        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        public ValueTask EvictAllShellsAsync()
+        {
+            InvalidateAllShells();
+            return ValueTask.CompletedTask;
+        }
+
+        private IReadOnlyCollection<ShellContext> GetAllShells()
+        {
+            lock (allShellsLock)
+            {
+                return allShells ??= cache.GetAll()
+                    .Select(settings => new ShellContext(settings, emptyServiceProvider, settings.EnabledFeatures))
+                    .ToList()
+                    .AsReadOnly();
+            }
+        }
+
+        private void InvalidateAllShells()
+        {
+            lock (allShellsLock)
+            {
+                allShells = null;
+            }
+        }
     }
 }
