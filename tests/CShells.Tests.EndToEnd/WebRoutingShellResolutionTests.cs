@@ -1,5 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using CShells.Management;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.EndToEnd;
 
@@ -13,6 +17,30 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
 {
     private readonly WorkbenchApplicationFactory _factory = factory;
     private readonly HttpClient _client = factory.CreateClient();
+
+    [Fact(DisplayName = "Explicit Default that is configured but unapplied does not fall back at root while other applied shells remain active")]
+    public async Task ExplicitDefault_Unapplied_DoesNotFallbackAtRoot()
+    {
+        await using var customFactory = CreateFactoryWithUnappliedDefault();
+        using var client = customFactory.CreateClient();
+
+        var accessor = customFactory.Services.GetRequiredService<IShellRuntimeStateAccessor>();
+        var statuses = accessor.GetAllShells().ToDictionary(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase);
+
+        Assert.False(statuses["Default"].IsRoutable);
+        Assert.False(statuses["Default"].IsInSync);
+        Assert.Equal(["MissingFeature", "StillMissingFeature"], statuses["Default"].MissingFeatures.OrderBy(feature => feature, StringComparer.OrdinalIgnoreCase).ToArray());
+        Assert.True(statuses["Acme"].IsRoutable);
+        Assert.True(statuses["Contoso"].IsRoutable);
+
+        var rootResponse = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.NotFound, rootResponse.StatusCode);
+
+        var acmeResponse = await client.GetAsync("/acme/");
+        acmeResponse.EnsureSuccessStatusCode();
+        var acmePayload = JsonDocument.Parse(await acmeResponse.Content.ReadAsStringAsync());
+        Assert.Equal("Acme", acmePayload.RootElement.GetProperty("tenant").GetString());
+    }
 
     [Fact(DisplayName = "Shell with WebRouting path configuration resolves correctly")]
     public async Task Shell_WithWebRoutingPath_ResolvesCorrectly()
@@ -215,5 +243,20 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
                 Assert.True(json.RootElement.TryGetProperty("tenant", out _));
             }
         }
+    }
+
+    private WebApplicationFactory<Program> CreateFactoryWithUnappliedDefault()
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configurationBuilder) =>
+            {
+                configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["CShells:Shells:0:Features:0"] = "MissingFeature",
+                    ["CShells:Shells:0:Features:1"] = "StillMissingFeature"
+                });
+            });
+        });
     }
 }

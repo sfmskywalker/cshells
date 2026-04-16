@@ -1,13 +1,14 @@
 namespace CShells.Hosting;
 
 /// <summary>
-/// Provides access to shell contexts and their configurations.
+/// Provides access to committed applied shell runtimes.
 /// </summary>
 public interface IShellHost
 {
     /// <summary>
-    /// Gets the default shell context. Returns the shell with Id "Default" if present,
-    /// otherwise returns the first shell.
+    /// Gets the default applied shell context.
+    /// Returns the shell with Id "Default" when it is explicitly configured and currently applied;
+    /// otherwise returns the first applied shell when no explicit default exists.
     /// </summary>
     ShellContext DefaultShell { get; }
 
@@ -15,12 +16,12 @@ public interface IShellHost
     /// Gets a shell context by its identifier.
     /// </summary>
     /// <param name="id">The shell identifier.</param>
-    /// <returns>The shell context for the specified identifier.</returns>
-    /// <exception cref="KeyNotFoundException">Thrown when no shell with the specified identifier exists.</exception>
+    /// <returns>The applied shell context for the specified identifier.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when no committed applied runtime exists for the specified shell.</exception>
     ShellContext GetShell(ShellId id);
 
     /// <summary>
-    /// Gets all available shell contexts.
+    /// Gets all committed applied shell contexts.
     /// </summary>
     IReadOnlyCollection<ShellContext> AllShells { get; }
 

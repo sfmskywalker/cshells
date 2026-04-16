@@ -54,7 +54,17 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ShellSettingsCache>(cache);
         services.TryAddSingleton<IShellSettingsCache>(cache);
 
+        services.TryAddSingleton<ShellRuntimeStateStore>();
+        services.TryAddSingleton<ShellRuntimeStateAccessor>();
+        services.TryAddSingleton<IShellRuntimeStateAccessor>(sp => sp.GetRequiredService<ShellRuntimeStateAccessor>());
+
         var builder = new CShellsBuilder(services);
+
+        services.TryAddSingleton<RuntimeFeatureCatalog>(sp =>
+        {
+            var logger = sp.GetService<ILogger<RuntimeFeatureCatalog>>();
+            return new RuntimeFeatureCatalog(ct => builder.BuildFeatureAssembliesAsync(sp, ct), logger);
+        });
 
         // Register IShellHost using the DefaultShellHost.
         // The root IServiceProvider is passed to allow IShellFeature constructors to resolve root-level services.
@@ -70,8 +80,11 @@ public static class ServiceCollectionExtensions
             var rootServicesAccessor = sp.GetRequiredService<IRootServiceCollectionAccessor>();
             var featureFactory = sp.GetRequiredService<IShellFeatureFactory>();
             var exclusionRegistry = sp.GetRequiredService<Hosting.IShellServiceExclusionRegistry>();
+            var runtimeFeatureCatalog = sp.GetRequiredService<RuntimeFeatureCatalog>();
+            var runtimeStateStore = sp.GetRequiredService<ShellRuntimeStateStore>();
+            var notificationPublisher = sp.GetRequiredService<Notifications.INotificationPublisher>();
 
-            return new DefaultShellHost(shellCache, ct => builder.BuildFeatureAssembliesAsync(sp, ct), rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, logger);
+            return new DefaultShellHost(shellCache, ct => builder.BuildFeatureAssembliesAsync(sp, ct), rootProvider: sp, rootServicesAccessor, featureFactory, exclusionRegistry, seedDesiredStateFromCache: true, runtimeFeatureCatalog, runtimeStateStore, notificationPublisher, logger);
         });
         services.AddSingleton<IShellHost>(sp => sp.GetRequiredService<DefaultShellHost>());
         services.AddSingleton<IShellHostInitializer>(sp => sp.GetRequiredService<DefaultShellHost>());
@@ -80,7 +93,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IShellContextScopeFactory, DefaultShellContextScopeFactory>();
 
         // Register the shell manager for runtime shell lifecycle management
-        services.TryAddSingleton<IShellManager, DefaultShellManager>();
+        services.TryAddSingleton<DefaultShellManager>(sp => new DefaultShellManager(
+            sp.GetRequiredService<DefaultShellHost>(),
+            sp.GetRequiredService<ShellSettingsCache>(),
+            sp.GetRequiredService<IShellSettingsProvider>(),
+            sp.GetRequiredService<Notifications.INotificationPublisher>(),
+            sp.GetService<ILogger<DefaultShellManager>>()));
+        services.TryAddSingleton<IShellManager>(sp => sp.GetRequiredService<DefaultShellManager>());
 
         // Register hosted services for feature discovery and shell lifecycle coordination.
         services.AddHostedService<ShellFeatureInitializationHostedService>();

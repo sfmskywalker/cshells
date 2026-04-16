@@ -18,7 +18,7 @@ public class ShellRetrievalTests(DefaultShellHostFixture fixture)
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(() => _ = host.DefaultShell);
-        Assert.Contains("No shells have been configured", ex.Message);
+        Assert.Contains("No applied shells are currently available", ex.Message);
     }
 
     [Theory(DisplayName = "DefaultShell resolves expected shell")]
@@ -98,15 +98,14 @@ public class ShellRetrievalTests(DefaultShellHostFixture fixture)
         Assert.Contains(allShells, s => s.Id.Name == "Shell3");
     }
 
-    [Fact(DisplayName = "GetShell with unknown feature throws InvalidOperationException")]
-    public void GetShell_WithUnknownFeature_ThrowsInvalidOperationException()
+    [Fact(DisplayName = "GetShell with an unapplied shell throws KeyNotFoundException")]
+    public void GetShell_WithUnknownFeature_ThrowsKeyNotFoundException()
     {
         // Arrange
         var host = fixture.CreateHost([new(new("TestShell"), ["UnknownFeature"])], typeof(TestFixtures).Assembly);
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("TestShell")));
-        Assert.Contains("UnknownFeature", ex.Message);
-        Assert.Contains("not found", ex.Message);
+        var ex = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new("TestShell")));
+        Assert.Contains("does not have a committed applied runtime", ex.Message);
     }
 }

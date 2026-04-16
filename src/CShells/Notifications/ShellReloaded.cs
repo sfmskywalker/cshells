@@ -1,3 +1,5 @@
+using CShells.Management;
+
 namespace CShells.Notifications;
 
 /// <summary>
@@ -11,10 +13,14 @@ namespace CShells.Notifications;
 /// For single-shell reload, this contains only the reloaded shell.
 /// For full reload, this contains all shells that changed during reconciliation.
 /// </param>
+/// <param name="Statuses">The current runtime status projection after the reconciliation pass completes.</param>
 /// <remarks>
 /// <para>This notification is always emitted last, only on successful completion.</para>
 /// <para>Failed reload operations do not emit this notification.</para>
 /// <para>For full reload: the existing aggregate <see cref="ShellsReloaded"/> notification is emitted
 /// before this notification.</para>
 /// </remarks>
-public record ShellReloaded(ShellId? ShellId, IReadOnlyCollection<ShellId> ChangedShells) : INotification;
+public record ShellReloaded(
+    ShellId? ShellId,
+    IReadOnlyCollection<ShellId> ChangedShells,
+    IReadOnlyCollection<ShellRuntimeStatus> Statuses) : INotification;

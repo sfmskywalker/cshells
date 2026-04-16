@@ -1,6 +1,11 @@
+using CShells.Configuration;
+using CShells.DependencyInjection;
 using CShells.Hosting;
 using CShells.Notifications;
+using CShells.Tests.Integration.ShellHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Tests.Unit.Hosting;
@@ -10,36 +15,35 @@ namespace CShells.Tests.Unit.Hosting;
 /// </summary>
 public class ShellStartupHostedServiceTests
 {
-    [Fact(DisplayName = "StartAsync activates each shell once and then publishes ShellsReloaded")]
-    public async Task StartAsync_ActivatesShells_ThenPublishesShellsReloaded()
+    [Fact(DisplayName = "StartAsync reconciles configured shells and publishes runtime status")]
+    public async Task StartAsync_ReconcilesShells_ThenPublishesShellStatuses()
     {
         // Arrange
-        var defaultShell = CreateShellContext(new ShellSettings(new("Default"), ["Core"]));
-        var contosoShell = CreateShellContext(new ShellSettings(new("Contoso"), ["Posts"]));
-        var shellHost = new StubShellHost([defaultShell, contosoShell]);
         var notifications = new RecordingNotificationPublisher();
-        var hostedService = new ShellStartupHostedService(
-            shellHost,
-            shellHost,
+        await using var provider = CreateServiceProvider(
             notifications,
-            NullLogger<ShellStartupHostedService>.Instance);
+            new ShellSettings(new("Default"), ["Core"]),
+            new ShellSettings(new("Contoso"), ["Weather"]));
+        var hostedService = GetStartupHostedService(provider);
 
         // Act
         await hostedService.StartAsync(CancellationToken.None);
 
         // Assert
-        Assert.Equal(1, shellHost.EnsureInitializedCalls);
+        var shellsReloaded = Assert.Single(notifications.Notifications.OfType<ShellsReloaded>());
         Assert.Collection(
-            notifications.Notifications,
-            notification => Assert.Equal(defaultShell, Assert.IsType<ShellActivated>(notification).Context),
-            notification => Assert.Equal(contosoShell, Assert.IsType<ShellActivated>(notification).Context),
-            notification =>
+            shellsReloaded.Statuses.OrderBy(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase),
+            status =>
             {
-                var shellsReloaded = Assert.IsType<ShellsReloaded>(notification);
-                Assert.Collection(
-                    shellsReloaded.AllShells,
-                    shell => Assert.Equal(defaultShell.Settings.Id, shell.Id),
-                    shell => Assert.Equal(contosoShell.Settings.Id, shell.Id));
+                Assert.Equal(new ShellId("Contoso"), status.ShellId);
+                Assert.True(status.IsRoutable);
+                Assert.True(status.IsInSync);
+            },
+            status =>
+            {
+                Assert.Equal(new ShellId("Default"), status.ShellId);
+                Assert.True(status.IsRoutable);
+                Assert.True(status.IsInSync);
             });
     }
 
@@ -47,22 +51,15 @@ public class ShellStartupHostedServiceTests
     public async Task StartAsync_WhenCalledMultipleTimes_PublishesStartupNotificationsOnce()
     {
         // Arrange
-        var defaultShell = CreateShellContext(new ShellSettings(new("Default"), ["Core"]));
-        var shellHost = new StubShellHost([defaultShell]);
         var notifications = new RecordingNotificationPublisher();
-        var hostedService = new ShellStartupHostedService(
-            shellHost,
-            shellHost,
-            notifications,
-            NullLogger<ShellStartupHostedService>.Instance);
+        await using var provider = CreateServiceProvider(notifications, new ShellSettings(new("Default"), ["Core"]));
+        var hostedService = GetStartupHostedService(provider);
 
         // Act
         await hostedService.StartAsync(CancellationToken.None);
         await hostedService.StartAsync(CancellationToken.None);
 
         // Assert
-        Assert.Equal(1, shellHost.EnsureInitializedCalls);
-        Assert.Single(notifications.Notifications.OfType<ShellActivated>());
         Assert.Single(notifications.Notifications.OfType<ShellsReloaded>());
     }
 
@@ -70,15 +67,14 @@ public class ShellStartupHostedServiceTests
     public async Task StopAsync_WhenCalledMultipleTimes_PublishesDeactivationOncePerShell()
     {
         // Arrange
-        var defaultShell = CreateShellContext(new ShellSettings(new("Default"), ["Core"]));
-        var contosoShell = CreateShellContext(new ShellSettings(new("Contoso"), ["Posts"]));
-        var shellHost = new StubShellHost([defaultShell, contosoShell]);
         var notifications = new RecordingNotificationPublisher();
-        var hostedService = new ShellStartupHostedService(
-            shellHost,
-            shellHost,
+        await using var provider = CreateServiceProvider(
             notifications,
-            NullLogger<ShellStartupHostedService>.Instance);
+            new ShellSettings(new("Default"), ["Core"]),
+            new ShellSettings(new("Contoso"), ["Weather"]));
+        var hostedService = GetStartupHostedService(provider);
+        await hostedService.StartAsync(CancellationToken.None);
+        notifications.Notifications.Clear();
 
         // Act
         await hostedService.StopAsync(CancellationToken.None);
@@ -87,36 +83,30 @@ public class ShellStartupHostedServiceTests
         // Assert
         var deactivating = notifications.Notifications.OfType<ShellDeactivating>().ToList();
         Assert.Equal(2, deactivating.Count);
-        Assert.Equal(defaultShell, deactivating[0].Context);
-        Assert.Equal(contosoShell, deactivating[1].Context);
+        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new ShellId("Default")));
+        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new ShellId("Contoso")));
     }
 
-    private static ShellContext CreateShellContext(ShellSettings settings) =>
-        new(settings, new ServiceCollection().BuildServiceProvider(), settings.EnabledFeatures.ToList().AsReadOnly());
+    private static ShellStartupHostedService GetStartupHostedService(IServiceProvider provider) =>
+        provider.GetServices<IHostedService>().OfType<ShellStartupHostedService>().Single();
 
-    private sealed class StubShellHost(IReadOnlyCollection<ShellContext> shells) : IShellHost, IShellHostInitializer
+    private static ServiceProvider CreateServiceProvider(
+        RecordingNotificationPublisher notifications,
+        params ShellSettings[] shells)
     {
-        private IReadOnlyCollection<ShellContext> Shells { get; } = shells;
+        var services = new ServiceCollection();
+        services.AddSingleton<INotificationPublisher>(notifications);
+        services.AddLogging();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(builder => builder
+            .FromAssemblies(typeof(TestFixtures).Assembly)
+            .WithProvider(new InMemoryShellSettingsProvider(shells)));
+        var provider = services.BuildServiceProvider();
+        var shellSettingsProvider = provider.GetRequiredService<IShellSettingsProvider>();
+        var shellSettingsCache = provider.GetRequiredService<ShellSettingsCache>();
+        shellSettingsCache.Load(shellSettingsProvider.GetShellSettingsAsync().GetAwaiter().GetResult().ToList());
 
-        public int EnsureInitializedCalls { get; private set; }
-
-        public ShellContext DefaultShell => Shells.First();
-
-        public IReadOnlyCollection<ShellContext> AllShells => Shells;
-
-        public ShellContext GetShell(ShellId id) =>
-            Shells.FirstOrDefault(shell => shell.Id.Equals(id))
-            ?? throw new KeyNotFoundException($"Shell '{id}' not found.");
-
-        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
-        {
-            EnsureInitializedCalls++;
-            return Task.CompletedTask;
-        }
-
-        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
-
-        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        return provider;
     }
 
     private sealed class RecordingNotificationPublisher : INotificationPublisher
@@ -133,4 +123,3 @@ public class ShellStartupHostedServiceTests
         }
     }
 }
-

@@ -1,24 +1,28 @@
 using CShells.Configuration;
+using CShells.Features;
 using CShells.Hosting;
 using CShells.Notifications;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Management;
 
 /// <summary>
-/// Default implementation of <see cref="IShellManager"/> that manages shell lifecycle
-/// and publishes notifications for shell state changes.
+/// Default implementation of <see cref="IShellManager"/> that manages desired shell definitions
+/// and reconciles them into committed applied runtimes.
 /// </summary>
 public class DefaultShellManager : IShellManager
 {
-    private readonly IShellHost _shellHost;
-    private readonly IShellHostInitializer _shellHostInitializer;
-    private readonly IShellSettingsCache _cache;
-    private readonly IShellSettingsProvider _provider;
-    private readonly INotificationPublisher _notificationPublisher;
-    private readonly ILogger<DefaultShellManager> _logger;
-    private readonly object _lock = new();
+    private readonly DefaultShellHost shellHost;
+    private readonly IShellSettingsCache cache;
+    private readonly IShellSettingsProvider provider;
+    private readonly ShellRuntimeStateStore runtimeStateStore;
+    private readonly RuntimeFeatureCatalog runtimeFeatureCatalog;
+    private readonly IShellRuntimeStateAccessor runtimeStateAccessor;
+    private readonly INotificationPublisher notificationPublisher;
+    private readonly ILogger<DefaultShellManager> logger;
+    private readonly SemaphoreSlim operationLock = new(1, 1);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DefaultShellManager"/> class.
@@ -30,13 +34,79 @@ public class DefaultShellManager : IShellManager
         IShellSettingsProvider provider,
         INotificationPublisher notificationPublisher,
         ILogger<DefaultShellManager>? logger = null)
+        : this(
+            shellHost as DefaultShellHost ?? throw new ArgumentException("DefaultShellManager requires DefaultShellHost for reconciliation operations.", nameof(shellHost)),
+            cache,
+            provider,
+            notificationPublisher,
+            logger)
     {
-        _shellHost = shellHost;
-        _shellHostInitializer = shellHostInitializer;
-        _cache = cache;
-        _provider = provider;
-        _notificationPublisher = notificationPublisher;
-        _logger = logger ?? NullLogger<DefaultShellManager>.Instance;
+        Guard.Against.Null(shellHostInitializer);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultShellManager"/> class.
+    /// </summary>
+    [ActivatorUtilitiesConstructor]
+    public DefaultShellManager(
+        DefaultShellHost shellHost,
+        IShellSettingsCache cache,
+        IShellSettingsProvider provider,
+        INotificationPublisher notificationPublisher,
+        ILogger<DefaultShellManager>? logger = null)
+        : this(
+            shellHost,
+            cache,
+            provider,
+            shellHost.RuntimeStateStore,
+            shellHost.RuntimeFeatureCatalog,
+            new ShellRuntimeStateAccessor(shellHost.RuntimeStateStore),
+            notificationPublisher,
+            logger)
+    {
+    }
+
+    internal DefaultShellManager(
+        DefaultShellHost shellHost,
+        IShellSettingsCache cache,
+        IShellSettingsProvider provider,
+        ShellRuntimeStateStore runtimeStateStore,
+        RuntimeFeatureCatalog runtimeFeatureCatalog,
+        IShellRuntimeStateAccessor runtimeStateAccessor,
+        INotificationPublisher notificationPublisher,
+        ILogger<DefaultShellManager>? logger = null)
+    {
+        this.shellHost = Guard.Against.Null(shellHost);
+        this.cache = Guard.Against.Null(cache);
+        this.provider = Guard.Against.Null(provider);
+        this.runtimeStateStore = Guard.Against.Null(runtimeStateStore);
+        this.runtimeFeatureCatalog = Guard.Against.Null(runtimeFeatureCatalog);
+        this.runtimeStateAccessor = Guard.Against.Null(runtimeStateAccessor);
+        this.notificationPublisher = Guard.Against.Null(notificationPublisher);
+        this.logger = logger ?? NullLogger<DefaultShellManager>.Instance;
+    }
+
+    internal async Task InitializeRuntimeAsync(CancellationToken cancellationToken = default)
+    {
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            logger.LogInformation("Reconciling configured shells during application startup");
+
+            var desiredShells = cache.GetAll().ToList();
+            foreach (var settings in desiredShells)
+            {
+                runtimeStateStore.RecordDesired(settings);
+            }
+
+            var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            await ReconcileShellsAsync(desiredShells.Select(settings => settings.Id), snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            operationLock.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -44,66 +114,53 @@ public class DefaultShellManager : IShellManager
     {
         Guard.Against.Null(settings);
 
-        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        ShellContext shellContext;
-
-        lock (_lock)
+        try
         {
-            _logger.LogInformation("Adding shell '{ShellId}'", settings.Id);
+            logger.LogInformation("Adding desired shell '{ShellId}'", settings.Id);
 
-            // Add to cache
-            _cache.Load(_cache.GetAll().Append(settings));
+            ReplaceShellInCache(settings);
+            runtimeStateStore.RecordDesired(settings);
 
-            // Build shell context (this triggers feature service registration)
-            shellContext = _shellHost.GetShell(settings.Id);
+            await notificationPublisher.PublishAsync(new ShellAdded(settings), strategy: null, cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation("Shell '{ShellId}' added successfully", settings.Id);
+            RuntimeFeatureCatalogSnapshot snapshot;
+            try
+            {
+                snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                runtimeStateStore.MarkFailed(settings.Id, ex.Message);
+                throw;
+            }
+
+            await ReconcileShellAsync(settings.Id, snapshot, cancellationToken).ConfigureAwait(false);
         }
-
-        // Publish notifications (outside lock to avoid deadlocks)
-        // Activate shell first, then notify that it was added
-        await _notificationPublisher.PublishAsync(new ShellActivated(shellContext), strategy: null, cancellationToken);
-        await _notificationPublisher.PublishAsync(new ShellAdded(settings), strategy: null, cancellationToken);
+        finally
+        {
+            operationLock.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task RemoveShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
     {
-        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        ShellContext? shellContext = null;
-
-        // Get shell context BEFORE removing from cache so handlers can access it during deactivation
         try
         {
-            shellContext = _shellHost.GetShell(shellId);
+            logger.LogInformation("Removing desired shell '{ShellId}'", shellId);
+
+            RemoveShellFromCache(shellId);
+            await shellHost.RemoveAppliedRuntimeAsync(shellId, removeDesiredState: true, publishLifecycleNotifications: true, cancellationToken).ConfigureAwait(false);
+            await notificationPublisher.PublishAsync(new ShellRemoved(shellId), strategy: null, cancellationToken).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
+        finally
         {
-            _logger.LogWarning("Shell '{ShellId}' not found, skipping deactivation", shellId);
+            operationLock.Release();
         }
-
-        // Publish deactivation notification BEFORE removal (outside lock to avoid deadlocks)
-        if (shellContext != null)
-        {
-            await _notificationPublisher.PublishAsync(new ShellDeactivating(shellContext), strategy: null, cancellationToken);
-        }
-
-        lock (_lock)
-        {
-            _logger.LogInformation("Removing shell '{ShellId}'", shellId);
-
-            // Remove from cache
-            var remainingShells = _cache.GetAll().Where(s => !s.Id.Equals(shellId));
-            _cache.Clear();
-            _cache.Load(remainingShells);
-
-            _logger.LogInformation("Shell '{ShellId}' removed successfully", shellId);
-        }
-
-        // Publish removal notification AFTER removal (outside lock to avoid deadlocks)
-        await _notificationPublisher.PublishAsync(new ShellRemoved(shellId), strategy: null, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -111,220 +168,250 @@ public class DefaultShellManager : IShellManager
     {
         Guard.Against.Null(settings);
 
-        _logger.LogInformation("Updating shell '{ShellId}'", settings.Id);
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        // Remove existing shell
-        await RemoveShellAsync(settings.Id, cancellationToken);
+        try
+        {
+            logger.LogInformation("Updating desired shell '{ShellId}'", settings.Id);
 
-        // Add updated shell
-        await AddShellAsync(settings, cancellationToken);
+            ReplaceShellInCache(settings);
+            runtimeStateStore.RecordDesired(settings);
 
-        _logger.LogInformation("Shell '{ShellId}' updated successfully", settings.Id);
+            await notificationPublisher.PublishAsync(new ShellUpdated(settings), strategy: null, cancellationToken).ConfigureAwait(false);
+
+            RuntimeFeatureCatalogSnapshot snapshot;
+            try
+            {
+                snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                runtimeStateStore.MarkFailed(settings.Id, ex.Message);
+                throw;
+            }
+
+            await ReconcileShellAsync(settings.Id, snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            operationLock.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task ReloadShellAsync(ShellId shellId, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Reloading shell '{ShellId}' from provider", shellId);
+        await notificationPublisher.PublishAsync(new ShellReloading(shellId), strategy: null, cancellationToken).ConfigureAwait(false);
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
-
-        // Emit ShellReloading before any state mutation
-        await _notificationPublisher.PublishAsync(new ShellReloading(shellId), strategy: null, cancellationToken);
-
-        // Query the provider for the targeted shell
-        var freshSettings = await _provider.GetShellSettingsAsync(shellId, cancellationToken);
-
-        if (freshSettings is null)
-        {
-            _logger.LogWarning("Provider does not define shell '{ShellId}'; reload aborted without state mutation", shellId);
-            throw new InvalidOperationException($"Shell '{shellId}' is not defined by the provider. Reload aborted without modifying runtime state.");
-        }
-
-        // Capture the old shell context (if it was previously built) so we can
-        // publish ShellDeactivating before disposing its service provider.
-        ShellContext? oldContext = null;
         try
         {
-            oldContext = _shellHost.GetShell(shellId);
-        }
-        catch (KeyNotFoundException)
-        {
-            // Shell was never built — no deactivation needed
-        }
+            logger.LogInformation("Reloading shell '{ShellId}' from provider", shellId);
 
-        // Deactivate the old shell before eviction (service provider is still alive)
-        if (oldContext is not null)
-        {
-            _logger.LogDebug("Publishing ShellDeactivating for shell '{ShellId}' before reload eviction", shellId);
-            await _notificationPublisher.PublishAsync(new ShellDeactivating(oldContext), strategy: null, cancellationToken);
-        }
+            var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            var freshSettings = await provider.GetShellSettingsAsync(shellId, cancellationToken).ConfigureAwait(false);
 
-        lock (_lock)
-        {
-            // Replace the targeted shell in-place to preserve insertion order;
-            // only append when the shell is genuinely new.
-            var existing = _cache.GetAll().ToList();
-            var index = existing.FindIndex(s => s.Id.Equals(shellId));
-
-            if (index >= 0)
+            if (freshSettings is null)
             {
-                existing[index] = freshSettings;
-            }
-            else
-            {
-                existing.Add(freshSettings);
+                logger.LogWarning("Provider does not define shell '{ShellId}'; reload aborted without state mutation", shellId);
+                throw new InvalidOperationException($"Shell '{shellId}' is not defined by the provider. Reload aborted without modifying runtime state.");
             }
 
-            _cache.Load(existing);
+            ReplaceShellInCache(freshSettings);
+            runtimeStateStore.RecordDesired(freshSettings);
+            await ReconcileShellAsync(shellId, snapshot, cancellationToken).ConfigureAwait(false);
+
+            await notificationPublisher.PublishAsync(
+                new ShellReloaded(shellId, [shellId], runtimeStateAccessor.GetAllShells()),
+                strategy: null,
+                cancellationToken).ConfigureAwait(false);
         }
-
-        // Evict the cached runtime context so next access rebuilds from fresh settings
-        await _shellHost.EvictShellAsync(shellId);
-
-        // Eagerly rebuild the shell and publish ShellActivated so lifecycle handlers run
-        var newContext = _shellHost.GetShell(shellId);
-        _logger.LogDebug("Publishing ShellActivated for shell '{ShellId}' after reload rebuild", shellId);
-        await _notificationPublisher.PublishAsync(new ShellActivated(newContext), strategy: null, cancellationToken);
-
-        _logger.LogInformation("Shell '{ShellId}' reloaded successfully", shellId);
-
-        // Emit ShellReloaded on success (always last)
-        await _notificationPublisher.PublishAsync(
-            new ShellReloaded(shellId, [shellId]), strategy: null, cancellationToken);
+        finally
+        {
+            operationLock.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task ReloadAllShellsAsync(CancellationToken cancellationToken = default)
     {
-        await _shellHostInitializer.EnsureInitializedAsync(cancellationToken);
+        await notificationPublisher.PublishAsync(new ShellReloading(null), strategy: null, cancellationToken).ConfigureAwait(false);
+        await operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation("Reloading all shells from provider");
-
-        // Emit aggregate ShellReloading (null ShellId = full reload)
-        await _notificationPublisher.PublishAsync(new ShellReloading(null), strategy: null, cancellationToken);
-
-        // Load fresh shell settings from provider
-        var settings = await _provider.GetShellSettingsAsync(cancellationToken);
-        var settingsList = settings.ToList();
-
-        // Capture current shells before updating cache for reconciliation
-        IReadOnlyCollection<ShellSettings> previousShells;
-
-        lock (_lock)
+        try
         {
-            previousShells = _cache.GetAll();
-        }
+            logger.LogInformation("Reloading all shells from provider");
 
-        // Determine changed shells (added, removed, or updated)
-        var previousIds = previousShells.Select(s => s.Id).ToHashSet();
-        var currentIds = settingsList.Select(s => s.Id).ToHashSet();
+            var previousStatuses = runtimeStateAccessor.GetAllShells().ToDictionary(status => status.ShellId);
+            var previousSettings = cache.GetAll().ToList();
+            var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            var desiredShells = (await provider.GetShellSettingsAsync(cancellationToken).ConfigureAwait(false)).ToList();
 
-        var addedIds = currentIds.Except(previousIds);
-        var removedIds = previousIds.Except(currentIds);
-        var potentiallyUpdatedIds = currentIds.Intersect(previousIds);
-
-        // Build lookup dictionaries using last-wins to handle duplicate IDs consistently
-        // with ShellSettingsCache.Load() which also uses last-wins semantics.
-        var previousByKey = new Dictionary<ShellId, ShellSettings>();
-        foreach (var s in previousShells)
-            previousByKey[s.Id] = s;
-
-        var currentByKey = new Dictionary<ShellId, ShellSettings>();
-        foreach (var s in settingsList)
-            currentByKey[s.Id] = s;
-
-        // For "updated", compare settings structurally to detect meaningful changes
-        var updatedIds = potentiallyUpdatedIds.Where(id =>
-            !ShellSettingsEqual(previousByKey[id], currentByKey[id]));
-
-        var changedShells = addedIds.Concat(removedIds).Concat(updatedIds).ToList();
-
-        // Emit per-shell ShellReloading for each changed shell (before mutation)
-        foreach (var id in changedShells)
-        {
-            await _notificationPublisher.PublishAsync(new ShellReloading(id), strategy: null, cancellationToken);
-        }
-
-        // Capture all existing shell contexts before eviction so we can publish
-        // ShellDeactivating while their service providers are still alive.
-        // EvictAllShellsAsync disposes ALL contexts, not just changed ones.
-        var existingContexts = new List<ShellContext>();
-        foreach (var shell in previousShells)
-        {
-            try
+            cache.Load(desiredShells);
+            foreach (var settings in desiredShells)
             {
-                existingContexts.Add(_shellHost.GetShell(shell.Id));
+                runtimeStateStore.RecordDesired(settings);
             }
-            catch (KeyNotFoundException)
+
+            var desiredIds = desiredShells.Select(settings => settings.Id).ToHashSet();
+            var removedIds = previousSettings
+                .Select(settings => settings.Id)
+                .Where(shellId => !desiredIds.Contains(shellId))
+                .Distinct()
+                .ToList();
+
+            foreach (var shellId in removedIds)
             {
-                // Shell was never built — no deactivation needed
+                await shellHost.RemoveAppliedRuntimeAsync(shellId, removeDesiredState: true, publishLifecycleNotifications: true, cancellationToken).ConfigureAwait(false);
             }
-        }
 
-        // Deactivate all existing shells before eviction
-        foreach (var context in existingContexts)
+            await ReconcileShellsAsync(desiredIds, snapshot, cancellationToken).ConfigureAwait(false);
+
+            var statuses = runtimeStateAccessor.GetAllShells();
+            var changedShells = DetermineChangedShells(previousStatuses, statuses, previousSettings, desiredShells, removedIds);
+
+            foreach (var shellId in changedShells)
+            {
+                await notificationPublisher.PublishAsync(
+                    new ShellReloaded(shellId, [shellId], statuses),
+                    strategy: null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            await notificationPublisher.PublishAsync(new ShellsReloaded(statuses), strategy: null, cancellationToken).ConfigureAwait(false);
+            await notificationPublisher.PublishAsync(new ShellReloaded(null, changedShells, statuses), strategy: null, cancellationToken).ConfigureAwait(false);
+        }
+        finally
         {
-            _logger.LogDebug("Publishing ShellDeactivating for shell '{ShellId}' before reload eviction", context.Id);
-            await _notificationPublisher.PublishAsync(new ShellDeactivating(context), strategy: null, cancellationToken);
+            operationLock.Release();
         }
-
-        // Update cache - reconciles to provider state
-        lock (_lock)
-        {
-            _cache.Clear();
-            _cache.Load(settingsList);
-        }
-
-        // Evict all cached runtime contexts so next access rebuilds from fresh settings
-        await _shellHost.EvictAllShellsAsync();
-
-        // Eagerly rebuild all shells and publish ShellActivated for each
-        var allShells = _shellHost.AllShells;
-        foreach (var context in allShells)
-        {
-            _logger.LogDebug("Publishing ShellActivated for shell '{ShellId}' after reload rebuild", context.Id);
-            await _notificationPublisher.PublishAsync(new ShellActivated(context), strategy: null, cancellationToken);
-        }
-
-        _logger.LogInformation("Reloaded {Count} shell(s)", settingsList.Count);
-
-        // Emit per-shell ShellReloaded for each changed shell (after mutation)
-        foreach (var id in changedShells)
-        {
-            await _notificationPublisher.PublishAsync(
-                new ShellReloaded(id, [id]), strategy: null, cancellationToken);
-        }
-
-        // Publish ShellsReloaded (existing aggregate notification, preserved)
-        await _notificationPublisher.PublishAsync(new ShellsReloaded(settingsList), strategy: null, cancellationToken);
-
-        // Publish aggregate ShellReloaded last (null ShellId, with all changed shells)
-        await _notificationPublisher.PublishAsync(
-            new ShellReloaded(null, changedShells.AsReadOnly()), strategy: null, cancellationToken);
     }
 
-    /// <summary>
-    /// Compares two <see cref="ShellSettings"/> by value (Id, EnabledFeatures, ConfigurationData)
-    /// to determine whether they represent the same logical configuration.
-    /// </summary>
-    private static bool ShellSettingsEqual(ShellSettings a, ShellSettings b)
+    private async Task ReconcileShellsAsync(
+        IEnumerable<ShellId> shellIds,
+        RuntimeFeatureCatalogSnapshot snapshot,
+        CancellationToken cancellationToken)
     {
-        if (!a.Id.Equals(b.Id))
-            return false;
-
-        if (!a.EnabledFeatures.SequenceEqual(b.EnabledFeatures, StringComparer.OrdinalIgnoreCase))
-            return false;
-
-        if (a.ConfigurationData.Count != b.ConfigurationData.Count)
-            return false;
-
-        foreach (var kvp in a.ConfigurationData)
+        foreach (var shellId in shellIds.Distinct())
         {
-            if (!b.ConfigurationData.TryGetValue(kvp.Key, out var otherValue))
-                return false;
+            await ReconcileShellAsync(shellId, snapshot, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
-            if (!Equals(kvp.Value, otherValue))
+    private async Task ReconcileShellAsync(
+        ShellId shellId,
+        RuntimeFeatureCatalogSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var record = runtimeStateStore.Get(shellId);
+        if (record is null)
+            return;
+
+        var candidate = shellHost.BuildCandidate(record, snapshot);
+        if (candidate.IsReadyToCommit)
+        {
+            await shellHost.CommitCandidateAsync(candidate, publishLifecycleNotifications: true, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (candidate.IsDeferred)
+        {
+            runtimeStateStore.MarkDeferred(shellId, candidate.MissingFeatures, candidate.FailureReason);
+            logger.LogInformation(
+                "Deferred shell '{ShellId}' at desired generation {DesiredGeneration}: {Reason}",
+                shellId,
+                record.DesiredGeneration,
+                candidate.FailureReason);
+            return;
+        }
+
+        runtimeStateStore.MarkFailed(shellId, candidate.FailureReason);
+        logger.LogWarning(
+            "Failed to reconcile shell '{ShellId}' at desired generation {DesiredGeneration}: {Reason}",
+            shellId,
+            record.DesiredGeneration,
+            candidate.FailureReason);
+    }
+
+    private void ReplaceShellInCache(ShellSettings settings)
+    {
+        var existing = cache.GetAll().ToList();
+        var index = existing.FindIndex(current => current.Id.Equals(settings.Id));
+
+        if (index >= 0)
+        {
+            existing[index] = settings;
+        }
+        else
+        {
+            existing.Add(settings);
+        }
+
+        cache.Load(existing);
+    }
+
+    private void RemoveShellFromCache(ShellId shellId)
+    {
+        var remainingShells = cache.GetAll()
+            .Where(settings => !settings.Id.Equals(shellId))
+            .ToList();
+
+        cache.Load(remainingShells);
+    }
+
+    private static IReadOnlyCollection<ShellId> DetermineChangedShells(
+        IReadOnlyDictionary<ShellId, ShellRuntimeStatus> previousStatuses,
+        IReadOnlyCollection<ShellRuntimeStatus> currentStatuses,
+        IReadOnlyCollection<ShellSettings> previousSettings,
+        IReadOnlyCollection<ShellSettings> currentSettings,
+        IReadOnlyCollection<ShellId> removedIds)
+    {
+        var changedShells = new HashSet<ShellId>(removedIds);
+        var previousSettingsById = previousSettings.ToDictionary(settings => settings.Id);
+        var currentSettingsById = currentSettings.ToDictionary(settings => settings.Id);
+
+        foreach (var shellId in previousSettingsById.Keys.Union(currentSettingsById.Keys))
+        {
+            var hadPreviousSettings = previousSettingsById.TryGetValue(shellId, out var previousSetting);
+            var hasCurrentSettings = currentSettingsById.TryGetValue(shellId, out var currentSetting);
+
+            if (!hadPreviousSettings || !hasCurrentSettings)
+            {
+                changedShells.Add(shellId);
+                continue;
+            }
+
+            if (!ShellSettingsEqual(previousSetting!, currentSetting!))
+            {
+                changedShells.Add(shellId);
+            }
+        }
+
+        foreach (var status in currentStatuses)
+        {
+            if (!previousStatuses.TryGetValue(status.ShellId, out var previousStatus) || previousStatus != status)
+            {
+                changedShells.Add(status.ShellId);
+            }
+        }
+
+        return changedShells.ToList().AsReadOnly();
+    }
+
+    private static bool ShellSettingsEqual(ShellSettings left, ShellSettings right)
+    {
+        if (!left.Id.Equals(right.Id))
+            return false;
+
+        if (!left.EnabledFeatures.SequenceEqual(right.EnabledFeatures, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        if (left.ConfigurationData.Count != right.ConfigurationData.Count)
+            return false;
+
+        foreach (var pair in left.ConfigurationData)
+        {
+            if (!right.ConfigurationData.TryGetValue(pair.Key, out var otherValue) || !Equals(pair.Value, otherValue))
                 return false;
         }
 

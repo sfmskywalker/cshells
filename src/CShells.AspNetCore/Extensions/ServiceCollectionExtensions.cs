@@ -94,7 +94,9 @@ public static class ServiceCollectionExtensions
             services.TryAddSingleton(new Resolution.WebRoutingShellResolverOptions());
 
             // Register strategies
-            services.AddSingleton<IShellResolverStrategy, Resolution.WebRoutingShellResolver>();
+            services.AddSingleton<IShellResolverStrategy>(sp => new Resolution.WebRoutingShellResolver(
+                sp.GetRequiredService<IShellHost>(),
+                sp.GetRequiredService<Resolution.WebRoutingShellResolverOptions>()));
             services.AddSingleton<IShellResolverStrategy, DefaultShellResolverStrategy>();
 
             // Configure their execution order

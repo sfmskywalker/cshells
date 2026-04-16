@@ -66,8 +66,8 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
         Assert.Equal(expectedParam, exception.ParamName);
     }
 
-    [Fact(DisplayName = "Deferred constructor requires async initialization before shell access")]
-    public void DeferredConstructor_BeforeInitialize_ThrowsInvalidOperationException()
+    [Fact(DisplayName = "Deferred constructor does not expose applied runtimes before reconciliation")]
+    public void DeferredConstructor_BeforeInitialize_ThrowsKeyNotFoundException()
     {
         var cache = new ShellSettingsCache();
         cache.Load([new(new("Default"), ["Weather"])]);
@@ -80,16 +80,17 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
             fixture.FeatureFactory,
             exclusionRegistry);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => host.GetShell(new("Default")));
+        var exception = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new("Default")));
 
-        Assert.Contains("ensure the shell host is initialized", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not have a committed applied runtime", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(DisplayName = "Deferred constructor builds shells after async initialization")]
-    public async Task DeferredConstructor_AfterInitialize_BuildsShells()
+    [Fact(DisplayName = "Deferred constructor builds shells after the runtime manager reconciles desired state")]
+    public async Task DeferredConstructor_AfterManagerInitialization_BuildsShells()
     {
         var cache = new ShellSettingsCache();
-        cache.Load([new(new("Default"), ["Weather"])]);
+        var settings = new ShellSettings(new("Default"), ["Weather"]);
+        cache.Load([settings]);
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
         var host = new Hosting.DefaultShellHost(
             cache,
@@ -98,8 +99,14 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
             fixture.RootAccessor,
             fixture.FeatureFactory,
             exclusionRegistry);
+        var manager = new Management.DefaultShellManager(
+            host,
+            cache,
+            new InMemoryShellSettingsProvider([settings]),
+            new Notifications.DefaultNotificationPublisher(fixture.RootProvider));
 
         await host.InitializeAsync();
+        await manager.InitializeRuntimeAsync();
 
         var shell = host.GetShell(new("Default"));
 

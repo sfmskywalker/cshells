@@ -2,6 +2,19 @@
 
 CShells provides lifecycle hooks that let shell-scoped services perform work when a shell starts up or shuts down. This is the recommended approach for per-tenant initialization and cleanup — simpler than `IHostedService` because the work runs inside the shell's own DI scope automatically.
 
+## Desired State vs. Applied Runtime
+
+As of the deferred-activation model, CShells tracks two truths for every configured shell:
+
+- **Desired state** — the latest `ShellSettings` definition the runtime has recorded
+- **Applied runtime** — the last fully built, committed shell runtime that is safe to serve
+
+Lifecycle handlers run only for **applied runtime transitions**.
+
+- Recording a new desired generation does **not** trigger `IShellActivatedHandler` by itself.
+- If the new desired generation is deferred (for example, because a feature is missing) or fails to build, the previous applied runtime stays live and no new activation occurs.
+- `IShellDeactivatingHandler` runs only when an applied runtime is actually being replaced or intentionally removed.
+
 ## Overview
 
 | Interface | When It Runs | Use Cases |
@@ -46,11 +59,13 @@ public class PostsFeature : IShellFeature
 
 ### When It Fires
 
-- **Application startup** — all configured shells are activated in order
-- **Dynamic shell addition** — `await shellManager.AddShellAsync(settings)` activates the new shell
-- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` re-activates the rebuilt shell after eviction
+- **Application startup** — every shell that can be reconciled into an applied runtime is activated in order
+- **Dynamic shell addition** — `await shellManager.AddShellAsync(settings)` activates the new shell only after its candidate runtime commits successfully
+- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` re-activates a shell only when a new applied runtime is committed
 - Handlers run in **registration order**
 - If a handler throws, the exception is logged and **propagated** (the shell activation fails)
+
+If a shell's latest desired generation is deferred or failed, no activation handler runs for that attempt. The last-known-good applied runtime, if any, continues serving.
 
 ## IShellDeactivatingHandler
 
@@ -90,9 +105,11 @@ public class AnalyticsFeature : IShellFeature
 
 - **Application shutdown** — all shells are deactivated
 - **Dynamic shell removal** — `await shellManager.RemoveShellAsync(shellId)`
-- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` deactivates the old shell before evicting its service provider
+- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` deactivates the old applied runtime only when a successor runtime is ready to commit
 - Handlers run in **reverse registration order** (LIFO)
 - Exceptions are **logged but swallowed** — all handlers get a chance to run
+
+If a reload records a newer desired generation but that generation is deferred or failed, the currently applied runtime is **not** deactivated.
 
 ## Lifecycle vs. Background Services
 

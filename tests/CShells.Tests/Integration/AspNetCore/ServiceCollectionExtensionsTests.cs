@@ -25,8 +25,8 @@ public class ServiceCollectionExtensionsTests
         Assert.NotNull(resolver);
     }
 
-    [Fact(DisplayName = "AddCShellsAspNetCore default resolver returns Default ShellId")]
-    public void AddCShellsAspNetCore_DefaultResolver_ReturnsDefaultShellId()
+    [Fact(DisplayName = "AddCShellsAspNetCore default resolver returns null when no applied shells exist")]
+    public void AddCShellsAspNetCore_DefaultResolver_ReturnsNullWithoutAppliedShells()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -40,8 +40,7 @@ public class ServiceCollectionExtensionsTests
         var result = resolver.Resolve(context);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(new("Default"), result.Value);
+        Assert.Null(result);
     }
 
     [Fact(DisplayName = "AddCShellsAspNetCore does not override custom IShellResolver")]

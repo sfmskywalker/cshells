@@ -1,11 +1,21 @@
+using System.Reflection;
+using CShells.AspNetCore.Features;
+using CShells.AspNetCore.Notifications;
 using CShells.AspNetCore.Routing;
+using CShells.Configuration;
+using CShells.Features;
 using CShells.Hosting;
+using CShells.Management;
+using CShells.Notifications;
 using CShells.Resolution;
+using CShells.Tests.Integration.ShellHost;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Hosting;
 
 namespace CShells.Tests.Integration.AspNetCore;
 
@@ -33,7 +43,7 @@ public class ApplicationBuilderExtensionsTests
         // Arrange
         var services = new ServiceCollection();
         services.AddSingleton<IShellResolver, NullShellResolver>();
-        services.AddSingleton<CShells.Features.IShellFeatureFactory, CShells.Features.DefaultShellFeatureFactory>();
+        services.AddSingleton<IShellFeatureFactory, DefaultShellFeatureFactory>();
         services.AddSingleton<IShellHost, EmptyShellHost>();
         services.AddSingleton<EndpointRouteBuilderAccessor>();
         services.AddSingleton<DynamicShellEndpointDataSource>();
@@ -46,6 +56,85 @@ public class ApplicationBuilderExtensionsTests
 
         // Assert
         Assert.NotNull(result);
+    }
+
+    [Fact(DisplayName = "Shell endpoint registration only exposes endpoints for committed applied runtimes")]
+    public async Task ShellEndpointRegistration_OnlyAppliedShellsExposeEndpoints()
+    {
+        // Arrange
+        var appliedShell = CreateShell("Applied", "applied", ["TestWeb"]);
+        var deferredShell = CreateShell("Deferred", "deferred", ["TestWeb", "MissingFeature"]);
+        var cache = new ShellSettingsCache();
+        cache.Load([appliedShell, deferredShell]);
+
+        var (rootServices, rootProvider) = TestFixtures.CreateRootServices();
+        var rootAccessor = TestFixtures.CreateRootServicesAccessor(rootServices);
+        var featureFactory = new DefaultShellFeatureFactory(rootProvider);
+        var stateStore = new ShellRuntimeStateStore();
+        var notifications = new RecordingNotificationPublisher();
+        var runtimeCatalog = new RuntimeFeatureCatalog(
+            _ => Task.FromResult<IReadOnlyCollection<Assembly>>([typeof(ApplicationBuilderExtensionsTests).Assembly]),
+            NullLogger<RuntimeFeatureCatalog>.Instance);
+        await using var host = new Hosting.DefaultShellHost(
+            cache,
+            _ => Task.FromResult<IReadOnlyCollection<Assembly>>([typeof(ApplicationBuilderExtensionsTests).Assembly]),
+            rootProvider,
+            rootAccessor,
+            featureFactory,
+            new ShellServiceExclusionRegistry([]),
+            seedDesiredStateFromCache: true,
+            runtimeFeatureCatalog: runtimeCatalog,
+            runtimeStateStore: stateStore,
+            notificationPublisher: notifications,
+            logger: NullLogger<Hosting.DefaultShellHost>.Instance);
+        var runtimeAccessor = new ShellRuntimeStateAccessor(stateStore);
+        var manager = new DefaultShellManager(
+            host,
+            cache,
+            new MutableInMemoryShellSettingsProvider([appliedShell, deferredShell]),
+            stateStore,
+            runtimeCatalog,
+            runtimeAccessor,
+            notifications,
+            NullLogger<DefaultShellManager>.Instance);
+
+        await manager.InitializeRuntimeAsync();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IShellResolver, NullShellResolver>();
+        services.AddSingleton<IShellFeatureFactory>(featureFactory);
+        services.AddSingleton<IShellHost>(host);
+        services.AddSingleton<EndpointRouteBuilderAccessor>();
+        services.AddSingleton<DynamicShellEndpointDataSource>();
+        services.AddSingleton<ApplicationBuilderAccessor>();
+        var serviceProvider = services.BuildServiceProvider();
+        var app = new TestApplicationBuilder(serviceProvider);
+
+        _ = CShells.AspNetCore.Extensions.ApplicationBuilderExtensions.MapShells(app);
+
+        var dataSource = serviceProvider.GetRequiredService<DynamicShellEndpointDataSource>();
+        var handler = new ShellEndpointRegistrationHandler(
+            dataSource,
+            featureFactory,
+            host,
+            serviceProvider.GetRequiredService<EndpointRouteBuilderAccessor>(),
+            serviceProvider.GetRequiredService<ApplicationBuilderAccessor>());
+
+        // Act
+        await handler.HandleAsync(new ShellsReloaded(runtimeAccessor.GetAllShells()));
+
+        // Assert
+        var routedEndpoints = dataSource.Endpoints
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => (
+                endpoint.Metadata.GetMetadata<ShellEndpointMetadata>()?.ShellId,
+                Pattern: endpoint.RoutePattern.RawText))
+            .ToList();
+
+        Assert.Contains(routedEndpoints, endpoint => endpoint.ShellId == new ShellId("Applied") && endpoint.Pattern == "/applied/ping");
+        Assert.DoesNotContain(routedEndpoints, endpoint => endpoint.ShellId == new ShellId("Deferred"));
+        Assert.DoesNotContain(routedEndpoints, endpoint => string.Equals(endpoint.Pattern, "/deferred/ping", StringComparison.OrdinalIgnoreCase));
     }
 
     // Test helpers
@@ -63,6 +152,40 @@ public class ApplicationBuilderExtensionsTests
         public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
     }
 
+    [ShellFeature("TestWeb")]
+    public sealed class TestWebFeature : IWebShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+        {
+            endpoints.MapGet("/ping", () => Results.Ok(new { ok = true }));
+        }
+    }
+
+    private static ShellSettings CreateShell(string name, string path, IReadOnlyCollection<string> features)
+    {
+        return new ShellSettings
+        {
+            Id = new(name),
+            EnabledFeatures = [.. features],
+            ConfigurationData = new Dictionary<string, object>
+            {
+                ["WebRouting:Path"] = path
+            }
+        };
+    }
+
+    private sealed class RecordingNotificationPublisher : INotificationPublisher
+    {
+        public Task PublishAsync<TNotification>(
+            TNotification notification,
+            INotificationStrategy? strategy = null,
+            CancellationToken cancellationToken = default) where TNotification : class, INotification => Task.CompletedTask;
+    }
+
     private class TestApplicationBuilder(IServiceProvider serviceProvider) : IApplicationBuilder, IEndpointRouteBuilder
     {
         private readonly List<Func<RequestDelegate, RequestDelegate>> _components = [];
@@ -78,7 +201,7 @@ public class ApplicationBuilderExtensionsTests
 
         public RequestDelegate Build()
         {
-            RequestDelegate app = context => Task.CompletedTask;
+            RequestDelegate app = _ => Task.CompletedTask;
             for (var i = _components.Count - 1; i >= 0; i--)
             {
                 app = _components[i](app);

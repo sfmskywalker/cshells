@@ -1,9 +1,10 @@
-using System.Collections.Concurrent;
 using System.Reflection;
 using CShells.Configuration;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Features.Validation;
+using CShells.Management;
+using CShells.Notifications;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -35,20 +36,17 @@ namespace CShells.Hosting;
 /// </remarks>
 public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposable
 {
-    private readonly Func<CancellationToken, Task<IReadOnlyCollection<Assembly>>>? _assemblyResolver;
-    private readonly IShellSettingsCache _shellSettingsCache;
     private readonly IServiceProvider _rootProvider;
     private readonly IServiceCollection _rootServices;
     private readonly IShellFeatureFactory _featureFactory;
     private readonly IShellServiceExclusionRegistry _exclusionRegistry;
-    private readonly ConcurrentDictionary<ShellId, ShellContext> _shellContexts = new();
+    private readonly ShellRuntimeStateStore _runtimeStateStore;
+    private readonly RuntimeFeatureCatalog _runtimeFeatureCatalog;
+    private readonly INotificationPublisher _notificationPublisher;
     private readonly FeatureDependencyResolver _dependencyResolver = new();
     private readonly ILogger<DefaultShellHost> _logger;
     private readonly object _buildLock = new();
-    private readonly object _featureInitializationLock = new();
     private bool _disposed;
-    private IReadOnlyDictionary<string, ShellFeatureDescriptor>? _featureMap;
-    private Task? _featureInitializationTask;
 
     // Cached copy of root service descriptors for efficient bulk-copy to shell service collections.
     // This avoids re-enumerating the root IServiceCollection for each shell.
@@ -79,15 +77,43 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
         IShellFeatureFactory featureFactory,
         IShellServiceExclusionRegistry exclusionRegistry,
         ILogger<DefaultShellHost>? logger = null)
+        : this(shellSettingsCache, assemblies, rootProvider, rootServicesAccessor, featureFactory, exclusionRegistry, activateExistingShells: true, runtimeFeatureCatalog: null, runtimeStateStore: null, notificationPublisher: null, logger)
     {
-        _shellSettingsCache = Guard.Against.Null(shellSettingsCache);
+    }
+
+    internal DefaultShellHost(
+        IShellSettingsCache shellSettingsCache,
+        IEnumerable<Assembly> assemblies,
+        IServiceProvider rootProvider,
+        IRootServiceCollectionAccessor rootServicesAccessor,
+        IShellFeatureFactory featureFactory,
+        IShellServiceExclusionRegistry exclusionRegistry,
+        bool activateExistingShells,
+        RuntimeFeatureCatalog? runtimeFeatureCatalog = null,
+        ShellRuntimeStateStore? runtimeStateStore = null,
+        INotificationPublisher? notificationPublisher = null,
+        ILogger<DefaultShellHost>? logger = null)
+    {
+        var cache = Guard.Against.Null(shellSettingsCache);
         _rootProvider = Guard.Against.Null(rootProvider);
         _rootServices = Guard.Against.Null(rootServicesAccessor).Services;
         _featureFactory = Guard.Against.Null(featureFactory);
         _exclusionRegistry = Guard.Against.Null(exclusionRegistry);
+        _runtimeStateStore = runtimeStateStore ?? new ShellRuntimeStateStore();
+        _notificationPublisher = notificationPublisher ?? new DefaultNotificationPublisher(rootProvider);
         _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
 
-        InitializeFeatureMap(Guard.Against.Null(assemblies));
+        var fixedAssemblies = Guard.Against.Null(assemblies).ToList().AsReadOnly();
+        _runtimeFeatureCatalog = runtimeFeatureCatalog ?? new RuntimeFeatureCatalog(
+            _ => Task.FromResult<IReadOnlyCollection<Assembly>>(fixedAssemblies),
+            rootProvider.GetService<ILogger<RuntimeFeatureCatalog>>());
+
+        SeedDesiredState(cache.GetAll());
+        if (activateExistingShells)
+        {
+            _runtimeFeatureCatalog.EnsureInitializedAsync().GetAwaiter().GetResult();
+            InitializeAppliedRuntimes(cache.GetAll());
+        }
     }
 
     /// <summary>
@@ -108,15 +134,40 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
         IShellFeatureFactory featureFactory,
         IShellServiceExclusionRegistry exclusionRegistry,
         ILogger<DefaultShellHost>? logger = null)
+        : this(shellSettingsCache, assemblyResolver, rootProvider, rootServicesAccessor, featureFactory, exclusionRegistry, seedDesiredStateFromCache: true, runtimeFeatureCatalog: null, runtimeStateStore: null, notificationPublisher: null, logger)
     {
-        _shellSettingsCache = Guard.Against.Null(shellSettingsCache);
-        _assemblyResolver = Guard.Against.Null(assemblyResolver);
+    }
+
+    internal DefaultShellHost(
+        IShellSettingsCache shellSettingsCache,
+        Func<CancellationToken, Task<IReadOnlyCollection<Assembly>>> assemblyResolver,
+        IServiceProvider rootProvider,
+        IRootServiceCollectionAccessor rootServicesAccessor,
+        IShellFeatureFactory featureFactory,
+        IShellServiceExclusionRegistry exclusionRegistry,
+        bool seedDesiredStateFromCache,
+        RuntimeFeatureCatalog? runtimeFeatureCatalog = null,
+        ShellRuntimeStateStore? runtimeStateStore = null,
+        INotificationPublisher? notificationPublisher = null,
+        ILogger<DefaultShellHost>? logger = null)
+    {
+        var cache = Guard.Against.Null(shellSettingsCache);
         _rootProvider = Guard.Against.Null(rootProvider);
         _rootServices = Guard.Against.Null(rootServicesAccessor).Services;
         _featureFactory = Guard.Against.Null(featureFactory);
         _exclusionRegistry = Guard.Against.Null(exclusionRegistry);
+        _runtimeStateStore = runtimeStateStore ?? new ShellRuntimeStateStore();
+        _runtimeFeatureCatalog = runtimeFeatureCatalog ?? new RuntimeFeatureCatalog(Guard.Against.Null(assemblyResolver), rootProvider.GetService<ILogger<RuntimeFeatureCatalog>>());
+        _notificationPublisher = notificationPublisher ?? new DefaultNotificationPublisher(rootProvider);
         _logger = logger ?? NullLogger<DefaultShellHost>.Instance;
+
+        if (seedDesiredStateFromCache)
+            SeedDesiredState(cache.GetAll());
     }
+
+    internal ShellRuntimeStateStore RuntimeStateStore => _runtimeStateStore;
+
+    internal RuntimeFeatureCatalog RuntimeFeatureCatalog => _runtimeFeatureCatalog;
 
     /// <summary>
     /// Ensures that feature discovery has completed for this shell host.
@@ -129,57 +180,8 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     {
         ThrowIfDisposed();
 
-        if (_featureMap is not null)
-            return Task.CompletedTask;
-
-        if (_assemblyResolver is null)
-            throw new InvalidOperationException("No deferred feature assembly resolver was configured for this shell host.");
-
-        lock (_featureInitializationLock)
-        {
-            if (_featureMap is not null)
-                return Task.CompletedTask;
-
-            _featureInitializationTask ??= InitializeFeatureMapAsync(cancellationToken);
-            return _featureInitializationTask;
-        }
+        return _runtimeFeatureCatalog.EnsureInitializedAsync(cancellationToken);
     }
-
-    private async Task InitializeFeatureMapAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var assemblies = await _assemblyResolver!(cancellationToken).ConfigureAwait(false);
-            InitializeFeatureMap(assemblies);
-        }
-        catch
-        {
-            lock (_featureInitializationLock)
-            {
-                _featureInitializationTask = null;
-            }
-
-            throw;
-        }
-    }
-
-    private void InitializeFeatureMap(IEnumerable<Assembly> assemblies)
-    {
-        var features = FeatureDiscovery.DiscoverFeatures(
-                Guard.Against.Null(assemblies),
-                (assembly, ex) => _logger.LogWarning(ex, "Failed to load types from assembly {AssemblyName}. Features in this assembly will not be available.", assembly.GetName().Name))
-            .ToList();
-
-        _logger.LogInformation("Discovered {FeatureCount} features: {FeatureNames}",
-            features.Count,
-            string.Join(", ", features.Select(f => f.Id)));
-
-        _featureMap = features.ToDictionary(f => f.Id, f => f, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private IReadOnlyDictionary<string, ShellFeatureDescriptor> FeatureMap =>
-        _featureMap ?? throw new InvalidOperationException(
-            "Shell feature discovery has not completed yet. Start the application or ensure the shell host is initialized before accessing shells.");
 
     /// <inheritdoc />
     public ShellContext DefaultShell
@@ -188,30 +190,12 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
         {
             ThrowIfDisposed();
 
-            // Try to find shell with Id "Default"
             var defaultId = new ShellId(ShellConstants.DefaultShellName);
-            if (_shellContexts.TryGetValue(defaultId, out var context))
-            {
-                return context;
-            }
+            if (_runtimeStateStore.HasDesiredShell(defaultId))
+                return GetShell(defaultId);
 
-            // Check if there's a settings entry for "Default"
-            var defaultSettings = _shellSettingsCache.GetById(defaultId);
-
-            if (defaultSettings != null)
-            {
-                return GetShell(defaultSettings.Id);
-            }
-
-            // Otherwise, return the first shell
-            var allSettings = _shellSettingsCache.GetAll();
-            var firstSettings = allSettings.FirstOrDefault();
-            if (firstSettings == null)
-            {
-                throw new InvalidOperationException("No shells have been configured.");
-            }
-
-            return GetShell(firstSettings.Id);
+            var firstAppliedShell = AllShells.FirstOrDefault();
+            return firstAppliedShell ?? throw new InvalidOperationException("No applied shells are currently available.");
         }
     }
 
@@ -220,14 +204,31 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     {
         ThrowIfDisposed();
 
-        // Try to get from cache first
-        if (_shellContexts.TryGetValue(id, out var context))
+        var record = _runtimeStateStore.Get(id);
+        if (record is null || !record.HasAppliedRuntime)
         {
-            return context;
+            throw new KeyNotFoundException($"Shell with Id '{id}' does not have a committed applied runtime.");
         }
 
-        // Build the shell context
-        return BuildShellContext(id);
+        if (record.AppliedContext is not null)
+            return record.AppliedContext;
+
+        lock (_buildLock)
+        {
+            record = _runtimeStateStore.Get(id);
+            if (record is null || !record.HasAppliedRuntime)
+            {
+                throw new KeyNotFoundException($"Shell with Id '{id}' does not have a committed applied runtime.");
+            }
+
+            if (record.AppliedContext is not null)
+                return record.AppliedContext;
+
+            var orderedFeatures = ResolveFeatureDependencies(record.AppliedSettings!, record.AppliedCatalog!.FeatureMap);
+            var context = CreateShellContext(record.AppliedSettings!, orderedFeatures, record.AppliedCatalog.FeatureDescriptors);
+            _runtimeStateStore.SetAppliedContext(id, context);
+            return context;
+        }
     }
 
     /// <inheritdoc />
@@ -237,68 +238,114 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
         {
             ThrowIfDisposed();
 
-            // Build all shells that haven't been built yet
-            var allSettings = _shellSettingsCache.GetAll();
-            foreach (var settings in allSettings)
-            {
-                // Use GetOrAdd pattern to build each shell only once
-                _shellContexts.GetOrAdd(settings.Id, _ => BuildShellContextInternal(settings));
-            }
-
-            return _shellContexts.Values.ToList().AsReadOnly();
+            return _runtimeStateStore
+                .GetAll()
+                .Where(record => record.HasAppliedRuntime)
+                .Select(record => GetShell(record.ShellId))
+                .ToList()
+                .AsReadOnly();
         }
     }
 
-    /// <summary>
-    /// Builds a shell context for the specified shell ID.
-    /// </summary>
-    private ShellContext BuildShellContext(ShellId id)
+    internal ShellCandidateBuildResult BuildCandidate(ShellRuntimeRecord record, RuntimeFeatureCatalogSnapshot catalogSnapshot)
     {
-        // Find the settings for this shell
-        var settings = _shellSettingsCache.GetById(id);
-        if (settings == null)
-        {
-            throw new KeyNotFoundException($"Shell with Id '{id}' was not found in the configured shell settings.");
-        }
+        Guard.Against.Null(record);
+        Guard.Against.Null(catalogSnapshot);
 
-        return _shellContexts.GetOrAdd(id, _ => BuildShellContextInternal(settings));
-    }
-
-    /// <summary>
-    /// Internal method to build a shell context for the given settings.
-    /// This method is called within GetOrAdd and ensures thread-safe initialization.
-    /// </summary>
-    private ShellContext BuildShellContextInternal(ShellSettings settings)
-    {
-        // Double-check locking for thread safety during initialization
-        lock (_buildLock)
+        try
         {
-            // Check again after acquiring lock in case another thread already built it
-            if (_shellContexts.TryGetValue(settings.Id, out var existingContext))
+            var missingFeatures = record.DesiredSettings.EnabledFeatures
+                .Where(featureName => !catalogSnapshot.FeatureMap.ContainsKey(featureName))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (missingFeatures.Length > 0)
             {
-                return existingContext;
+                var blockingReason = $"Feature(s) '{string.Join(", ", missingFeatures)}' required by shell '{record.ShellId}' are not available in the current runtime feature catalog.";
+                return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, blockingReason, missingFeatures);
             }
 
-            _logger.LogInformation("Building shell context for '{ShellId}'", settings.Id);
+            var orderedFeatures = ResolveFeatureDependencies(record.DesiredSettings, catalogSnapshot.FeatureMap);
+            var context = CreateShellContext(record.DesiredSettings, orderedFeatures, catalogSnapshot.FeatureDescriptors);
+            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, context, null, []);
+        }
+        catch (FeatureNotFoundException ex)
+        {
+            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, ex.Message, [ex.FeatureName]);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to build candidate runtime for shell '{ShellId}'", record.ShellId);
+            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, ex.Message, []);
+        }
+    }
 
-            ValidateEnabledFeatures(settings);
-            var orderedFeatures = ResolveFeatureDependencies(settings);
+    internal async Task CommitCandidateAsync(
+        ShellCandidateBuildResult candidate,
+        bool publishLifecycleNotifications = true,
+        CancellationToken cancellationToken = default)
+    {
+        Guard.Against.Null(candidate);
 
-            _logger.LogInformation("Shell '{ShellId}' will use features (in order): {Features}",
-                settings.Id, string.Join(", ", orderedFeatures));
+        if (!candidate.IsReadyToCommit)
+        {
+            throw new InvalidOperationException($"Shell '{candidate.ShellId}' does not have a ready-to-commit runtime candidate.");
+        }
 
-            return CreateShellContext(settings, orderedFeatures);
+        var previousRecord = _runtimeStateStore.Get(candidate.ShellId);
+        var previousContext = previousRecord?.AppliedContext;
+
+        if (publishLifecycleNotifications && previousContext is not null)
+        {
+            await _notificationPublisher.PublishAsync(new ShellDeactivating(previousContext), strategy: null, cancellationToken).ConfigureAwait(false);
+        }
+
+        var commit = _runtimeStateStore.CommitAppliedRuntime(
+            candidate.ShellId,
+            candidate.DesiredSettings,
+            candidate.CatalogSnapshot,
+            candidate.CandidateContext!);
+
+        if (publishLifecycleNotifications)
+        {
+            await _notificationPublisher.PublishAsync(new ShellActivated(candidate.CandidateContext!), strategy: null, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (commit.PreviousContext is not null && !ReferenceEquals(commit.PreviousContext, candidate.CandidateContext))
+        {
+            await DisposeShellContextAsync(commit.PreviousContext).ConfigureAwait(false);
+        }
+    }
+
+    internal async Task RemoveAppliedRuntimeAsync(
+        ShellId shellId,
+        bool removeDesiredState = false,
+        bool publishLifecycleNotifications = true,
+        CancellationToken cancellationToken = default)
+    {
+        var result = removeDesiredState
+            ? _runtimeStateStore.RemoveShell(shellId)
+            : _runtimeStateStore.ClearAppliedRuntime(shellId);
+
+        if (result.PreviousContext is not null && publishLifecycleNotifications)
+        {
+            await _notificationPublisher.PublishAsync(new ShellDeactivating(result.PreviousContext), strategy: null, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (result.PreviousContext is not null)
+        {
+            await DisposeShellContextAsync(result.PreviousContext).ConfigureAwait(false);
         }
     }
 
     /// <summary>
     /// Resolves feature dependencies and returns an ordered list of features for the shell.
     /// </summary>
-    private List<string> ResolveFeatureDependencies(ShellSettings settings)
+    private List<string> ResolveFeatureDependencies(ShellSettings settings, IReadOnlyDictionary<string, ShellFeatureDescriptor> featureMap)
     {
         try
         {
-            return _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, FeatureMap);
+            return _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, featureMap);
         }
         catch (InvalidOperationException ex)
         {
@@ -311,40 +358,19 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     /// Creates a shell context with its service provider and configured features.
     /// Uses the holder pattern to allow ShellContext to be resolved from DI.
     /// </summary>
-    private ShellContext CreateShellContext(ShellSettings settings, List<string> orderedFeatures)
+    private ShellContext CreateShellContext(
+        ShellSettings settings,
+        List<string> orderedFeatures,
+        IReadOnlyCollection<ShellFeatureDescriptor> featureDescriptors)
     {
         var contextHolder = new ShellContextHolder();
-        var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder);
+        var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder, featureDescriptors);
         var context = new ShellContext(settings, serviceProvider, orderedFeatures.AsReadOnly());
 
         // Populate the holder so ShellContext can be resolved from DI
         contextHolder.Context = context;
 
         return context;
-    }
-
-    /// <summary>
-    /// Validates that all enabled features in the shell settings are known/discovered features.
-    /// </summary>
-    /// <param name="settings">The shell settings to validate.</param>
-    /// <exception cref="InvalidOperationException">Thrown when an unknown feature is configured.</exception>
-    private void ValidateEnabledFeatures(ShellSettings settings)
-    {
-        var unknownFeatures = settings.EnabledFeatures
-            .Where(featureName => !FeatureMap.ContainsKey(featureName))
-            .ToList();
-
-        foreach (var featureName in unknownFeatures)
-        {
-            _logger.LogWarning("Unknown feature '{FeatureName}' configured for shell '{ShellId}'",
-                featureName, settings.Id);
-        }
-
-        if (unknownFeatures.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"Feature(s) '{string.Join(", ", unknownFeatures)}' configured for shell '{settings.Id}' were not found in discovered features. Make sure to add the necessary package/project references that contain the feature implementations.");
-        }
     }
 
     /// <summary>
@@ -370,7 +396,11 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     /// registrations override root registrations for the same service type.
     /// </para>
     /// </remarks>
-    private IServiceProvider BuildServiceProvider(ShellSettings settings, List<string> orderedFeatures, ShellContextHolder contextHolder)
+    private IServiceProvider BuildServiceProvider(
+        ShellSettings settings,
+        List<string> orderedFeatures,
+        ShellContextHolder contextHolder,
+        IReadOnlyCollection<ShellFeatureDescriptor> featureDescriptors)
     {
         var shellServices = new ServiceCollection();
 
@@ -380,17 +410,17 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
         // Step 2: Register shell-specific core services (ShellSettings, ShellId, ShellContext, IConfiguration).
         // These are added after root services, so they override any root registrations.
-        RegisterCoreServices(shellServices, settings, contextHolder, _rootProvider, FeatureMap.Values);
+        RegisterCoreServices(shellServices, settings, contextHolder, _rootProvider, featureDescriptors);
 
         // Step 3: Configure feature services in dependency order.
         // Features can override root services by registering the same service type.
         // A single ShellFeatureContext is shared across all features so they can
         // exchange data through its Properties bag during construction.
-        var featureContext = new ShellFeatureContext(settings, FeatureMap.Values);
+        var featureContext = new ShellFeatureContext(settings, featureDescriptors);
         var postConfigureFeatures = new List<IPostConfigureShellServices>();
         if (orderedFeatures.Count > 0)
         {
-            ConfigureFeatureServices(shellServices, orderedFeatures, settings, featureContext, postConfigureFeatures);
+            ConfigureFeatureServices(shellServices, orderedFeatures, settings, featureContext, postConfigureFeatures, featureDescriptors.ToDictionary(descriptor => descriptor.Id, descriptor => descriptor, StringComparer.OrdinalIgnoreCase));
         }
 
         // Step 3b: Post-configure — called after ALL features have registered their services
@@ -508,10 +538,16 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     /// as an explicit parameter. No temporary shell ServiceProviders are created during configuration.
     /// This ensures features can only depend on root-level services in their constructors.
     /// </remarks>
-    private void ConfigureFeatureServices(ServiceCollection services, List<string> orderedFeatures, ShellSettings settings, ShellFeatureContext featureContext, List<IPostConfigureShellServices> postConfigureFeatures)
+    private void ConfigureFeatureServices(
+        ServiceCollection services,
+        List<string> orderedFeatures,
+        ShellSettings settings,
+        ShellFeatureContext featureContext,
+        List<IPostConfigureShellServices> postConfigureFeatures,
+        IReadOnlyDictionary<string, ShellFeatureDescriptor> featureMap)
     {
         var featuresWithStartups = orderedFeatures
-            .Select(name => (Name: name, Descriptor: FeatureMap[name]))
+            .Select(name => (Name: name, Descriptor: featureMap[name]))
             .Where(f => f.Descriptor.StartupType != null);
 
         foreach (var (featureName, descriptor) in featuresWithStartups)
@@ -620,23 +656,23 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     /// <inheritdoc />
     public async ValueTask EvictShellAsync(ShellId shellId)
     {
-        if (_shellContexts.TryRemove(shellId, out var context))
+        var context = _runtimeStateStore.EvictAppliedContext(shellId);
+        if (context is not null)
         {
             _logger.LogDebug("Evicting cached shell context for '{ShellId}'", shellId);
-            await DisposeShellContextAsync(context);
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
         }
     }
 
     /// <inheritdoc />
     public async ValueTask EvictAllShellsAsync()
     {
-        var contexts = _shellContexts.Values.ToList();
-        _shellContexts.Clear();
+        var contexts = _runtimeStateStore.EvictAllAppliedContexts();
 
         foreach (var context in contexts)
         {
             _logger.LogDebug("Evicting cached shell context for '{ShellId}'", context.Settings.Id);
-            await DisposeShellContextAsync(context);
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
         }
     }
 
@@ -691,15 +727,46 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
             return;
         }
 
-        // Dispose all service providers asynchronously
-        foreach (var context in _shellContexts.Values)
+        foreach (var context in _runtimeStateStore.EvictAllAppliedContexts())
         {
-            await DisposeShellContextAsync(context);
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
         }
 
-        _shellContexts.Clear();
         _disposed = true;
 
         GC.SuppressFinalize(this);
+    }
+
+    private void SeedDesiredState(IEnumerable<ShellSettings> settings)
+    {
+        foreach (var shell in settings)
+        {
+            _runtimeStateStore.RecordDesired(shell);
+        }
+    }
+
+    private void InitializeAppliedRuntimes(IEnumerable<ShellSettings> settings)
+    {
+        var snapshot = _runtimeFeatureCatalog.CurrentSnapshot;
+
+        foreach (var shell in settings)
+        {
+            var record = _runtimeStateStore.Get(shell.Id) ?? _runtimeStateStore.RecordDesired(shell);
+            var candidate = BuildCandidate(record, snapshot);
+
+            if (candidate.IsReadyToCommit)
+            {
+                _runtimeStateStore.CommitAppliedRuntime(candidate.ShellId, candidate.DesiredSettings, candidate.CatalogSnapshot, candidate.CandidateContext!);
+                continue;
+            }
+
+            if (candidate.IsDeferred)
+            {
+                _runtimeStateStore.MarkDeferred(candidate.ShellId, candidate.MissingFeatures, candidate.FailureReason);
+                continue;
+            }
+
+            _runtimeStateStore.MarkFailed(candidate.ShellId, candidate.FailureReason);
+        }
     }
 }

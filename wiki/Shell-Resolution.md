@@ -1,12 +1,12 @@
 # Shell Resolution
 
-Shell resolution determines which shell handles an incoming HTTP request. CShells ships with a unified `WebRoutingShellResolver` that supports path, host, header, and claim-based routing out of the box.
+Shell resolution determines which shell handles an incoming HTTP request. CShells ships with a unified `WebRoutingShellResolver` that supports path, host, header, and claim-based routing out of the box — but only **applied** shells participate in routing.
 
 ---
 
 ## How Resolution Works
 
-For each incoming request, CShells runs through registered resolver strategies in order. The first strategy that returns a shell name wins. If no strategy matches, a configurable fallback (default: `"Default"` shell) is used.
+For each incoming request, CShells runs through registered resolver strategies in order. The first strategy that returns a shell name wins. Desired-only shells that are deferred or failed do not participate until a runtime has been committed.
 
 ```
 Request
@@ -15,7 +15,7 @@ Request
          ├── Host routing    (WebRouting:Host match)
          ├── Header routing  (X-Tenant-Id: header)
          └── Claim routing   (tenant_id claim)
-  └──> DefaultShellResolverStrategy  (returns "Default")
+  └──> DefaultShellResolverStrategy  (uses explicit `Default` only when it is applied)
 ```
 
 ---
@@ -49,7 +49,7 @@ A shell is resolved when the first URL path segment matches the shell's `WebRout
 }
 ```
 
-Requests to `/acme/*` → resolved to the `Acme` shell.
+Requests to `/acme/*` → resolved to the `Acme` shell, provided `Acme` currently has an applied runtime.
 
 Path routing is enabled by default (`EnablePathRouting = true`).
 
@@ -193,6 +193,24 @@ services.AddCShells(cshells =>
     cshells.WithDefaultResolver();
 });
 ```
+
+## Explicit `Default` Behavior
+
+If a shell named `Default` is explicitly configured, fallback is strict:
+
+- **Applied `Default`** → fallback can resolve to `Default`
+- **Configured but unapplied `Default`** → fallback returns no shell
+- **No explicit `Default` configured** → fallback may choose the first applied shell
+
+This prevents a deferred or failed explicit default shell from silently routing traffic to another tenant.
+
+## Applied-Only Endpoints
+
+Endpoint registration follows the same rule as routing:
+
+- applied shells expose endpoints
+- deferred / failed desired shells expose no shell-owned endpoints
+- runtime status remains inspectable through `IShellRuntimeStateAccessor`
 
 ---
 
