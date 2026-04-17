@@ -73,28 +73,6 @@ internal sealed class ShellRuntimeStateStore
         }
     }
 
-    public ShellRuntimeRecord MarkDeferred(ShellId shellId, IReadOnlyCollection<string> missingFeatures, string? blockingReason)
-    {
-        lock (syncRoot)
-        {
-            var existing = GetRequiredRecord(shellId);
-            var normalizedMissingFeatures = missingFeatures
-                .Where(feature => !string.IsNullOrWhiteSpace(feature))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var record = existing with
-            {
-                LatestDesiredOutcome = ShellReconciliationOutcome.DeferredDueToMissingFeatures,
-                BlockingReason = blockingReason,
-                MissingFeatures = normalizedMissingFeatures
-            };
-
-            records[shellId] = record;
-            return record;
-        }
-    }
-
     public ShellRuntimeRecord MarkFailed(ShellId shellId, string? blockingReason)
     {
         lock (syncRoot)
@@ -116,7 +94,8 @@ internal sealed class ShellRuntimeStateStore
         ShellId shellId,
         ShellSettings appliedSettings,
         RuntimeFeatureCatalogSnapshot appliedCatalog,
-        ShellContext appliedContext)
+        ShellContext appliedContext,
+        IReadOnlyCollection<string> missingFeatures)
     {
         Guard.Against.Null(appliedSettings);
         Guard.Against.Null(appliedCatalog);
@@ -126,15 +105,24 @@ internal sealed class ShellRuntimeStateStore
         {
             var existing = GetRequiredRecord(shellId);
             var previousContext = existing.AppliedContext;
+            var normalizedMissingFeatures = missingFeatures
+                .Where(feature => !string.IsNullOrWhiteSpace(feature))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var outcome = normalizedMissingFeatures.Length > 0
+                ? ShellReconciliationOutcome.ActiveWithMissingFeatures
+                : ShellReconciliationOutcome.Active;
+
             var record = existing with
             {
                 AppliedGeneration = existing.DesiredGeneration,
                 AppliedSettings = CloneShellSettings(appliedSettings),
                 AppliedCatalog = appliedCatalog,
                 AppliedContext = appliedContext,
-                LatestDesiredOutcome = ShellReconciliationOutcome.Active,
+                LatestDesiredOutcome = outcome,
                 BlockingReason = null,
-                MissingFeatures = []
+                MissingFeatures = normalizedMissingFeatures
             };
 
             records[shellId] = record;

@@ -98,14 +98,19 @@ public class ShellRetrievalTests(DefaultShellHostFixture fixture)
         Assert.Contains(allShells, s => s.Id.Name == "Shell3");
     }
 
-    [Fact(DisplayName = "GetShell with an unapplied shell throws KeyNotFoundException")]
-    public void GetShell_WithUnknownFeature_ThrowsKeyNotFoundException()
+    [Fact(DisplayName = "GetShell with unknown features activates with partial features and records missing")]
+    public void GetShell_WithUnknownFeature_ActivatesWithMissingFeatures()
     {
         // Arrange
         var host = fixture.CreateHost([new(new("TestShell"), ["UnknownFeature"])], typeof(TestFixtures).Assembly);
 
-        // Act & Assert
-        var ex = Assert.Throws<KeyNotFoundException>(() => host.GetShell(new("TestShell")));
-        Assert.Contains("does not have a committed applied runtime", ex.Message);
+        // Act
+        var shell = host.GetShell(new("TestShell"));
+
+        // Assert — shell activates with no enabled features, UnknownFeature recorded as missing
+        Assert.NotNull(shell);
+        Assert.Equal("TestShell", shell.Id.Name);
+        Assert.DoesNotContain("UnknownFeature", shell.EnabledFeatures);
+        Assert.Contains("UnknownFeature", shell.MissingFeatures);
     }
 }

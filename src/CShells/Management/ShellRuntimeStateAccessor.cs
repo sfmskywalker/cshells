@@ -23,13 +23,12 @@ internal sealed class ShellRuntimeStateAccessor(ShellRuntimeStateStore stateStor
         var isRoutable = record.HasAppliedRuntime;
         var isInSync = record.AppliedGeneration.HasValue && record.AppliedGeneration.Value == record.DesiredGeneration;
         var blockingReason = isInSync ? null : record.BlockingReason;
-        var outcome = isRoutable ? ShellReconciliationOutcome.Active : record.LatestDesiredOutcome;
 
         return new ShellRuntimeStatus(
             record.ShellId,
             record.DesiredGeneration,
             record.AppliedGeneration,
-            outcome,
+            record.LatestDesiredOutcome,
             isInSync,
             isRoutable,
             blockingReason,

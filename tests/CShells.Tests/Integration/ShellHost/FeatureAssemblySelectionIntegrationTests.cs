@@ -44,10 +44,12 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
             DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
         });
 
+        // With partial activation, the shell activates but "Weather" is recorded as missing
+        // because the CShellsBuilder assembly doesn't contain the Weather feature.
         var shellHost = serviceProvider.GetRequiredService<IShellHost>();
-        var exception = Assert.Throws<KeyNotFoundException>(() => shellHost.GetShell(new ShellId("Default")));
-
-        Assert.Contains("does not have a committed applied runtime", exception.Message);
+        var shell = shellHost.GetShell(new ShellId("Default"));
+        Assert.DoesNotContain("Weather", shell.EnabledFeatures);
+        Assert.Contains("Weather", shell.MissingFeatures);
     }
 
     [Fact]

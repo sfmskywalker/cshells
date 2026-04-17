@@ -30,7 +30,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithPathShell();
         var options = new WebRoutingShellResolverOptions();
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(path: $"/{Tenant1Path}/api");
 
         // Act
@@ -46,7 +46,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithPathShell();
         var options = new WebRoutingShellResolverOptions();
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(path: $"/{Tenant1Path.ToUpper()}/api");
 
         // Act
@@ -56,17 +56,17 @@ public class WebRoutingShellResolverTests
         Assert.Equal(new ShellId(Tenant1Name), result);
     }
 
-    [Fact(DisplayName = "WebRoutingShellResolver only resolves path-routed shells that currently have an applied runtime")]
-    public async Task WebRoutingShellResolver_PathRouting_OnlyUsesAppliedShells()
+    [Fact(DisplayName = "WebRoutingShellResolver resolves path-routed shells including those with missing features")]
+    public async Task WebRoutingShellResolver_PathRouting_IncludesShellsWithMissingFeatures()
     {
-        // Arrange
+        // Arrange — both shells activate (partial shell has missing features but is still routable)
         var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["Core"]);
-        var deferredSettings = CreateShell("Deferred", new WebRoutingShellOptions { Path = "deferred" }, ["MissingFeature"]);
-        await using var host = CreateAppliedHost(defaultSettings, deferredSettings);
+        var partialSettings = CreateShell("Partial", new WebRoutingShellOptions { Path = "partial" }, ["MissingFeature"]);
+        await using var host = CreateAppliedHost(defaultSettings, partialSettings);
         var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
 
-        // Act & Assert
-        Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/deferred/api")));
+        // Act & Assert — the partial shell resolves by its path
+        Assert.Equal(new ShellId("Partial"), resolver.Resolve(CreateContext(path: "/partial/api")));
         Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/")));
     }
 
@@ -79,7 +79,7 @@ public class WebRoutingShellResolverTests
         {
             ExcludePaths = ["/api", "/health"]
         };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(path: "/api/users");
 
         // Act
@@ -95,7 +95,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithPathShell();
         var options = new WebRoutingShellResolverOptions { EnablePathRouting = false };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(path: $"/{Tenant1Path}/api");
 
         // Act
@@ -115,7 +115,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHostShell();
         var options = new WebRoutingShellResolverOptions();
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(host: Tenant1Host);
 
         // Act
@@ -131,7 +131,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHostShell();
         var options = new WebRoutingShellResolverOptions();
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(host: Tenant1Host.ToUpper());
 
         // Act
@@ -147,7 +147,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHostShell();
         var options = new WebRoutingShellResolverOptions { EnableHostRouting = false };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext(host: Tenant1Host);
 
         // Act
@@ -167,7 +167,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHeaderShell();
         var options = new WebRoutingShellResolverOptions { HeaderName = HeaderName };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Header:{HeaderName}", Tenant2Name);
 
@@ -184,7 +184,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHeaderShell();
         var options = new WebRoutingShellResolverOptions { HeaderName = HeaderName };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Header:{HeaderName}", Tenant2Name.ToUpper());
 
@@ -201,7 +201,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithHeaderShell();
         var options = new WebRoutingShellResolverOptions(); // No HeaderName set
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Header:{HeaderName}", Tenant2Name);
 
@@ -222,7 +222,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithClaimShell();
         var options = new WebRoutingShellResolverOptions { ClaimKey = ClaimKey };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Claim:{ClaimKey}", Tenant3Name);
 
@@ -239,7 +239,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithClaimShell();
         var options = new WebRoutingShellResolverOptions { ClaimKey = ClaimKey };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Claim:{ClaimKey}", Tenant3Name.ToUpper());
 
@@ -256,7 +256,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithClaimShell();
         var options = new WebRoutingShellResolverOptions(); // No ClaimKey set
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
         var context = CreateContext();
         context.Set($"Claim:{ClaimKey}", Tenant3Name);
 
@@ -267,17 +267,17 @@ public class WebRoutingShellResolverTests
         Assert.Null(result);
     }
 
-    [Fact(DisplayName = "WebRoutingShellResolver does not use an unapplied explicit Default shell as the root-path fallback")]
-    public async Task WebRoutingShellResolver_ExplicitDefaultUnapplied_DoesNotResolveRootFallback()
+    [Fact(DisplayName = "WebRoutingShellResolver resolves explicit Default shell with missing features as root-path fallback")]
+    public async Task WebRoutingShellResolver_ExplicitDefaultWithMissingFeatures_ResolvesRootFallback()
     {
-        // Arrange
+        // Arrange — Default shell activates with missing features (still routable)
         var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["MissingFeature"]);
         var contosoSettings = CreateShell("Contoso", new WebRoutingShellOptions { Path = "contoso" }, ["Core"]);
         await using var host = CreateAppliedHost(defaultSettings, contosoSettings);
         var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
 
-        // Act & Assert
-        Assert.Null(resolver.Resolve(CreateContext(path: "/")));
+        // Act & Assert — Default resolves as the root fallback since it's applied
+        Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/")));
         Assert.Equal(new ShellId("Contoso"), resolver.Resolve(CreateContext(path: "/contoso/posts")));
     }
 
@@ -295,7 +295,7 @@ public class WebRoutingShellResolverTests
             HeaderName = HeaderName,
             ClaimKey = ClaimKey
         };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
 
         // Context with path (should match first)
         var context = CreateContext(path: $"/{Tenant1Path}/api");
@@ -318,7 +318,7 @@ public class WebRoutingShellResolverTests
         {
             HeaderName = HeaderName
         };
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
 
         // Context with no path/host match, but header match
         var context = CreateContext(path: "/other/api", host: "other.example.com");
@@ -342,7 +342,7 @@ public class WebRoutingShellResolverTests
         var options = new WebRoutingShellResolverOptions();
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new WebRoutingShellResolver((IShellSettingsCache)null!, options));
+        var ex = Assert.Throws<ArgumentNullException>(() => WebRoutingShellResolver.FromCache(null!, options));
         Assert.Equal("cache", ex.ParamName);
     }
 
@@ -353,7 +353,7 @@ public class WebRoutingShellResolverTests
         var cache = CreateCacheWithPathShell();
 
         // Act & Assert
-        var ex = Assert.Throws<ArgumentNullException>(() => new WebRoutingShellResolver(cache, null!));
+        var ex = Assert.Throws<ArgumentNullException>(() => WebRoutingShellResolver.FromCache(cache, null!));
         Assert.Equal("options", ex.ParamName);
     }
 
@@ -363,7 +363,7 @@ public class WebRoutingShellResolverTests
         // Arrange
         var cache = CreateCacheWithPathShell();
         var options = new WebRoutingShellResolverOptions();
-        var resolver = new WebRoutingShellResolver(cache, options);
+        var resolver = WebRoutingShellResolver.FromCache(cache, options);
 
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => resolver.Resolve(null!));

@@ -18,8 +18,7 @@ namespace CShells.AspNetCore.Notifications;
 public class ShellEndpointRegistrationHandler :
     INotificationHandler<ShellActivated>,
     INotificationHandler<ShellDeactivating>,
-    INotificationHandler<ShellRemoved>,
-    INotificationHandler<ShellsReloaded>
+    INotificationHandler<ShellRemoved>
 {
     private readonly DynamicShellEndpointDataSource _endpointDataSource;
     private readonly EndpointRouteBuilderAccessor _endpointRouteBuilderAccessor;
@@ -79,37 +78,6 @@ public class ShellEndpointRegistrationHandler :
     {
         _logger.LogInformation("Removing endpoints for shell '{ShellId}'", notification.ShellId);
         _endpointDataSource.RemoveEndpoints(notification.ShellId);
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public Task HandleAsync(ShellsReloaded notification, CancellationToken cancellationToken = default)
-    {
-        if (_endpointRouteBuilderAccessor.EndpointRouteBuilder == null)
-        {
-            _logger.LogWarning("Cannot register endpoints: IEndpointRouteBuilder not available. " +
-                               "This typically means the application hasn't been fully configured yet.");
-            return Task.CompletedTask;
-        }
-
-        _logger.LogInformation("Registering endpoints for {Count} applied shell(s)", notification.Statuses.Count(status => status.IsRoutable));
-
-        // Clear existing endpoints
-        _endpointDataSource.Clear();
-
-        // Register endpoints for all shells
-        foreach (var status in notification.Statuses.Where(status => status.IsRoutable))
-        {
-            try
-            {
-                RegisterShellEndpoints(_shellHost.GetShell(status.ShellId));
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.LogDebug("Shell '{ShellId}' is no longer applied while rebuilding endpoints; skipping", status.ShellId);
-            }
-        }
-
         return Task.CompletedTask;
     }
 

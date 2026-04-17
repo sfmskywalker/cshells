@@ -261,23 +261,56 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
             if (missingFeatures.Length > 0)
             {
-                var blockingReason = $"Feature(s) '{string.Join(", ", missingFeatures)}' required by shell '{record.ShellId}' are not available in the current runtime feature catalog.";
-                return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, blockingReason, missingFeatures);
+                _logger.LogWarning(
+                    "Shell '{ShellId}' is missing feature(s) '{MissingFeatures}' from the runtime feature catalog. Activating with available features only.",
+                    record.ShellId,
+                    string.Join(", ", missingFeatures));
             }
 
-            var orderedFeatures = ResolveFeatureDependencies(record.DesiredSettings, catalogSnapshot.FeatureMap);
-            var context = CreateShellContext(record.DesiredSettings, orderedFeatures, catalogSnapshot.FeatureDescriptors);
-            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, context, null, []);
+            // Build with available features only, filtering out missing ones
+            var availableSettings = missingFeatures.Length > 0
+                ? CreateSettingsWithAvailableFeatures(record.DesiredSettings, missingFeatures)
+                : record.DesiredSettings;
+
+            var orderedFeatures = availableSettings.EnabledFeatures.Count > 0
+                ? ResolveFeatureDependencies(availableSettings, catalogSnapshot.FeatureMap)
+                : [];
+
+            var context = CreateShellContext(record.DesiredSettings, orderedFeatures, catalogSnapshot.FeatureDescriptors, missingFeatures);
+            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, context, null, missingFeatures);
         }
         catch (FeatureNotFoundException ex)
         {
-            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, ex.Message, [ex.FeatureName]);
+            _logger.LogError(ex, "Failed to build candidate runtime for shell '{ShellId}'", record.ShellId);
+            return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, ex.Message, []);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to build candidate runtime for shell '{ShellId}'", record.ShellId);
             return new ShellCandidateBuildResult(record.ShellId, record.DesiredGeneration, record.DesiredSettings, catalogSnapshot, null, ex.Message, []);
         }
+    }
+
+    private static ShellSettings CreateSettingsWithAvailableFeatures(ShellSettings desiredSettings, IReadOnlyCollection<string> missingFeatures)
+    {
+        var missingSet = new HashSet<string>(missingFeatures, StringComparer.OrdinalIgnoreCase);
+        var availableFeatures = desiredSettings.EnabledFeatures
+            .Where(f => !missingSet.Contains(f))
+            .ToList();
+
+        var filtered = new ShellSettings
+        {
+            Id = desiredSettings.Id,
+            EnabledFeatures = availableFeatures,
+            ConfigurationData = desiredSettings.ConfigurationData.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase)
+        };
+
+        foreach (var configurator in desiredSettings.FeatureConfigurators)
+        {
+            filtered.FeatureConfigurators[configurator.Key] = configurator.Value;
+        }
+
+        return filtered;
     }
 
     internal async Task CommitCandidateAsync(
@@ -304,7 +337,8 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
             candidate.ShellId,
             candidate.DesiredSettings,
             candidate.CatalogSnapshot,
-            candidate.CandidateContext!);
+            candidate.CandidateContext!,
+            candidate.MissingFeatures);
 
         if (publishLifecycleNotifications)
         {
@@ -361,11 +395,12 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
     private ShellContext CreateShellContext(
         ShellSettings settings,
         List<string> orderedFeatures,
-        IReadOnlyCollection<ShellFeatureDescriptor> featureDescriptors)
+        IReadOnlyCollection<ShellFeatureDescriptor> featureDescriptors,
+        IReadOnlyCollection<string>? missingFeatures = null)
     {
         var contextHolder = new ShellContextHolder();
         var serviceProvider = BuildServiceProvider(settings, orderedFeatures, contextHolder, featureDescriptors);
-        var context = new ShellContext(settings, serviceProvider, orderedFeatures.AsReadOnly());
+        var context = new ShellContext(settings, serviceProvider, orderedFeatures.AsReadOnly(), missingFeatures);
 
         // Populate the holder so ShellContext can be resolved from DI
         contextHolder.Context = context;
@@ -756,13 +791,7 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
             if (candidate.IsReadyToCommit)
             {
-                _runtimeStateStore.CommitAppliedRuntime(candidate.ShellId, candidate.DesiredSettings, candidate.CatalogSnapshot, candidate.CandidateContext!);
-                continue;
-            }
-
-            if (candidate.IsDeferred)
-            {
-                _runtimeStateStore.MarkDeferred(candidate.ShellId, candidate.MissingFeatures, candidate.FailureReason);
+                _runtimeStateStore.CommitAppliedRuntime(candidate.ShellId, candidate.DesiredSettings, candidate.CatalogSnapshot, candidate.CandidateContext!, candidate.MissingFeatures);
                 continue;
             }
 

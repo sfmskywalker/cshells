@@ -207,10 +207,9 @@ public static class CShellsBuilderExtensions
             builder.Services.TryAddSingleton<ApplicationBuilderAccessor>();
 
             // Register the endpoint registration notification handler
-            builder.Services.AddSingleton<INotificationHandler<ShellActivated>, Notifications.ShellEndpointRegistrationHandler>();
-            builder.Services.AddSingleton<INotificationHandler<ShellDeactivating>, Notifications.ShellEndpointRegistrationHandler>();
-            builder.Services.AddSingleton<INotificationHandler<ShellRemoved>, Notifications.ShellEndpointRegistrationHandler>();
-            builder.Services.AddSingleton<INotificationHandler<ShellsReloaded>, Notifications.ShellEndpointRegistrationHandler>();
+            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellActivated>, Notifications.ShellEndpointRegistrationHandler>());
+            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellDeactivating>, Notifications.ShellEndpointRegistrationHandler>());
+            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellRemoved>, Notifications.ShellEndpointRegistrationHandler>());
 
             return builder;
         }

@@ -15,9 +15,9 @@ public class ShellRuntimeStatusIntegrationTests
     {
         // Arrange
         var defaultSettings = new ShellSettings(new ShellId("Default"), ["Core"]);
-        var deferredSettings = new ShellSettings(new ShellId("Deferred"), ["MissingFeature"]);
+        var partialSettings = new ShellSettings(new ShellId("Partial"), ["MissingFeature"]);
         var cache = new ShellSettingsCache();
-        cache.Load([defaultSettings, deferredSettings]);
+        cache.Load([defaultSettings, partialSettings]);
 
         var (services, rootProvider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
@@ -41,13 +41,13 @@ public class ShellRuntimeStatusIntegrationTests
             notificationPublisher: notifications,
             logger: NullLogger<Hosting.DefaultShellHost>.Instance);
         var runtimeAccessor = new ShellRuntimeStateAccessor(stateStore);
-        var manager = new DefaultShellManager(host, cache, new MutableInMemoryShellSettingsProvider([defaultSettings, deferredSettings]), stateStore, runtimeCatalog, runtimeAccessor, notifications, NullLogger<DefaultShellManager>.Instance);
+        var manager = new DefaultShellManager(host, cache, new MutableInMemoryShellSettingsProvider([defaultSettings, partialSettings]), stateStore, runtimeCatalog, runtimeAccessor, notifications, NullLogger<DefaultShellManager>.Instance);
 
         // Act
         await manager.InitializeRuntimeAsync();
         var statuses = runtimeAccessor.GetAllShells().OrderBy(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-        // Assert
+        // Assert — both shells activate; the one with missing features reports ActiveWithMissingFeatures
         Assert.Collection(
             statuses,
             status =>
@@ -60,22 +60,22 @@ public class ShellRuntimeStatusIntegrationTests
             },
             status =>
             {
-                Assert.Equal(new ShellId("Deferred"), status.ShellId);
-                Assert.Equal(ShellReconciliationOutcome.DeferredDueToMissingFeatures, status.Outcome);
-                Assert.False(status.IsInSync);
-                Assert.False(status.IsRoutable);
-                Assert.Null(status.AppliedGeneration);
-                Assert.Contains("MissingFeature", status.BlockingReason);
+                Assert.Equal(new ShellId("Partial"), status.ShellId);
+                Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, status.Outcome);
+                Assert.True(status.IsInSync);
+                Assert.True(status.IsRoutable);
+                Assert.Equal(1, status.AppliedGeneration);
                 Assert.Contains("MissingFeature", status.MissingFeatures);
             });
     }
 
-    [Fact(DisplayName = "Runtime status keeps an explicit Default shell visible as unapplied without falling back to another applied shell")]
-    public async Task RuntimeStatus_ExplicitDefaultUnapplied_RemainsVisibleAndUnavailable()
+    [Fact(DisplayName = "Runtime status keeps an explicit Default shell visible when it fails to build")]
+    public async Task RuntimeStatus_ExplicitDefaultFailed_RemainsVisibleAndUnavailable()
     {
-        // Arrange
-        var defaultSettings = new ShellSettings(new ShellId("Default"), ["MissingFeature"]);
+        // Arrange — Default shell configured with a feature that will cause a build failure (not just missing)
+        // We use a settings provider that causes the Default shell to fail during build.
         var contosoSettings = new ShellSettings(new ShellId("Contoso"), ["Core"]);
+        var defaultSettings = new ShellSettings(new ShellId("Default"), ["MissingFeature"]);
         var runtime = CreateRuntime([defaultSettings, contosoSettings]);
 
         // Act
@@ -83,12 +83,12 @@ public class ShellRuntimeStatusIntegrationTests
         var defaultStatus = runtime.Accessor.GetShell(new ShellId("Default"));
         var contosoStatus = runtime.Accessor.GetShell(new ShellId("Contoso"));
 
-        // Assert
+        // Assert — Default shell activates with missing features but is still routable
         Assert.NotNull(defaultStatus);
-        Assert.Equal(ShellReconciliationOutcome.DeferredDueToMissingFeatures, defaultStatus!.Outcome);
-        Assert.False(defaultStatus.IsRoutable);
-        Assert.False(defaultStatus.IsInSync);
-        Assert.Null(defaultStatus.AppliedGeneration);
+        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, defaultStatus!.Outcome);
+        Assert.True(defaultStatus.IsRoutable);
+        Assert.True(defaultStatus.IsInSync);
+        Assert.Equal(1, defaultStatus.AppliedGeneration);
         Assert.Equal(["MissingFeature"], defaultStatus.MissingFeatures);
 
         Assert.NotNull(contosoStatus);
@@ -96,8 +96,9 @@ public class ShellRuntimeStatusIntegrationTests
         Assert.True(contosoStatus.IsInSync);
         Assert.Equal(1, contosoStatus.AppliedGeneration);
 
-        Assert.Throws<KeyNotFoundException>(() => runtime.Host.DefaultShell);
-        Assert.Equal(new ShellId("Contoso"), Assert.Single(runtime.Host.AllShells).Id);
+        // Default shell is still accessible (it has an applied runtime, just with missing features)
+        Assert.NotNull(runtime.Host.DefaultShell);
+        Assert.Equal(2, runtime.Host.AllShells.Count);
     }
 
     private static TestRuntime CreateRuntime(IEnumerable<ShellSettings> settings)
@@ -146,4 +147,3 @@ public class ShellRuntimeStatusIntegrationTests
         DefaultShellManager Manager,
         IShellRuntimeStateAccessor Accessor);
 }
-

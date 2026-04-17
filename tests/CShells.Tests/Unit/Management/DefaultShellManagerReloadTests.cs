@@ -13,14 +13,14 @@ namespace CShells.Tests.Unit.Management;
 
 public class DefaultShellManagerReloadTests
 {
-    [Fact(DisplayName = "ReloadShellAsync preserves last-known-good applied runtime when the new desired shell is deferred")]
-    public async Task ReloadShellAsync_DeferredDesiredGeneration_PreservesAppliedRuntime()
+    [Fact(DisplayName = "ReloadShellAsync rebuilds shell with available features when some are missing")]
+    public async Task ReloadShellAsync_MissingFeatures_RebuildsWithAvailableFeatures()
     {
         // Arrange
         var shellId = new ShellId("Contoso");
         var initialSettings = new ShellSettings(shellId, ["Core"]);
-        var deferredSettings = new ShellSettings(shellId, ["Core", "MissingFeature"]);
-        var provider = new MutableInMemoryShellSettingsProvider([deferredSettings]);
+        var partialSettings = new ShellSettings(shellId, ["Core", "MissingFeature"]);
+        var provider = new MutableInMemoryShellSettingsProvider([partialSettings]);
         var notifications = new RecordingNotificationPublisher();
         var runtime = CreateRuntime([initialSettings], provider, notifications);
 
@@ -30,22 +30,24 @@ public class DefaultShellManagerReloadTests
         // Act
         await runtime.Manager.ReloadShellAsync(shellId);
 
-        // Assert
+        // Assert — shell rebuilds with available features; missing features recorded
         var appliedContext = runtime.Host.GetShell(shellId);
-        Assert.Equal(["Core"], appliedContext.Settings.EnabledFeatures);
+        Assert.Contains("Core", appliedContext.EnabledFeatures);
+        Assert.DoesNotContain("MissingFeature", appliedContext.EnabledFeatures);
+        Assert.Equal(["MissingFeature"], appliedContext.MissingFeatures);
 
         var status = runtime.Accessor.GetShell(shellId);
         Assert.NotNull(status);
         Assert.Equal(2, status!.DesiredGeneration);
-        Assert.Equal(1, status.AppliedGeneration);
-        Assert.Equal(ShellReconciliationOutcome.Active, status.Outcome);
-        Assert.False(status.IsInSync);
+        Assert.Equal(2, status.AppliedGeneration);
+        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, status.Outcome);
+        Assert.True(status.IsInSync);
         Assert.True(status.IsRoutable);
-        Assert.Contains("MissingFeature", status.BlockingReason);
         Assert.Equal(["MissingFeature"], status.MissingFeatures);
 
-        Assert.DoesNotContain(notifications.Notifications, notification => notification is ShellActivated);
-        Assert.DoesNotContain(notifications.Notifications, notification => notification is ShellDeactivating);
+        // Lifecycle notifications fire (shell was deactivated then reactivated)
+        Assert.Contains(notifications.Notifications, notification => notification is ShellActivated);
+        Assert.Contains(notifications.Notifications, notification => notification is ShellDeactivating);
         Assert.Contains(notifications.Notifications, notification => notification is ShellReloaded reloaded && reloaded.ShellId == shellId);
     }
 

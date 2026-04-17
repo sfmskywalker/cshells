@@ -3,7 +3,7 @@ namespace CShells.Hosting;
 /// <summary>
 /// Represents an initialized shell with its settings and service provider.
 /// </summary>
-public class ShellContext(ShellSettings settings, IServiceProvider serviceProvider, IReadOnlyList<string> enabledFeatures)
+public class ShellContext(ShellSettings settings, IServiceProvider serviceProvider, IReadOnlyList<string> enabledFeatures, IReadOnlyCollection<string>? missingFeatures = null)
 {
     /// <summary>
     /// Gets the shell settings.
@@ -32,4 +32,10 @@ public class ShellContext(ShellSettings settings, IServiceProvider serviceProvid
     /// Features are ordered by their dependency requirements (dependencies before dependents).
     /// </remarks>
     public IReadOnlyList<string> EnabledFeatures { get; } = Guard.Against.Null(enabledFeatures);
+
+    /// <summary>
+    /// Gets the list of configured feature IDs that were not present in the runtime feature catalog
+    /// when this shell was built. Empty when all configured features were available.
+    /// </summary>
+    public IReadOnlyCollection<string> MissingFeatures { get; } = missingFeatures ?? [];
 }

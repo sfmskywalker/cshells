@@ -202,7 +202,7 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         Assert.Single(runtime.Notifications.Notifications.OfType<ShellActivated>());
     }
 
-    [Fact(DisplayName = "ReloadAllShellsAsync through manager only publishes lifecycle notifications for committed mixed-shell successors")]
+    [Fact(DisplayName = "ReloadAllShellsAsync through manager rebuilds all shells including those with missing features")]
     public async Task ReloadAllShellsAsync_ThroughManager_ReconcilesMixedShellsAtomically()
     {
         // Arrange
@@ -211,11 +211,11 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         var initialSettings1 = new ShellSettings(tenant1, ["Core"]);
         var initialSettings2 = new ShellSettings(tenant2, ["Core"]);
         var updatedSettings1 = new ShellSettings(tenant1, ["Weather"]);
-        var deferredSettings2 = new ShellSettings(tenant2, ["Core", "MissingFeature"]);
+        var partialSettings2 = new ShellSettings(tenant2, ["Core", "MissingFeature"]);
 
         var runtime = CreateManagedRuntime(
             [initialSettings1, initialSettings2],
-            new InMemoryShellSettingsProvider([updatedSettings1, deferredSettings2]));
+            new InMemoryShellSettingsProvider([updatedSettings1, partialSettings2]));
 
         // Build shells initially
         await runtime.Manager.InitializeRuntimeAsync();
@@ -230,25 +230,24 @@ public class ReloadBehaviorTests(DefaultShellHostFixture fixture)
         Assert.Contains(runtime.Notifications.Notifications, n => n is ShellReloading r && r.ShellId is null);
         Assert.Contains(runtime.Notifications.Notifications, n => n is ShellReloaded r && r.ShellId is null);
 
-        // Assert - lifecycle notifications only for the committed shell
+        // Assert - lifecycle notifications for BOTH shells (both rebuild; Tenant2 rebuilds with available features)
         var deactivating = runtime.Notifications.Notifications.OfType<ShellDeactivating>().ToList();
         var activated = runtime.Notifications.Notifications.OfType<ShellActivated>().ToList();
-        Assert.Single(deactivating);
-        Assert.Single(activated);
-        Assert.Equal(tenant1, deactivating[0].Context.Id);
-        Assert.Equal(tenant1, activated[0].Context.Id);
+        Assert.Equal(2, deactivating.Count);
+        Assert.Equal(2, activated.Count);
 
-        // Assert - only the ready shell is rebuilt
+        // Assert - both shells are rebuilt
         var ctx1After = runtime.Host.GetShell(tenant1);
         var ctx2After = runtime.Host.GetShell(tenant2);
         Assert.NotSame(ctx1Before, ctx1After);
-        Assert.Same(ctx2Before, ctx2After);
+        Assert.NotSame(ctx2Before, ctx2After);
 
         var tenant2Status = runtime.Accessor.GetShell(tenant2);
         Assert.NotNull(tenant2Status);
         Assert.True(tenant2Status.IsRoutable);
-        Assert.False(tenant2Status.IsInSync);
-        Assert.Equal(1, tenant2Status.AppliedGeneration);
+        Assert.True(tenant2Status.IsInSync);
+        Assert.Equal(2, tenant2Status.AppliedGeneration);
+        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, tenant2Status.Outcome);
         Assert.Equal(["MissingFeature"], tenant2Status.MissingFeatures);
     }
 

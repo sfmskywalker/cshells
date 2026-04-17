@@ -311,17 +311,15 @@ public class DefaultShellManager : IShellManager
         if (candidate.IsReadyToCommit)
         {
             await shellHost.CommitCandidateAsync(candidate, publishLifecycleNotifications: true, cancellationToken).ConfigureAwait(false);
-            return;
-        }
 
-        if (candidate.IsDeferred)
-        {
-            runtimeStateStore.MarkDeferred(shellId, candidate.MissingFeatures, candidate.FailureReason);
-            logger.LogInformation(
-                "Deferred shell '{ShellId}' at desired generation {DesiredGeneration}: {Reason}",
-                shellId,
-                record.DesiredGeneration,
-                candidate.FailureReason);
+            if (candidate.HasMissingFeatures)
+            {
+                logger.LogWarning(
+                    "Shell '{ShellId}' activated with missing feature(s): {MissingFeatures}",
+                    shellId,
+                    string.Join(", ", candidate.MissingFeatures));
+            }
+
             return;
         }
 

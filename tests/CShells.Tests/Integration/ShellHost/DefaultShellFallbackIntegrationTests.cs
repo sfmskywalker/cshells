@@ -12,8 +12,8 @@ namespace CShells.Tests.Integration.ShellHost;
 
 public class DefaultShellFallbackIntegrationTests
 {
-    [Fact(DisplayName = "Explicit Default shell that is configured but unapplied does not silently fall back to another applied shell")]
-    public async Task ExplicitDefault_Unapplied_DoesNotSilentlyFallback()
+    [Fact(DisplayName = "Explicit Default shell with missing features still resolves because it activates with partial features")]
+    public async Task ExplicitDefault_WithMissingFeatures_StillResolves()
     {
         // Arrange
         var defaultSettings = new ShellSettings(new ShellId("Default"), ["MissingFeature"]);
@@ -51,10 +51,15 @@ public class DefaultShellFallbackIntegrationTests
         // Act
         var resolved = resolver.Resolve(new ShellResolutionContext());
 
-        // Assert
-        Assert.Null(resolved);
-        Assert.Single(host.AllShells);
-        Assert.Equal(new ShellId("Contoso"), host.AllShells.Single().Id);
+        // Assert — Default activates with missing features and is routable
+        Assert.Equal(new ShellId("Default"), resolved);
+        Assert.Equal(2, host.AllShells.Count);
+
+        var defaultStatus = runtimeAccessor.GetShell(new ShellId("Default"));
+        Assert.NotNull(defaultStatus);
+        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, defaultStatus!.Outcome);
+        Assert.True(defaultStatus.IsRoutable);
+        Assert.Contains("MissingFeature", defaultStatus.MissingFeatures);
     }
 
     private sealed class RecordingNotificationPublisher : INotificationPublisher
@@ -65,4 +70,3 @@ public class DefaultShellFallbackIntegrationTests
             CancellationToken cancellationToken = default) where TNotification : class, INotification => Task.CompletedTask;
     }
 }
-

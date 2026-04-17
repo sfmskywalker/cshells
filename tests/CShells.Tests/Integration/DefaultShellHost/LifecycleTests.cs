@@ -32,8 +32,8 @@ public class LifecycleTests(DefaultShellHostFixture fixture)
         Assert.Throws<ObjectDisposedException>(() => _ = host.AllShells);
     }
 
-    [Fact(DisplayName = "ReloadAllShellsAsync only swaps shells whose candidates commit while preserving other applied runtimes")]
-    public async Task ReloadAllShellsAsync_MixedReconciliation_OnlyCommittedShellsAreReplaced()
+    [Fact(DisplayName = "ReloadAllShellsAsync rebuilds all shells including those with missing features")]
+    public async Task ReloadAllShellsAsync_MixedReconciliation_AllShellsAreRebuilt()
     {
         // Arrange
         var alphaId = new ShellId("Alpha");
@@ -42,7 +42,7 @@ public class LifecycleTests(DefaultShellHostFixture fixture)
         var alphaInitial = new ShellSettings(alphaId, ["Core"]);
         var betaInitial = new ShellSettings(betaId, ["Core"]);
         var alphaUpdated = new ShellSettings(alphaId, ["Weather"]);
-        var betaDeferred = new ShellSettings(betaId, ["Core", "MissingFeature"]);
+        var betaPartial = new ShellSettings(betaId, ["Core", "MissingFeature"]);
 
         var cache = fixture.CreateCache([alphaInitial, betaInitial]);
         var notifications = new RecordingNotificationPublisher();
@@ -66,7 +66,7 @@ public class LifecycleTests(DefaultShellHostFixture fixture)
         var manager = new DefaultShellManager(
             host,
             cache,
-            new MutableInMemoryShellSettingsProvider([alphaUpdated, betaDeferred]),
+            new MutableInMemoryShellSettingsProvider([alphaUpdated, betaPartial]),
             stateStore,
             runtimeCatalog,
             runtimeAccessor,
@@ -81,11 +81,11 @@ public class LifecycleTests(DefaultShellHostFixture fixture)
         // Act
         await manager.ReloadAllShellsAsync();
 
-        // Assert
+        // Assert — both shells rebuild (Beta rebuilds with available features)
         var alphaAfter = host.GetShell(alphaId);
         var betaAfter = host.GetShell(betaId);
         Assert.NotSame(alphaBefore, alphaAfter);
-        Assert.Same(betaBefore, betaAfter);
+        Assert.NotSame(betaBefore, betaAfter);
 
         var statuses = runtimeAccessor.GetAllShells().OrderBy(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase).ToList();
         Assert.Collection(
@@ -101,19 +101,19 @@ public class LifecycleTests(DefaultShellHostFixture fixture)
             status =>
             {
                 Assert.Equal(betaId, status.ShellId);
-                Assert.False(status.IsInSync);
+                Assert.True(status.IsInSync);
                 Assert.True(status.IsRoutable);
                 Assert.Equal(2, status.DesiredGeneration);
-                Assert.Equal(1, status.AppliedGeneration);
-                Assert.Equal(ShellReconciliationOutcome.Active, status.Outcome);
-                Assert.Contains("MissingFeature", status.BlockingReason);
+                Assert.Equal(2, status.AppliedGeneration);
+                Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, status.Outcome);
                 Assert.Equal(["MissingFeature"], status.MissingFeatures);
             });
 
+        // Lifecycle notifications fire for BOTH shells
         Assert.Contains(notifications.Notifications, notification => notification is ShellDeactivating deactivating && deactivating.Context.Id == alphaId);
         Assert.Contains(notifications.Notifications, notification => notification is ShellActivated activated && activated.Context.Id == alphaId);
-        Assert.DoesNotContain(notifications.Notifications, notification => notification is ShellDeactivating deactivating && deactivating.Context.Id == betaId);
-        Assert.DoesNotContain(notifications.Notifications, notification => notification is ShellActivated activated && activated.Context.Id == betaId);
+        Assert.Contains(notifications.Notifications, notification => notification is ShellDeactivating deactivating && deactivating.Context.Id == betaId);
+        Assert.Contains(notifications.Notifications, notification => notification is ShellActivated activated && activated.Context.Id == betaId);
     }
 
     private sealed class RecordingNotificationPublisher : INotificationPublisher

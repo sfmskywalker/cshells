@@ -58,14 +58,14 @@ public class ApplicationBuilderExtensionsTests
         Assert.NotNull(result);
     }
 
-    [Fact(DisplayName = "Shell endpoint registration only exposes endpoints for committed applied runtimes")]
-    public async Task ShellEndpointRegistration_OnlyAppliedShellsExposeEndpoints()
+    [Fact(DisplayName = "Shell endpoint registration exposes endpoints for all applied runtimes including those with missing features")]
+    public async Task ShellEndpointRegistration_AllAppliedShellsExposeEndpoints()
     {
         // Arrange
         var appliedShell = CreateShell("Applied", "applied", ["TestWeb"]);
-        var deferredShell = CreateShell("Deferred", "deferred", ["TestWeb", "MissingFeature"]);
+        var partialShell = CreateShell("Partial", "partial", ["TestWeb", "MissingFeature"]);
         var cache = new ShellSettingsCache();
-        cache.Load([appliedShell, deferredShell]);
+        cache.Load([appliedShell, partialShell]);
 
         var (rootServices, rootProvider) = TestFixtures.CreateRootServices();
         var rootAccessor = TestFixtures.CreateRootServicesAccessor(rootServices);
@@ -91,7 +91,7 @@ public class ApplicationBuilderExtensionsTests
         var manager = new DefaultShellManager(
             host,
             cache,
-            new MutableInMemoryShellSettingsProvider([appliedShell, deferredShell]),
+            new MutableInMemoryShellSettingsProvider([appliedShell, partialShell]),
             stateStore,
             runtimeCatalog,
             runtimeAccessor,
@@ -121,10 +121,12 @@ public class ApplicationBuilderExtensionsTests
             serviceProvider.GetRequiredService<EndpointRouteBuilderAccessor>(),
             serviceProvider.GetRequiredService<ApplicationBuilderAccessor>());
 
-        // Act
-        await handler.HandleAsync(new ShellsReloaded(runtimeAccessor.GetAllShells()));
+        // Act — both shells are applied (partial shell activated with available features)
+        var appliedStatuses = runtimeAccessor.GetAllShells().Where(s => s.IsRoutable);
+        foreach (var status in appliedStatuses)
+            await handler.HandleAsync(new ShellActivated(host.GetShell(status.ShellId)));
 
-        // Assert
+        // Assert — both shells expose endpoints for their loaded features
         var routedEndpoints = dataSource.Endpoints
             .OfType<RouteEndpoint>()
             .Select(endpoint => (
@@ -133,8 +135,7 @@ public class ApplicationBuilderExtensionsTests
             .ToList();
 
         Assert.Contains(routedEndpoints, endpoint => endpoint.ShellId == new ShellId("Applied") && endpoint.Pattern == "/applied/ping");
-        Assert.DoesNotContain(routedEndpoints, endpoint => endpoint.ShellId == new ShellId("Deferred"));
-        Assert.DoesNotContain(routedEndpoints, endpoint => string.Equals(endpoint.Pattern, "/deferred/ping", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(routedEndpoints, endpoint => endpoint.ShellId == new ShellId("Partial") && endpoint.Pattern == "/partial/ping");
     }
 
     // Test helpers

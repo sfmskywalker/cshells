@@ -13,6 +13,5 @@ internal sealed record ShellCandidateBuildResult(
 {
     public bool IsReadyToCommit => CandidateContext is not null;
 
-    public bool IsDeferred => MissingFeatures.Count > 0;
+    public bool HasMissingFeatures => MissingFeatures.Count > 0;
 }
-

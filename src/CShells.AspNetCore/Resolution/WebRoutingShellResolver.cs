@@ -23,14 +23,12 @@ public class WebRoutingShellResolver : IShellResolverStrategy
     }
 
     /// <summary>
-    /// Initializes a new resolver against a static shell settings cache.
-    /// This overload exists for compatibility with tests and non-DI callers; the runtime pipeline
+    /// Creates a resolver backed by a static shell settings cache.
+    /// Intended for tests and non-DI callers; the runtime pipeline
     /// should prefer the <see cref="IShellHost"/>-based constructor so only applied shells participate.
     /// </summary>
-    public WebRoutingShellResolver(IShellSettingsCache cache, WebRoutingShellResolverOptions options)
-        : this(new CacheBackedShellHost(cache), options)
-    {
-    }
+    public static WebRoutingShellResolver FromCache(IShellSettingsCache cache, WebRoutingShellResolverOptions options)
+        => new(new CacheBackedShellHost(cache), options);
 
     /// <inheritdoc />
     public ShellId? Resolve(ShellResolutionContext context)

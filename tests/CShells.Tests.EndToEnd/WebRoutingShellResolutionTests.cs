@@ -18,21 +18,23 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
     private readonly WorkbenchApplicationFactory _factory = factory;
     private readonly HttpClient _client = factory.CreateClient();
 
-    [Fact(DisplayName = "Explicit Default that is configured but unapplied does not fall back at root while other applied shells remain active")]
-    public async Task ExplicitDefault_Unapplied_DoesNotFallbackAtRoot()
+    [Fact(DisplayName = "Explicit Default with missing features activates with partial features and is routable")]
+    public async Task ExplicitDefault_WithMissingFeatures_ActivatesWithPartialFeaturesAndIsRoutable()
     {
-        await using var customFactory = CreateFactoryWithUnappliedDefault();
+        await using var customFactory = CreateFactoryWithMissingFeaturesDefault();
         using var client = customFactory.CreateClient();
 
         var accessor = customFactory.Services.GetRequiredService<IShellRuntimeStateAccessor>();
         var statuses = accessor.GetAllShells().ToDictionary(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase);
 
-        Assert.False(statuses["Default"].IsRoutable);
-        Assert.False(statuses["Default"].IsInSync);
+        Assert.True(statuses["Default"].IsRoutable);
+        Assert.True(statuses["Default"].IsInSync);
+        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, statuses["Default"].Outcome);
         Assert.Equal(["MissingFeature", "StillMissingFeature"], statuses["Default"].MissingFeatures.OrderBy(feature => feature, StringComparer.OrdinalIgnoreCase).ToArray());
         Assert.True(statuses["Acme"].IsRoutable);
         Assert.True(statuses["Contoso"].IsRoutable);
 
+        // Default shell is routable but has no loaded features/endpoints, so root returns 404
         var rootResponse = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.NotFound, rootResponse.StatusCode);
 
@@ -245,7 +247,7 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
         }
     }
 
-    private WebApplicationFactory<Program> CreateFactoryWithUnappliedDefault()
+    private WebApplicationFactory<Program> CreateFactoryWithMissingFeaturesDefault()
     {
         return _factory.WithWebHostBuilder(builder =>
         {
