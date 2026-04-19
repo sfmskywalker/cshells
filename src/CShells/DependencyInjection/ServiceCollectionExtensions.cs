@@ -111,31 +111,32 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IShellSettingsProvider>(sp =>
         {
             var providers = new List<IShellSettingsProvider>();
-            
+
             // Add code-first shells provider if any shells were defined
             if (builder.CodeFirstShells.Count > 0)
             {
                 providers.Add(new InMemoryShellSettingsProvider(builder.CodeFirstShells));
             }
-            
+
             // Build and add all registered providers
             var registeredProviders = builder.BuildProviders(sp);
             providers.AddRange(registeredProviders);
-            
+
+            IShellSettingsProvider provider;
+
             // If no providers were registered, return an empty provider
             if (providers.Count == 0)
-            {
-                return new InMemoryShellSettingsProvider([]);
-            }
-            
-            // If only one provider, return it directly (optimization)
-            if (providers.Count == 1)
-            {
-                return providers[0];
-            }
-            
-            // Return composite provider for multiple providers
-            return new CompositeShellSettingsProvider(providers);
+                provider = new InMemoryShellSettingsProvider([]);
+            else if (providers.Count == 1)
+                provider = providers[0];
+            else
+                provider = new CompositeShellSettingsProvider(providers);
+
+            // Wrap with ConfigureAllShells configurators when registered
+            if (builder.ShellConfigurators.Count > 0)
+                provider = new ConfiguringShellSettingsProvider(provider, builder.ShellConfigurators);
+
+            return provider;
         });
         
         configure?.Invoke(builder);
