@@ -118,9 +118,10 @@ public class CShellsBuilder
     /// <param name="configure">Configuration action applied to each shell's builder.</param>
     /// <returns>This builder for method chaining.</returns>
     /// <remarks>
-    /// Use this to define a base set of features or configuration that all shells should share.
-    /// Shell-specific features (from <see cref="AddShell(string,System.Action{CShells.Configuration.ShellBuilder})"/>
-    /// or configuration providers) are merged on top.
+    /// Use this to define a shared set of features or configuration that should be applied to all shells.
+    /// This configuration is applied as part of shell finalization and may override values already supplied by
+    /// shell-specific configuration (from <see cref="AddShell(string,System.Action{CShells.Configuration.ShellBuilder})"/>)
+    /// or configuration providers when they target the same settings.
     /// </remarks>
     public CShellsBuilder ConfigureAllShells(Action<ShellBuilder> configure)
     {
