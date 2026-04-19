@@ -8,6 +8,8 @@ internal sealed class ConfiguringShellSettingsProvider(
     IShellSettingsProvider inner,
     IReadOnlyList<Action<ShellBuilder>> configurators) : IShellSettingsProvider
 {
+    private readonly IShellSettingsProvider inner = inner ?? throw new ArgumentNullException(nameof(inner));
+    private readonly Action<ShellBuilder>[] configurators = (configurators ?? throw new ArgumentNullException(nameof(configurators))).ToArray();
     public async Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await inner.GetShellSettingsAsync(cancellationToken);
