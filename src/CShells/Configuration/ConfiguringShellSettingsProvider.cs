@@ -24,9 +24,24 @@ internal sealed class ConfiguringShellSettingsProvider(
 
     private ShellSettings ApplyConfigurators(ShellSettings settings)
     {
-        var builder = new ShellBuilder(settings);
+        var clone = CloneSettings(settings);
+        var builder = new ShellBuilder(clone);
         foreach (var configurator in configurators)
             configurator(builder);
-        return settings;
+        return clone;
+    }
+
+    private static ShellSettings CloneSettings(ShellSettings settings)
+    {
+        var clone = new ShellSettings(settings.Id)
+        {
+            EnabledFeatures = settings.EnabledFeatures,
+            ConfigurationData = new Dictionary<string, object>(settings.ConfigurationData),
+        };
+
+        foreach (var (key, value) in settings.FeatureConfigurators)
+            clone.FeatureConfigurators[key] = value;
+
+        return clone;
     }
 }
