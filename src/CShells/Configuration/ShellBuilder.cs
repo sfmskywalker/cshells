@@ -29,6 +29,15 @@ public class ShellBuilder
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ShellBuilder"/> class that wraps an existing <see cref="ShellSettings"/>.
+    /// Mutations via the builder are applied directly to the provided settings instance.
+    /// </summary>
+    internal ShellBuilder(ShellSettings settings)
+    {
+        _settings = Guard.Against.Null(settings);
+    }
+
+    /// <summary>
     /// Adds features to the shell by string identifier.
     /// </summary>
     public ShellBuilder WithFeatures(params string[] featureIds)

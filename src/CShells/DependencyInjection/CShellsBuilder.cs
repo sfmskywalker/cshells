@@ -14,6 +14,7 @@ public class CShellsBuilder
     private readonly List<ShellSettings> _codeFirstShells = new();
     private readonly List<Action<IServiceProvider, List<IShellSettingsProvider>>> _providerRegistrations = new();
     private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
+    private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CShellsBuilder"/> class.
@@ -33,6 +34,11 @@ public class CShellsBuilder
     /// Gets all code-first shell settings configured via AddShell.
     /// </summary>
     internal IReadOnlyList<ShellSettings> CodeFirstShells => _codeFirstShells.AsReadOnly();
+
+    /// <summary>
+    /// Gets the configurators registered via <see cref="ConfigureAllShells"/>.
+    /// </summary>
+    internal IReadOnlyList<Action<ShellBuilder>> ShellConfigurators => _shellConfigurators.AsReadOnly();
 
     /// <summary>
     /// Gets a value indicating whether explicit feature assembly providers were configured.
@@ -103,6 +109,24 @@ public class CShellsBuilder
         return UsesExplicitFeatureAssemblyProviders
             ? await CShells.Features.FeatureAssemblyResolver.ResolveAssembliesAsync(BuildFeatureAssemblyProviders(serviceProvider), serviceProvider, cancellationToken)
             : CShells.Features.FeatureAssemblyResolver.ResolveHostAssemblies();
+    }
+
+    /// <summary>
+    /// Registers a configurator that is applied to every shell — whether defined in code or loaded from configuration.
+    /// Configurators run in registration order before a shell's settings are finalized.
+    /// </summary>
+    /// <param name="configure">Configuration action applied to each shell's builder.</param>
+    /// <returns>This builder for method chaining.</returns>
+    /// <remarks>
+    /// Use this to define a base set of features or configuration that all shells should share.
+    /// Shell-specific features (from <see cref="AddShell(string,System.Action{CShells.Configuration.ShellBuilder})"/>
+    /// or configuration providers) are merged on top.
+    /// </remarks>
+    public CShellsBuilder ConfigureAllShells(Action<ShellBuilder> configure)
+    {
+        Guard.Against.Null(configure);
+        _shellConfigurators.Add(configure);
+        return this;
     }
 
     /// <summary>
