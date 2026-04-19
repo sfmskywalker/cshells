@@ -11,7 +11,7 @@ internal sealed class ConfiguringShellSettingsProvider(
     public async Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await inner.GetShellSettingsAsync(cancellationToken);
-        return settings.Select(ApplyConfigurators);
+        return settings.Select(ApplyConfigurators).ToArray();
     }
 
     public async Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
