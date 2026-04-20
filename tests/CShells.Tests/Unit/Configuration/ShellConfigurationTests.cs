@@ -9,7 +9,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_WithShellSpecificValue_ReturnsShellValue()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         shellSettings.ConfigurationData["Theme"] = "Dark";
 
         var rootConfig = new ConfigurationBuilder()
@@ -32,7 +32,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_WithoutShellSpecificValue_ReturnsRootValue()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
 
         var rootConfig = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -57,7 +57,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_GetSection_ReturnsShellSpecificSection()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         shellSettings.ConfigurationData["Database:ConnectionString"] = "Server=shell-db;";
         shellSettings.ConfigurationData["Database:Timeout"] = "30";
 
@@ -85,7 +85,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_GetSection_FallsBackToRootSection()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
 
         var rootConfig = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -111,7 +111,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_CanBindToStronglyTypedOptions()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         shellSettings.ConfigurationData["Theme"] = "Dark";
         shellSettings.ConfigurationData["MaxUploadSizeMB"] = "50";
 
@@ -138,7 +138,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_GetChildren_MergesShellAndRootChildren()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         shellSettings.ConfigurationData["Feature1:Enabled"] = "true";
 
         var rootConfig = new ConfigurationBuilder()
@@ -168,7 +168,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_WithEmptyConfigurationData_ReturnsRootValues()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
 
         var rootConfig = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -189,7 +189,7 @@ public class ShellConfigurationTests
     public void ShellConfiguration_IndexerSet_ThrowsNotSupportedException()
     {
         // Arrange
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         var rootConfig = new ConfigurationBuilder().Build();
         var shellConfig = new ShellConfiguration(shellSettings, rootConfig);
 

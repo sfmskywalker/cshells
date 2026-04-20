@@ -12,7 +12,7 @@ namespace CShells.Tests.TestHelpers;
 /// </summary>
 public sealed class DefaultShellHostFixture : IAsyncDisposable
 {
-    private readonly List<Hosting.DefaultShellHost> _hosts = [];
+    private readonly List<DefaultShellHost> _hosts = [];
     private readonly IServiceProvider _rootProvider;
     private readonly IServiceCollection _rootServices;
     private readonly IRootServiceCollectionAccessor _accessor;
@@ -29,21 +29,21 @@ public sealed class DefaultShellHostFixture : IAsyncDisposable
         _featureFactory = new DefaultShellFeatureFactory(_rootProvider);
     }
 
-    public Hosting.DefaultShellHost CreateHost(IEnumerable<ShellSettings> shells, params System.Reflection.Assembly[] assemblies)
+    public DefaultShellHost CreateHost(IEnumerable<ShellSettings> shells, params System.Reflection.Assembly[] assemblies)
     {
         var cache = BuildCache(shells);
         return CreateHost(cache, assemblies);
     }
 
-    public Hosting.DefaultShellHost CreateHost(ShellSettingsCache cache, params System.Reflection.Assembly[] assemblies)
+    public DefaultShellHost CreateHost(ShellSettingsCache cache, params System.Reflection.Assembly[] assemblies)
     {
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
-        var host = new Hosting.DefaultShellHost(cache, assemblies, _rootProvider, _accessor, _featureFactory, exclusionRegistry);
+        var host = new DefaultShellHost(cache, assemblies, _rootProvider, _accessor, _featureFactory, exclusionRegistry);
         _hosts.Add(host);
         return host;
     }
 
-    public Hosting.DefaultShellHost CreateWeatherHost() =>
+    public DefaultShellHost CreateWeatherHost() =>
         CreateHost([new(new("Default"), ["Weather"])], typeof(TestFixtures).Assembly);
 
     private static ShellSettingsCache BuildCache(IEnumerable<ShellSettings> shells)

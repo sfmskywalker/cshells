@@ -16,8 +16,8 @@ public class DefaultShellFallbackIntegrationTests
     public async Task ExplicitDefault_WithMissingFeatures_StillResolves()
     {
         // Arrange
-        var defaultSettings = new ShellSettings(new ShellId("Default"), ["MissingFeature"]);
-        var otherSettings = new ShellSettings(new ShellId("Contoso"), ["Core"]);
+        var defaultSettings = new ShellSettings(new("Default"), ["MissingFeature"]);
+        var otherSettings = new ShellSettings(new("Contoso"), ["Core"]);
         var cache = new ShellSettingsCache();
         cache.Load([defaultSettings, otherSettings]);
 
@@ -49,13 +49,13 @@ public class DefaultShellFallbackIntegrationTests
         await manager.InitializeRuntimeAsync();
 
         // Act
-        var resolved = resolver.Resolve(new ShellResolutionContext());
+        var resolved = resolver.Resolve(new());
 
         // Assert — Default activates with missing features and is routable
         Assert.Equal(new ShellId("Default"), resolved);
         Assert.Equal(2, host.AllShells.Count);
 
-        var defaultStatus = runtimeAccessor.GetShell(new ShellId("Default"));
+        var defaultStatus = runtimeAccessor.GetShell(new("Default"));
         Assert.NotNull(defaultStatus);
         Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, defaultStatus!.Outcome);
         Assert.True(defaultStatus.IsRoutable);

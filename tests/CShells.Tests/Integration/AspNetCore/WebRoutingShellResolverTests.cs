@@ -60,10 +60,10 @@ public class WebRoutingShellResolverTests
     public async Task WebRoutingShellResolver_PathRouting_IncludesShellsWithMissingFeatures()
     {
         // Arrange — both shells activate (partial shell has missing features but is still routable)
-        var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["Core"]);
-        var partialSettings = CreateShell("Partial", new WebRoutingShellOptions { Path = "partial" }, ["MissingFeature"]);
+        var defaultSettings = CreateShell("Default", new() { Path = string.Empty }, ["Core"]);
+        var partialSettings = CreateShell("Partial", new() { Path = "partial" }, ["MissingFeature"]);
         await using var host = CreateAppliedHost(defaultSettings, partialSettings);
-        var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
+        var resolver = new WebRoutingShellResolver(host, new());
 
         // Act & Assert — the partial shell resolves by its path
         Assert.Equal(new ShellId("Partial"), resolver.Resolve(CreateContext(path: "/partial/api")));
@@ -271,10 +271,10 @@ public class WebRoutingShellResolverTests
     public async Task WebRoutingShellResolver_ExplicitDefaultWithMissingFeatures_ResolvesRootFallback()
     {
         // Arrange — Default shell activates with missing features (still routable)
-        var defaultSettings = CreateShell("Default", new WebRoutingShellOptions { Path = string.Empty }, ["MissingFeature"]);
-        var contosoSettings = CreateShell("Contoso", new WebRoutingShellOptions { Path = "contoso" }, ["Core"]);
+        var defaultSettings = CreateShell("Default", new() { Path = string.Empty }, ["MissingFeature"]);
+        var contosoSettings = CreateShell("Contoso", new() { Path = "contoso" }, ["Core"]);
         await using var host = CreateAppliedHost(defaultSettings, contosoSettings);
-        var resolver = new WebRoutingShellResolver(host, new WebRoutingShellResolverOptions());
+        var resolver = new WebRoutingShellResolver(host, new());
 
         // Act & Assert — Default resolves as the root fallback since it's applied
         Assert.Equal(new ShellId("Default"), resolver.Resolve(CreateContext(path: "/")));
@@ -439,7 +439,7 @@ public class WebRoutingShellResolverTests
         var featureFactory = new DefaultShellFeatureFactory(provider);
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
 
-        return new Hosting.DefaultShellHost(cache, [typeof(TestFixtures).Assembly], provider, accessor, featureFactory, exclusionRegistry);
+        return new(cache, [typeof(TestFixtures).Assembly], provider, accessor, featureFactory, exclusionRegistry);
     }
 
     private class TestShellSettingsCache(List<ShellSettings> shells) : IShellSettingsCache

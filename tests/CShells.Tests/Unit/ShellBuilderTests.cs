@@ -200,7 +200,7 @@ public class ShellBuilderTests
             Features =
             [
                 FeatureEntry.FromName("Feature2"),
-                new FeatureEntry
+                new()
                 {
                     Name = "Feature3",
                     Settings = new()
@@ -210,7 +210,7 @@ public class ShellBuilderTests
                     }
                 }
             ],
-            Configuration = new Dictionary<string, object?>
+            Configuration = new()
             {
                 ["Key1"] = "NewValue1",
                 ["Key2"] = "Value2"
@@ -243,7 +243,7 @@ public class ShellBuilderTests
             Name = "TestShell",
             Features =
             [
-                new FeatureEntry
+                new()
                 {
                     Name = "Feature1",
                     Settings = new()

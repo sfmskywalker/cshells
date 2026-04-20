@@ -168,7 +168,7 @@ public class ApplicationBuilderExtensionsTests
 
     private static ShellSettings CreateShell(string name, string path, IReadOnlyCollection<string> features)
     {
-        return new ShellSettings
+        return new()
         {
             Id = new(name),
             EnabledFeatures = [.. features],

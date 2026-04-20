@@ -35,13 +35,13 @@ public class ShellStartupHostedServiceTests
             shellsReloaded.Statuses.OrderBy(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase),
             status =>
             {
-                Assert.Equal(new ShellId("Contoso"), status.ShellId);
+                Assert.Equal(new("Contoso"), status.ShellId);
                 Assert.True(status.IsRoutable);
                 Assert.True(status.IsInSync);
             },
             status =>
             {
-                Assert.Equal(new ShellId("Default"), status.ShellId);
+                Assert.Equal(new("Default"), status.ShellId);
                 Assert.True(status.IsRoutable);
                 Assert.True(status.IsInSync);
             });
@@ -83,8 +83,8 @@ public class ShellStartupHostedServiceTests
         // Assert
         var deactivating = notifications.Notifications.OfType<ShellDeactivating>().ToList();
         Assert.Equal(2, deactivating.Count);
-        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new ShellId("Default")));
-        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new ShellId("Contoso")));
+        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new("Default")));
+        Assert.Contains(deactivating, notification => notification.Context.Id.Equals(new("Contoso")));
     }
 
     private static ShellStartupHostedService GetStartupHostedService(IServiceProvider provider) =>
@@ -97,9 +97,9 @@ public class ShellStartupHostedServiceTests
         var services = new ServiceCollection();
         services.AddSingleton<INotificationPublisher>(notifications);
         services.AddLogging();
-        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddCShells(builder => builder
-            .FromAssemblies(typeof(TestFixtures).Assembly)
+            .WithAssemblies(typeof(TestFixtures).Assembly)
             .WithProvider(new InMemoryShellSettingsProvider(shells)));
         var provider = services.BuildServiceProvider();
         var shellSettingsProvider = provider.GetRequiredService<IShellSettingsProvider>();

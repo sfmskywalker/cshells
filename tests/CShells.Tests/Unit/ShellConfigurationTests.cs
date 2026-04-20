@@ -11,7 +11,7 @@ public class ShellConfigurationTests
         // Arrange
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["MyFeature:ApiKey"] = "secret-key",
@@ -35,7 +35,7 @@ public class ShellConfigurationTests
         // Arrange - This simulates what a feature developer would do
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["FraudDetection:Threshold"] = "0.85",
@@ -60,7 +60,7 @@ public class ShellConfigurationTests
         // Arrange
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["Key"] = "Value1"
@@ -81,7 +81,7 @@ public class ShellConfigurationTests
         // Arrange - Create shell settings with feature-specific configuration
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["FraudDetection:Threshold"] = "0.85",
@@ -108,7 +108,7 @@ public class ShellConfigurationTests
         // Arrange
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["WebRouting:Path"] = "acme",
@@ -134,7 +134,7 @@ public class ShellConfigurationTests
         // Arrange
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["FraudDetection:Threshold"] = "0.85",
@@ -162,7 +162,7 @@ public class ShellConfigurationTests
         // Arrange
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["Feature:SettingA"] = "ShellValue"
@@ -192,7 +192,7 @@ public class ShellConfigurationTests
         // Arrange - Simulate what happens when a feature has public properties
         var shellSettings = new ShellSettings
         {
-            Id = new ShellId("TestShell"),
+            Id = new("TestShell"),
             ConfigurationData = new Dictionary<string, object>
             {
                 ["MyFeature:ApiKey"] = "secret-key",

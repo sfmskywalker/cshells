@@ -15,8 +15,8 @@ public class CShellsBuilderAssemblySourceTests
         var secondAssembly = typeof(CShellsBuilder).Assembly;
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.FromAssemblies(builder, firstAssembly);
-        CShellsBuilderExtensions.FromAssemblies(builder, secondAssembly);
+        builder.WithAssemblies(firstAssembly);
+        builder.WithAssemblies(secondAssembly);
 
         var providers = builder.BuildFeatureAssemblyProviders(serviceProvider);
 
@@ -32,7 +32,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.FromAssemblies(builder);
+        builder.WithAssemblies();
 
         Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
         Assert.Empty(await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider));
@@ -44,7 +44,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         Assembly[] assemblies = [typeof(CShellsBuilderAssemblySourceTests).Assembly, null!];
 
-        var exception = Assert.Throws<ArgumentException>(() => CShellsBuilderExtensions.FromAssemblies(builder, assemblies));
+        var exception = Assert.Throws<ArgumentException>(() => builder.WithAssemblies(assemblies));
 
         Assert.Equal("assemblies", exception.ParamName);
     }
@@ -55,7 +55,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.FromAssemblyContaining<MarkerService>(builder);
+        builder.WithAssemblyContaining<MarkerService>();
 
         Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
         Assert.IsType<ExplicitFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
@@ -71,8 +71,8 @@ public class CShellsBuilderAssemblySourceTests
         var secondAssembly = typeof(CShellsBuilder).Assembly;
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.FromAssemblyContaining<MarkerService>(builder);
-        CShellsBuilderExtensions.FromAssemblies(builder, secondAssembly);
+        builder.WithAssemblyContaining<MarkerService>();
+        builder.WithAssemblies(secondAssembly);
 
         var assemblies = await FeatureAssemblyResolver.ResolveAssembliesAsync(builder.BuildFeatureAssemblyProviders(serviceProvider), serviceProvider);
 
@@ -85,7 +85,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.FromHostAssemblies(builder);
+        builder.WithHostAssemblies();
 
         Assert.True(builder.UsesExplicitFeatureAssemblyProviders);
         Assert.IsType<HostFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
@@ -99,7 +99,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(services);
         using var serviceProvider = services.BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider<TestFeatureAssemblyProvider>(builder);
+        builder.WithAssemblyProvider<TestFeatureAssemblyProvider>();
 
         var providers = builder.BuildFeatureAssemblyProviders(serviceProvider);
 
@@ -112,7 +112,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider<MissingFeatureAssemblyProvider>(builder);
+        builder.WithAssemblyProvider<MissingFeatureAssemblyProvider>();
 
         var exception = Assert.Throws<InvalidOperationException>(() => builder.BuildFeatureAssemblyProviders(serviceProvider));
 
@@ -126,7 +126,7 @@ public class CShellsBuilderAssemblySourceTests
         var provider = new DelegateFeatureAssemblyProvider(_ => [typeof(CShellsBuilderAssemblySourceTests).Assembly]);
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider(builder, provider);
+        builder.WithAssemblyProvider(provider);
 
         Assert.Same(provider, Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
     }
@@ -139,7 +139,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(services);
         using var serviceProvider = services.BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
+        builder.WithAssemblyProvider(_ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
 
         var provider = Assert.IsType<DelegateFeatureAssemblyProvider>(Assert.Single(builder.BuildFeatureAssemblyProviders(serviceProvider)));
         var assemblies = await provider.GetAssembliesAsync(serviceProvider);
@@ -155,9 +155,9 @@ public class CShellsBuilderAssemblySourceTests
         var instanceProvider = new DelegateFeatureAssemblyProvider(_ => [typeof(CShellsBuilderAssemblySourceTests).Assembly]);
         using var serviceProvider = services.BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider<TestFeatureAssemblyProvider>(builder);
-        CShellsBuilderExtensions.WithAssemblyProvider(builder, instanceProvider);
-        CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
+        builder.WithAssemblyProvider<TestFeatureAssemblyProvider>();
+        builder.WithAssemblyProvider(instanceProvider);
+        builder.WithAssemblyProvider(_ => new DelegateFeatureAssemblyProvider(_ => [typeof(MarkerService).Assembly]));
 
         var providers = builder.BuildFeatureAssemblyProviders(serviceProvider);
 
@@ -175,7 +175,7 @@ public class CShellsBuilderAssemblySourceTests
     {
         var builder = new CShellsBuilder(new ServiceCollection());
 
-        var exception = Assert.Throws<ArgumentNullException>(() => CShellsBuilderExtensions.WithAssemblyProvider(builder, provider: null!));
+        var exception = Assert.Throws<ArgumentNullException>(() => builder.WithAssemblyProvider(provider: null!));
 
         Assert.Equal("provider", exception.ParamName);
     }
@@ -185,7 +185,7 @@ public class CShellsBuilderAssemblySourceTests
     {
         var builder = new CShellsBuilder(new ServiceCollection());
 
-        var exception = Assert.Throws<ArgumentNullException>(() => CShellsBuilderExtensions.WithAssemblyProvider(builder, factory: null!));
+        var exception = Assert.Throws<ArgumentNullException>(() => builder.WithAssemblyProvider(factory: null!));
 
         Assert.Equal("factory", exception.ParamName);
     }
@@ -196,7 +196,7 @@ public class CShellsBuilderAssemblySourceTests
         var builder = new CShellsBuilder(new ServiceCollection());
         using var serviceProvider = new ServiceCollection().BuildServiceProvider();
 
-        CShellsBuilderExtensions.WithAssemblyProvider(builder, _ => null!);
+        builder.WithAssemblyProvider(_ => null!);
 
         var exception = Assert.Throws<InvalidOperationException>(() => builder.BuildFeatureAssemblyProviders(serviceProvider));
 

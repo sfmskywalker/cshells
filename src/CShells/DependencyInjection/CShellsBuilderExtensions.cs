@@ -111,7 +111,7 @@ public static class CShellsBuilderExtensions
     /// Passing an empty array is valid and still switches CShells into explicit feature-assembly provider mode.
     /// </para>
     /// </remarks>
-    public static CShellsBuilder FromAssemblies(this CShellsBuilder builder, params Assembly[] assemblies)
+    public static CShellsBuilder WithAssemblies(this CShellsBuilder builder, params Assembly[] assemblies)
     {
         Guard.Against.Null(builder);
 
@@ -131,10 +131,9 @@ public static class CShellsBuilderExtensions
     /// <param name="builder">The CShells builder.</param>
     /// <returns>The updated CShells builder.</returns>
     /// <remarks>
-    /// This is a convenience wrapper over <see cref="FromAssemblies(CShellsBuilder,System.Reflection.Assembly[])"/> for the common marker-type pattern.
+    /// This is a convenience wrapper over <see cref="WithAssemblies"/> for the common marker-type pattern.
     /// </remarks>
-    public static CShellsBuilder FromAssemblyContaining<TMarker>(this CShellsBuilder builder) =>
-        FromAssemblies(builder, typeof(TMarker).Assembly);
+    public static CShellsBuilder WithAssemblyContaining<TMarker>(this CShellsBuilder builder) => builder.WithAssemblies(typeof(TMarker).Assembly);
 
     /// <summary>
     /// Appends the built-in host-derived assembly contribution for shell feature discovery.
@@ -144,7 +143,7 @@ public static class CShellsBuilderExtensions
     /// <remarks>
     /// The host-derived assembly set matches the default feature discovery behavior used when no assembly-source methods are called.
     /// </remarks>
-    public static CShellsBuilder FromHostAssemblies(this CShellsBuilder builder)
+    public static CShellsBuilder WithHostAssemblies(this CShellsBuilder builder)
     {
         Guard.Against.Null(builder);
 

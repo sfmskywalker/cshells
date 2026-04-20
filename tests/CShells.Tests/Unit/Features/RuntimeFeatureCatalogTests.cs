@@ -62,14 +62,14 @@ public class RuntimeFeatureCatalogTests
 
     private static Assembly CreateDynamicFeatureAssembly(string assemblyName, string typeName, string featureName)
     {
-        var dynamicAssembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(assemblyName), AssemblyBuilderAccess.Run);
+        var dynamicAssembly = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.Run);
         var module = dynamicAssembly.DefineDynamicModule(assemblyName);
         var type = module.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Class);
         type.AddInterfaceImplementation(typeof(IShellFeature));
 
         var attributeConstructor = typeof(ShellFeatureAttribute).GetConstructor([typeof(string)])
             ?? throw new InvalidOperationException("ShellFeatureAttribute(string) constructor was not found.");
-        type.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, [featureName]));
+        type.SetCustomAttribute(new(attributeConstructor, [featureName]));
         type.DefineDefaultConstructor(MethodAttributes.Public);
 
         var configureServices = type.DefineMethod(

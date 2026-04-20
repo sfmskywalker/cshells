@@ -30,7 +30,7 @@ public class ServiceResolutionTests : IAsyncDisposable
         cache.Load(settings);
         var (services, provider) = TestFixtures.CreateRootServices();
         var accessor = TestFixtures.CreateRootServicesAccessor(services);
-        var factory = new CShells.Features.DefaultShellFeatureFactory(provider);
+        var factory = new DefaultShellFeatureFactory(provider);
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
         var host = new Hosting.DefaultShellHost(cache, assemblies, provider, accessor, factory, exclusionRegistry);
         _hostsToDispose.Add(host);

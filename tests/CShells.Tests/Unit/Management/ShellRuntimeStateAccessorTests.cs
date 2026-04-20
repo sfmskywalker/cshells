@@ -64,7 +64,7 @@ public class ShellRuntimeStateAccessorTests
 
         // Assert
         var status = Assert.Single(statuses);
-        Assert.Equal(new ShellId("Partial"), status.ShellId);
+        Assert.Equal(new("Partial"), status.ShellId);
         Assert.Equal(1, status.AppliedGeneration);
         Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, status.Outcome);
         Assert.True(status.IsRoutable);

@@ -96,8 +96,8 @@ public class ShellSettingsCacheInitializerTests
     {
         // Arrange
         var provider = new TestShellSettingsProvider([
-            new ShellSettings(new("Default")),
-            new ShellSettings(new("Contoso"), ["Core"]) 
+            new(new("Default")),
+            new(new("Contoso"), ["Core"]) 
         ]);
         var cache = new ShellSettingsCache();
         var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
@@ -108,17 +108,17 @@ public class ShellSettingsCacheInitializerTests
         // Assert
         Assert.Collection(
             cache.GetAll(),
-            shell => Assert.Equal(new ShellId("Default"), shell.Id),
-            shell => Assert.Equal(new ShellId("Contoso"), shell.Id));
+            shell => Assert.Equal(new("Default"), shell.Id),
+            shell => Assert.Equal(new("Contoso"), shell.Id));
     }
 
     [Fact(DisplayName = "Initializer replaces existing cached shells with provider state")]
     public async Task Initializer_ReplacesExistingCacheContents()
     {
         // Arrange
-        var provider = new TestShellSettingsProvider([new ShellSettings(new("Tenant2"), ["FeatureB"])]);
+        var provider = new TestShellSettingsProvider([new(new("Tenant2"), ["FeatureB"])]);
         var cache = new ShellSettingsCache();
-        cache.Load([new ShellSettings(new("Tenant1"), ["FeatureA"])]);
+        cache.Load([new(new("Tenant1"), ["FeatureA"])]);
         var initializer = new ShellSettingsCacheInitializer(provider, cache, NullLogger<ShellSettingsCacheInitializer>.Instance);
 
         // Act
@@ -127,7 +127,7 @@ public class ShellSettingsCacheInitializerTests
         // Assert
         var allShells = cache.GetAll();
         Assert.Single(allShells);
-        Assert.Equal(new ShellId("Tenant2"), allShells.Single().Id);
+        Assert.Equal(new("Tenant2"), allShells.Single().Id);
     }
 
     private sealed class TestShellSettingsProvider(IReadOnlyCollection<ShellSettings> shells) : IShellSettingsProvider

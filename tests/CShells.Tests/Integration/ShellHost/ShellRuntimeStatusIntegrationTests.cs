@@ -14,8 +14,8 @@ public class ShellRuntimeStatusIntegrationTests
     public async Task RuntimeStatus_ExposesMixedDesiredAndAppliedStates()
     {
         // Arrange
-        var defaultSettings = new ShellSettings(new ShellId("Default"), ["Core"]);
-        var partialSettings = new ShellSettings(new ShellId("Partial"), ["MissingFeature"]);
+        var defaultSettings = new ShellSettings(new("Default"), ["Core"]);
+        var partialSettings = new ShellSettings(new("Partial"), ["MissingFeature"]);
         var cache = new ShellSettingsCache();
         cache.Load([defaultSettings, partialSettings]);
 
@@ -52,7 +52,7 @@ public class ShellRuntimeStatusIntegrationTests
             statuses,
             status =>
             {
-                Assert.Equal(new ShellId("Default"), status.ShellId);
+                Assert.Equal(new("Default"), status.ShellId);
                 Assert.Equal(ShellReconciliationOutcome.Active, status.Outcome);
                 Assert.True(status.IsInSync);
                 Assert.True(status.IsRoutable);
@@ -60,7 +60,7 @@ public class ShellRuntimeStatusIntegrationTests
             },
             status =>
             {
-                Assert.Equal(new ShellId("Partial"), status.ShellId);
+                Assert.Equal(new("Partial"), status.ShellId);
                 Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, status.Outcome);
                 Assert.True(status.IsInSync);
                 Assert.True(status.IsRoutable);
@@ -74,14 +74,14 @@ public class ShellRuntimeStatusIntegrationTests
     {
         // Arrange — Default shell configured with a feature that will cause a build failure (not just missing)
         // We use a settings provider that causes the Default shell to fail during build.
-        var contosoSettings = new ShellSettings(new ShellId("Contoso"), ["Core"]);
-        var defaultSettings = new ShellSettings(new ShellId("Default"), ["MissingFeature"]);
+        var contosoSettings = new ShellSettings(new("Contoso"), ["Core"]);
+        var defaultSettings = new ShellSettings(new("Default"), ["MissingFeature"]);
         var runtime = CreateRuntime([defaultSettings, contosoSettings]);
 
         // Act
         await runtime.Manager.InitializeRuntimeAsync();
-        var defaultStatus = runtime.Accessor.GetShell(new ShellId("Default"));
-        var contosoStatus = runtime.Accessor.GetShell(new ShellId("Contoso"));
+        var defaultStatus = runtime.Accessor.GetShell(new("Default"));
+        var contosoStatus = runtime.Accessor.GetShell(new("Contoso"));
 
         // Assert — Default shell activates with missing features but is still routable
         Assert.NotNull(defaultStatus);

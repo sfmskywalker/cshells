@@ -116,7 +116,7 @@ public static class TestFixtures
         cache.Load([shellSettings]);
         var (services, provider) = CreateRootServices();
         var accessor = CreateRootServicesAccessor(services);
-        var factory = new CShells.Features.DefaultShellFeatureFactory(provider);
+        var factory = new DefaultShellFeatureFactory(provider);
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
         var host = new Hosting.DefaultShellHost(cache, [assembly], provider, accessor, factory, exclusionRegistry);
         hostsToDispose.Add(host);

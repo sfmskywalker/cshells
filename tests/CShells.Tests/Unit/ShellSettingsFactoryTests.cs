@@ -117,7 +117,7 @@ public class ShellSettingsFactoryTests
             Name = "TestShell",
             Features =
             [
-                new FeatureEntry
+                new()
                 {
                     Name = "FraudDetection",
                     Settings = new() { ["Threshold"] = 0.85, ["MaxAmount"] = 5000 }
@@ -147,7 +147,7 @@ public class ShellSettingsFactoryTests
             Features =
             [
                 FeatureEntry.FromName("Core"),
-                new FeatureEntry
+                new()
                 {
                     Name = "Database",
                     Settings = new() { ["ConnectionString"] = "Server=localhost" }
@@ -174,7 +174,7 @@ public class ShellSettingsFactoryTests
             Name = "TestShell",
             Features =
             [
-                new FeatureEntry
+                new()
                 {
                     Name = "Feature1",
                     Settings = new()
@@ -218,7 +218,7 @@ public class ShellSettingsFactoryTests
             [
                 Feature("Core"),
                 Feature("Posts"),
-                new FeatureEntry
+                new()
                 {
                     Name = "Analytics",
                     Settings = new() { ["TopPostsCount"] = 10 }
@@ -262,7 +262,7 @@ public class ShellSettingsFactoryTests
             Name = "InnerNameShell",
             Features =
             [
-                new FeatureEntry
+                new()
                 {
                     Name = "Analytics",
                     Settings = new() { ["Name"] = "AnalyticsDisplay", ["TopPostsCount"] = 5 }

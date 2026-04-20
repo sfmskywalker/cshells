@@ -29,7 +29,7 @@ public class ShellConfigurationIntegrationTests
         var rootProvider = services.BuildServiceProvider();
 
         // Shell with custom settings
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
         shellSettings.ConfigurationData["Theme"] = "Dark";
         shellSettings.ConfigurationData["MaxUploadSizeMB"] = "50";
 
@@ -73,10 +73,10 @@ public class ShellConfigurationIntegrationTests
         var rootProvider = services.BuildServiceProvider();
 
         // Create two shells with different settings
-        var shell1 = new ShellSettings(new ShellId("Shell1"));
+        var shell1 = new ShellSettings(new("Shell1"));
         shell1.ConfigurationData["Theme"] = "Dark";
 
-        var shell2 = new ShellSettings(new ShellId("Shell2"));
+        var shell2 = new ShellSettings(new("Shell2"));
         shell2.ConfigurationData["Theme"] = "Blue";
 
         var cache = new ShellSettingsCache();
@@ -122,7 +122,7 @@ public class ShellConfigurationIntegrationTests
         var rootProvider = services.BuildServiceProvider();
 
         // Create shell without custom settings
-        var shellSettings = new ShellSettings(new ShellId("TestShell"));
+        var shellSettings = new ShellSettings(new("TestShell"));
 
         var cache = new ShellSettingsCache();
         cache.Load([shellSettings]);

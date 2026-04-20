@@ -71,7 +71,7 @@ public class ConfiguringShellSettingsProviderTests
         var services = new ServiceCollection();
         var providerShells = new List<ShellSettings>
         {
-            new(new ShellId("ProviderShell"), ["ProviderFeature"])
+            new(new("ProviderShell"), ["ProviderFeature"])
         };
 
         services.AddCShells(shells =>
@@ -99,7 +99,7 @@ public class ConfiguringShellSettingsProviderTests
         var services = new ServiceCollection();
         var providerShells = new List<ShellSettings>
         {
-            new(new ShellId("Shell1"), ["Feature1"])
+            new(new("Shell1"), ["Feature1"])
         };
 
         services.AddCShells(shells =>
@@ -126,7 +126,7 @@ public class ConfiguringShellSettingsProviderTests
     public async Task ConfigureAllShells_DoesNotMutateOriginalProviderInstances()
     {
         // Arrange
-        var originalSettings = new ShellSettings(new ShellId("Shell1"), ["Feature1"]);
+        var originalSettings = new ShellSettings(new("Shell1"), ["Feature1"]);
         var providerShells = new List<ShellSettings> { originalSettings };
 
         var services = new ServiceCollection();
@@ -158,7 +158,7 @@ public class ConfiguringShellSettingsProviderTests
         var services = new ServiceCollection();
         var providerShells = new List<ShellSettings>
         {
-            new(new ShellId("Shell1"), ["Feature1"])
+            new(new("Shell1"), ["Feature1"])
         };
 
         services.AddCShells(shells =>

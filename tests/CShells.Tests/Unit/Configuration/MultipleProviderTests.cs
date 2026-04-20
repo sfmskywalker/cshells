@@ -36,11 +36,11 @@ public class MultipleProviderTests
         var services = new ServiceCollection();
         var provider1Shells = new List<ShellSettings>
         {
-            new(new ShellId("Provider1Shell"), ["Feature1"])
+            new(new("Provider1Shell"), ["Feature1"])
         };
         var provider2Shells = new List<ShellSettings>
         {
-            new(new ShellId("Provider2Shell"), ["Feature2"])
+            new(new("Provider2Shell"), ["Feature2"])
         };
         
         // Act
@@ -67,11 +67,11 @@ public class MultipleProviderTests
         var services = new ServiceCollection();
         var provider1Shells = new List<ShellSettings>
         {
-            new(new ShellId("SharedShell"), ["Feature1"])
+            new(new("SharedShell"), ["Feature1"])
         };
         var provider2Shells = new List<ShellSettings>
         {
-            new(new ShellId("SharedShell"), ["Feature2"])
+            new(new("SharedShell"), ["Feature2"])
         };
         
         // Act
@@ -99,7 +99,7 @@ public class MultipleProviderTests
         var services = new ServiceCollection();
         var providerShells = new List<ShellSettings>
         {
-            new(new ShellId("ProviderShell"), ["ProviderFeature"])
+            new(new("ProviderShell"), ["ProviderFeature"])
         };
         
         // Act
@@ -146,19 +146,19 @@ public class MultipleProviderTests
         var mutableProvider = new MutableInMemoryShellSettingsProvider();
         
         // Act - Add shell
-        var shell1 = new ShellSettings(new ShellId("Shell1"), ["Feature1"]);
+        var shell1 = new ShellSettings(new("Shell1"), ["Feature1"]);
         mutableProvider.AddOrUpdate(shell1);
         
         var settings1 = (await mutableProvider.GetShellSettingsAsync()).ToList();
         
         // Act - Add another shell
-        var shell2 = new ShellSettings(new ShellId("Shell2"), ["Feature2"]);
+        var shell2 = new ShellSettings(new("Shell2"), ["Feature2"]);
         mutableProvider.AddOrUpdate(shell2);
         
         var settings2 = (await mutableProvider.GetShellSettingsAsync()).ToList();
         
         // Act - Remove first shell
-        mutableProvider.Remove(new ShellId("Shell1"));
+        mutableProvider.Remove(new("Shell1"));
         
         var settings3 = (await mutableProvider.GetShellSettingsAsync()).ToList();
         

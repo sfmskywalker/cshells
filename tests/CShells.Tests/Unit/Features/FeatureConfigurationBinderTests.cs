@@ -11,7 +11,7 @@ public class FeatureConfigurationBinderTests
     public void BindAndConfigure_WithICollectionProperty_BindsValues()
     {
         // Arrange
-        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        var configuration = BuildConfiguration(new()
         {
             ["DefaultAdminUser:AdminRolePermissions:0"] = "ReadUsers",
             ["DefaultAdminUser:AdminRolePermissions:1"] = "ManageUsers"
@@ -30,7 +30,7 @@ public class FeatureConfigurationBinderTests
     public void BindAndConfigure_WithComplexProperty_BindsValues()
     {
         // Arrange
-        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        var configuration = BuildConfiguration(new()
         {
             ["Complex:Settings:Mode"] = "Strict",
             ["Complex:Settings:MaxItems"] = "7"

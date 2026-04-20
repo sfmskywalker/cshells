@@ -11,8 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
-    cshells.FromHostAssemblies(); // Re-include the built-in host-derived source explicitly for this sample.
-    cshells.FromAssemblyContaining<CoreFeature>(); // Add the separate features assembly as an explicit source.
+    cshells.WithHostAssemblies(); // Re-include the built-in host-derived source explicitly for this sample.
+    cshells.WithAssemblyContaining<CoreFeature>(); // Add the separate features assembly as an explicit source.
 });
 
 // Background service that logs a heartbeat for each active shell every 30 s.

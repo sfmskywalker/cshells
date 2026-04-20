@@ -17,9 +17,9 @@ public class CShellsBuilderNamingGuardrailTests
 
         Assert.Equal(
             [
-                nameof(CShellsBuilderExtensions.FromAssemblies),
-                nameof(CShellsBuilderExtensions.FromAssemblyContaining),
-                nameof(CShellsBuilderExtensions.FromHostAssemblies),
+                nameof(CShellsBuilderExtensions.WithAssemblies),
+                nameof(CShellsBuilderExtensions.WithAssemblyContaining),
+                nameof(CShellsBuilderExtensions.WithHostAssemblies),
                 nameof(CShellsBuilderExtensions.WithAssemblyProvider)
             ],
             methodNames);
@@ -30,7 +30,7 @@ public class CShellsBuilderNamingGuardrailTests
     {
         var overload = Assert.Single(
             GetPublicAssemblyDiscoveryMethods(),
-            method => method.Name == nameof(CShellsBuilderExtensions.FromAssemblyContaining));
+            method => method.Name == nameof(CShellsBuilderExtensions.WithAssemblyContaining));
 
         Assert.True(overload.IsGenericMethodDefinition);
         Assert.Single(overload.GetGenericArguments());

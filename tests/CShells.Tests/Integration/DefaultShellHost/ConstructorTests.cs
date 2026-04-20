@@ -74,7 +74,7 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
         var host = new Hosting.DefaultShellHost(
             cache,
-            _ => Task.FromResult<IReadOnlyCollection<System.Reflection.Assembly>>([typeof(CShells.Tests.Integration.ShellHost.TestFixtures).Assembly]),
+            _ => Task.FromResult<IReadOnlyCollection<System.Reflection.Assembly>>([typeof(ShellHost.TestFixtures).Assembly]),
             fixture.RootProvider,
             fixture.RootAccessor,
             fixture.FeatureFactory,
@@ -94,7 +94,7 @@ public class ConstructorTests(DefaultShellHostFixture fixture)
         var exclusionRegistry = new ShellServiceExclusionRegistry([]);
         var host = new Hosting.DefaultShellHost(
             cache,
-            _ => Task.FromResult<IReadOnlyCollection<System.Reflection.Assembly>>([typeof(CShells.Tests.Integration.ShellHost.TestFixtures).Assembly]),
+            _ => Task.FromResult<IReadOnlyCollection<System.Reflection.Assembly>>([typeof(ShellHost.TestFixtures).Assembly]),
             fixture.RootProvider,
             fixture.RootAccessor,
             fixture.FeatureFactory,

@@ -22,11 +22,11 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var explicitHostProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            DependencyInjection.CShellsBuilderExtensions.FromHostAssemblies(builder);
+            builder.WithHostAssemblies();
         });
 
-        var defaultShell = GetShell(defaultProvider, new ShellId("Default"));
-        var explicitHostShell = GetShell(explicitHostProvider, new ShellId("Default"));
+        var defaultShell = GetShell(defaultProvider, new("Default"));
+        var explicitHostShell = GetShell(explicitHostProvider, new("Default"));
         var defaultFeatures = defaultShell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
         var explicitHostFeatures = explicitHostShell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
@@ -41,13 +41,13 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
+            builder.WithAssemblies(typeof(CShellsBuilder).Assembly);
         });
 
         // With partial activation, the shell activates but "Weather" is recorded as missing
         // because the CShellsBuilder assembly doesn't contain the Weather feature.
         var shellHost = serviceProvider.GetRequiredService<IShellHost>();
-        var shell = shellHost.GetShell(new ShellId("Default"));
+        var shell = shellHost.GetShell(new("Default"));
         Assert.DoesNotContain("Weather", shell.EnabledFeatures);
         Assert.Contains("Weather", shell.MissingFeatures);
     }
@@ -61,8 +61,8 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
             builder =>
             {
                 builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-                DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(CShellsBuilder).Assembly);
-                DependencyInjection.CShellsBuilderExtensions.WithAssemblyProvider(builder, sp =>
+                builder.WithAssemblies(typeof(CShellsBuilder).Assembly);
+                builder.WithAssemblyProvider(sp =>
                 {
                     var resolvedMarker = sp.GetRequiredService<RootMarkerService>();
                     return new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly], resolvedMarker);
@@ -70,7 +70,7 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
             },
             services => services.AddSingleton(marker));
 
-        var shell = GetShell(serviceProvider, new ShellId("Default"));
+        var shell = GetShell(serviceProvider, new("Default"));
         var features = shell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
         Assert.Contains(TrackingFeatureAssemblyProvider.CreatedProviders, provider => ReferenceEquals(provider.ResolvedMarker, marker));
@@ -85,11 +85,11 @@ public class FeatureAssemblySelectionIntegrationTests : IAsyncDisposable
         var serviceProvider = await BuildRootProviderAsync(builder =>
         {
             builder.AddShell("Default", shell => shell.WithFeatures("Weather"));
-            DependencyInjection.CShellsBuilderExtensions.FromAssemblies(builder, typeof(TestFixtures).Assembly);
-            DependencyInjection.CShellsBuilderExtensions.WithAssemblyProvider(builder, new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly]));
+            builder.WithAssemblies(typeof(TestFixtures).Assembly);
+            builder.WithAssemblyProvider(new TrackingFeatureAssemblyProvider([typeof(TestFixtures).Assembly]));
         });
 
-        var shell = GetShell(serviceProvider, new ShellId("Default"));
+        var shell = GetShell(serviceProvider, new("Default"));
         var features = shell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
 
         Assert.Contains(features, feature => feature.Id == "Core");

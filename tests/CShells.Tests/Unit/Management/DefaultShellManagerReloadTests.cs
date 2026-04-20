@@ -134,7 +134,7 @@ public class DefaultShellManagerReloadTests
         var accessorService = new ShellRuntimeStateAccessor(stateStore);
         var manager = new DefaultShellManager(host, cache, provider, stateStore, runtimeCatalog, accessorService, notifications, NullLogger<DefaultShellManager>.Instance);
 
-        return new TestRuntime(cache, host, manager, accessorService);
+        return new(cache, host, manager, accessorService);
     }
 
     private sealed record TestRuntime(
