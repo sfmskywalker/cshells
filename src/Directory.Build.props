@@ -13,7 +13,7 @@
         <Company>Valence Works</Company>
         <Copyright>Copyright (c) 2025 Valence Works</Copyright>
         <Description>A lightweight shell &amp; feature system for .NET projects that lets you build modular and multi-tenant apps with per-shell DI containers and config-driven features.</Description>
-        <PackageProjectUrl>https://github.com/sfmskywalker/cshells</PackageProjectUrl>
+        <PackageProjectUrl>https://github.com/valence-works/cshells</PackageProjectUrl>
         <RepositoryUrl>https://github.com/valence-works/cshells</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>shell;feature;modular;multitenant;aspnetcore;dependency-injection</PackageTags>
