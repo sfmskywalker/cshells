@@ -291,6 +291,13 @@ public class ShellMiddlewareTests
 
         public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
         public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        public virtual IAsyncDisposable AcquireContextScope(ShellContext context) => NoOpDisposable.Instance;
+
+        private sealed class NoOpDisposable : IAsyncDisposable
+        {
+            public static readonly NoOpDisposable Instance = new();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>
@@ -298,9 +305,9 @@ public class ShellMiddlewareTests
     /// to use the real active-scope counter on <see cref="ShellContext"/>, letting tests observe
     /// when the scope handle is acquired and released.
     /// </summary>
-    private sealed class TrackingShellHost(ShellContext? shellContext = null) : TestShellHost(shellContext), IShellHost
+    private sealed class TrackingShellHost(ShellContext? shellContext = null) : TestShellHost(shellContext)
     {
-        IAsyncDisposable IShellHost.AcquireContextScope(ShellContext context)
+        public override IAsyncDisposable AcquireContextScope(ShellContext context)
         {
             context.IncrementActiveScopes();
             return new ScopeHandle(context);

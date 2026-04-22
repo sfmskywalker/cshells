@@ -40,19 +40,8 @@ public interface IShellHost
 
     /// <summary>
     /// Acquires a scope tracking handle for the specified shell context.
-    /// The handle must be disposed (via <c>await using</c>) when the scope ends so that the host
-    /// can safely defer disposal of shells that are replaced while request scopes are still active.
+    /// The handle must be disposed when the scope ends so that the host can safely defer disposal
+    /// of shells that are replaced while request scopes are still active.
     /// </summary>
-    /// <remarks>
-    /// The default implementation is a no-op. <see cref="DefaultShellHost"/> overrides this to
-    /// implement deferred disposal: when a shell is reloaded, its old <see cref="IServiceProvider"/>
-    /// is not disposed until all outstanding scope handles have been released.
-    /// </remarks>
-    IAsyncDisposable AcquireContextScope(ShellContext context) => NoOpAsyncDisposable.Instance;
-
-    private sealed class NoOpAsyncDisposable : IAsyncDisposable
-    {
-        public static readonly NoOpAsyncDisposable Instance = new();
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
+    IAsyncDisposable AcquireContextScope(ShellContext context);
 }

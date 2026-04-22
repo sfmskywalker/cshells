@@ -151,6 +151,13 @@ public class ApplicationBuilderExtensionsTests
         public ShellContext GetShell(ShellId id) => throw new KeyNotFoundException();
         public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
         public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        public IAsyncDisposable AcquireContextScope(ShellContext context) => NoOpDisposable.Instance;
+
+        private sealed class NoOpDisposable : IAsyncDisposable
+        {
+            public static readonly NoOpDisposable Instance = new();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     [ShellFeature("TestWeb")]
