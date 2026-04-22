@@ -79,6 +79,12 @@ public class ShellMiddleware(
 
         var shellContext = _host.GetShell(shellId.Value);
 
+        // Acquire a scope handle so that DefaultShellHost can defer disposal of this shell
+        // context if it is replaced (e.g. via a reload) while this request is still in flight.
+        // The handle is released via `await using` after _next returns (i.e. after the response
+        // has been written), at which point the old provider can be safely disposed.
+        await using var scopeHandle = _host.AcquireContextScope(shellContext);
+
         var scope = shellContext.ServiceProvider.CreateScope();
         context.RequestServices = scope.ServiceProvider;
 

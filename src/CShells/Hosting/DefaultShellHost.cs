@@ -347,7 +347,7 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
         if (commit.PreviousContext is not null && !ReferenceEquals(commit.PreviousContext, candidate.CandidateContext))
         {
-            await DisposeShellContextAsync(commit.PreviousContext).ConfigureAwait(false);
+            await DisposeOrDeferContextAsync(commit.PreviousContext).ConfigureAwait(false);
         }
     }
 
@@ -368,7 +368,7 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
         if (result.PreviousContext is not null)
         {
-            await DisposeShellContextAsync(result.PreviousContext).ConfigureAwait(false);
+            await DisposeOrDeferContextAsync(result.PreviousContext).ConfigureAwait(false);
         }
     }
 
@@ -709,6 +709,41 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
             _logger.LogDebug("Evicting cached shell context for '{ShellId}'", context.Settings.Id);
             await DisposeShellContextAsync(context).ConfigureAwait(false);
         }
+    }
+
+    /// <inheritdoc/>
+    public IAsyncDisposable AcquireContextScope(ShellContext context)
+        => new ShellContextScopeHandle(context, this);
+
+    /// <summary>
+    /// Disposes <paramref name="context"/> immediately if no active request scopes are using it,
+    /// otherwise marks it for deferred disposal. The last scope handle to release will dispose it
+    /// via <see cref="TryDisposePendingContextAsync"/>.
+    /// </summary>
+    private async ValueTask DisposeOrDeferContextAsync(ShellContext context)
+    {
+        if (context.ActiveScopes == 0)
+        {
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        context.MarkPendingDisposal();
+
+        // Double-check: all scopes may have released between the ActiveScopes check above and
+        // MarkPendingDisposal(). If so, we must dispose now since no scope handle will do it.
+        if (context.ActiveScopes == 0)
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Disposes <paramref name="context"/> if it is pending disposal and has no active scopes.
+    /// Called by <see cref="ShellContextScopeHandle"/> when the last scope releases.
+    /// </summary>
+    internal async ValueTask TryDisposePendingContextAsync(ShellContext context)
+    {
+        if (context.IsPendingDisposal && context.ActiveScopes == 0)
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
     }
 
     private async ValueTask DisposeShellContextAsync(ShellContext context)

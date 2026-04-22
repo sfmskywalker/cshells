@@ -5,6 +5,9 @@ namespace CShells.Hosting;
 /// </summary>
 public class ShellContext(ShellSettings settings, IServiceProvider serviceProvider, IReadOnlyList<string> enabledFeatures, IReadOnlyCollection<string>? missingFeatures = null)
 {
+    private int _activeScopes;
+    private volatile bool _pendingDisposal;
+
     /// <summary>
     /// Gets the shell settings.
     /// </summary>
@@ -38,4 +41,27 @@ public class ShellContext(ShellSettings settings, IServiceProvider serviceProvid
     /// when this shell was built. Empty when all configured features were available.
     /// </summary>
     public IReadOnlyCollection<string> MissingFeatures { get; } = missingFeatures ?? [];
+
+    /// <summary>
+    /// Gets the number of active request scopes currently using this shell context.
+    /// </summary>
+    internal int ActiveScopes => Volatile.Read(ref _activeScopes);
+
+    /// <summary>
+    /// Gets whether this context has been marked for deferred disposal once all active scopes release.
+    /// </summary>
+    internal bool IsPendingDisposal => _pendingDisposal;
+
+    internal void IncrementActiveScopes() => Interlocked.Increment(ref _activeScopes);
+
+    /// <summary>
+    /// Decrements the active scope counter and returns the new count.
+    /// </summary>
+    internal int DecrementActiveScopes() => Interlocked.Decrement(ref _activeScopes);
+
+    /// <summary>
+    /// Marks this context for deferred disposal. The actual disposal will happen when
+    /// <see cref="ActiveScopes"/> reaches zero.
+    /// </summary>
+    internal void MarkPendingDisposal() => _pendingDisposal = true;
 }
