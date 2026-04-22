@@ -8,6 +8,11 @@ public class ShellContext(ShellSettings settings, IServiceProvider serviceProvid
     private int _activeScopes;
     private volatile bool _pendingDisposal;
 
+    // CAS flag that ensures DisposeShellContextAsync is entered by at most one caller even when
+    // both DisposeOrDeferContextAsync (double-check path) and ShellContextScopeHandle.DisposeAsync
+    // race to trigger disposal in the same narrow window. 0 = not yet disposing, 1 = disposing.
+    private int _disposing;
+
     /// <summary>
     /// Gets the shell settings.
     /// </summary>
@@ -64,4 +69,19 @@ public class ShellContext(ShellSettings settings, IServiceProvider serviceProvid
     /// <see cref="ActiveScopes"/> reaches zero.
     /// </summary>
     internal void MarkPendingDisposal() => _pendingDisposal = true;
+
+    /// <summary>
+    /// Atomically claims the right to dispose this context. Returns <see langword="true"/> exactly
+    /// once across all concurrent callers; all subsequent calls return <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// Used to prevent double-disposal in the race where both
+    /// <c>DisposeOrDeferContextAsync</c> (the double-check path) and
+    /// <c>ShellContextScopeHandle.DisposeAsync</c> determine simultaneously that
+    /// <see cref="ActiveScopes"/> has reached zero. <see cref="IServiceProvider"/> disposal is
+    /// idempotent in .NET, so double-disposal would not crash, but this keeps the code clean and
+    /// avoids spurious <see cref="ObjectDisposedException"/> log warnings.
+    /// </remarks>
+    internal bool TryBeginDispose() =>
+        Interlocked.CompareExchange(ref _disposing, 1, 0) == 0;
 }
