@@ -1,107 +1,171 @@
-# Quickstart: Shell Draining & Disposal Lifecycle
+# Quickstart: Shell Generations, Reload & Disposal Lifecycle
 
-This guide shows the key usage patterns for the new `IShellRegistry` API.
+This guide shows the key usage patterns for the `IShellRegistry` API. Hosts register a
+**blueprint** per shell name; the library owns generation assignment, activation, reload,
+and cooperative drain.
 
 ---
 
-## 1. Register CShells with drain support
+## 1. Register CShells with blueprints and drain policy
 
 ```csharp
 // Program.cs
 builder.Services.AddCShells(cshells =>
 {
-    // Optional: override the default 30-second drain policy
+    cshells.AddShell("payments", shell => shell
+        .WithFeature<PaymentsFeature>()
+        .WithConfiguration("stripe:key", builder.Configuration["Stripe:ApiKey"]!));
+
+    cshells.AddShell("reporting", shell => shell
+        .WithFeature<ReportingFeature>());
+
+    // Optional: override the default 30-second drain policy.
     cshells.ConfigureDrainPolicy(new FixedTimeoutDrainPolicy(TimeSpan.FromSeconds(60)));
+
+    // Optional: override the default 3-second grace period.
+    cshells.ConfigureGracePeriod(TimeSpan.FromSeconds(5));
 });
 ```
 
+Blueprints can also be loaded from configuration (e.g. `Shells/payments.json`); the
+`ConfigurationShellBlueprint` wraps a bound section and recomposes on every reload.
+
 When no drain policy is configured, the default is `FixedTimeoutDrainPolicy(30 seconds)`.
 
+The library's built-in startup hosted service activates every registered blueprint in
+parallel at host start. A blueprint that fails to compose, build, or initialize causes host
+startup to fail — the same loud-failure contract as any other startup step.
+
 ---
 
-## 2. Create and promote a shell
+## 2. Contribute initializers and drain handlers from features
 
 ```csharp
-public class ShellManager(IShellRegistry registry)
+internal sealed class PaymentsFeature : IShellFeature
 {
-    public async Task<IShell> StartPaymentsShellAsync(CancellationToken ct)
+    public void ConfigureServices(IServiceCollection services, ShellFeatureContext context)
     {
-        // Create in Initializing state
-        var shell = await registry.CreateAsync(
-            name: "payments",
-            version: "v1",
-            configure: services =>
-            {
-                services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
-                services.AddTransient<IDrainHandler, PaymentDrainHandler>();
-            },
-            metadata: new Dictionary<string, string> { ["owner"] = "payments-team" },
-            cancellationToken: ct);
-
-        // Promote to Active — this is when GetActive("payments") starts returning this shell
-        await registry.PromoteAsync(shell, ct);
-        return shell;
+        services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
+        services.AddTransient<IShellInitializer, PaymentsInitializer>();
+        services.AddTransient<IDrainHandler, PaymentsDrainHandler>();
     }
 }
-```
 
----
-
-## 3. Register a drain handler
-
-```csharp
-internal sealed class PaymentDrainHandler(IPaymentProcessor processor) : IDrainHandler
+// Runs once during Initializing → Active.
+internal sealed class PaymentsInitializer(IPaymentCache cache) : IShellInitializer
 {
-    public async Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken cancellationToken)
+    public Task InitializeAsync(CancellationToken ct) => cache.WarmAsync(ct);
+}
+
+// Runs during Draining, after all request scopes release (or deadline elapses).
+internal sealed class PaymentsDrainHandler(IPaymentProcessor processor) : IDrainHandler
+{
+    public async Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken ct)
     {
-        // Optionally request more time if there are in-flight transactions
         if (processor.InFlightCount > 0)
             extensionHandle.TryExtend(TimeSpan.FromSeconds(15), out _);
 
-        await processor.WaitForInFlightAsync(cancellationToken);
+        await processor.WaitForInFlightAsync(ct);
     }
 }
-
-// Registered in the shell's service collection:
-// services.AddTransient<IDrainHandler, PaymentDrainHandler>();
 ```
+
+Initializers run sequentially in the order their features' `ConfigureServices` calls
+registered them. Drain handlers run in parallel.
 
 ---
 
-## 4. Replace an active shell (rolling update)
+## 3. Reload a shell (rolling update)
+
+Update the blueprint's underlying source (fluent delegate capture or `Shells/*.json`) and
+call `ReloadAsync`:
 
 ```csharp
-public async Task DeployNewVersionAsync(IShellRegistry registry, CancellationToken ct)
+public async Task DeployNewConfigurationAsync(IShellRegistry registry, CancellationToken ct)
 {
-    // Create the new version in Initializing state
-    var newShell = await registry.CreateAsync("payments", "v2", services =>
+    var result = await registry.ReloadAsync("payments", ct);
+
+    if (result.Error is not null)
     {
-        services.AddSingleton<IPaymentProcessor, StripePaymentProcessorV2>();
-        services.AddTransient<IDrainHandler, PaymentDrainHandler>();
-    }, cancellationToken: ct);
+        logger.LogError(result.Error, "Reload failed for {Name}", result.Name);
+        return;
+    }
 
-    // ReplaceAsync: promotes v2 AND initiates drain on v1 atomically
-    var drainOp = await registry.ReplaceAsync(newShell, ct);
+    // result.NewShell.Descriptor.Generation == previous + 1
+    // result.NewShell is now Active; the prior generation is draining in the background.
 
-    if (drainOp is not null)
+    if (result.Drain is not null)
     {
-        // Await drain completion (optional — drain continues in background regardless)
-        var result = await drainOp.WaitAsync(ct);
-
+        var drainResult = await result.Drain.WaitAsync(ct);
         logger.LogInformation(
-            "Old shell drained. Status={Status}, Handlers={Count}",
-            result.Status,
-            result.HandlerResults.Count);
+            "Old generation drained. Status={Status}, ScopeWait={ScopeWait}, Handlers={Count}",
+            drainResult.Status,
+            drainResult.ScopeWaitElapsed,
+            drainResult.HandlerResults.Count);
     }
 }
 ```
 
+Concurrent `ReloadAsync` calls for the same name are serialized; generation numbers are
+assigned in arrival order and the last call to complete becomes the active generation.
+
 ---
 
-## 5. Observe lifecycle events
+## 4. Reload every shell at once
 
 ```csharp
-public class ShellMonitor(IShellRegistry registry, ILogger<ShellMonitor> logger)
+var results = await registry.ReloadAllAsync(ct);
+
+foreach (var r in results)
+{
+    if (r.Error is not null)
+        logger.LogError(r.Error, "Reload failed for {Name}", r.Name);
+    else
+        logger.LogInformation("Reloaded {Name} to generation {Gen}",
+            r.Name, r.NewShell!.Descriptor.Generation);
+}
+```
+
+One failing blueprint does not abort the batch — every other name still reloads.
+
+---
+
+## 5. Serve requests through a shell scope (web middleware pattern)
+
+```csharp
+public sealed class ShellMiddleware(RequestDelegate next, IShellRegistry registry, IShellResolver resolver)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var shellName = resolver.Resolve(context);
+        if (shellName is null)
+        {
+            await next(context);
+            return;
+        }
+
+        var shell = registry.GetActive(shellName)
+            ?? throw new InvalidOperationException($"No active shell for '{shellName}'");
+
+        await using var scope = shell.BeginScope();
+        context.RequestServices = scope.ServiceProvider;
+        await next(context);
+    }
+}
+```
+
+`shell.BeginScope()` both creates a DI scope and increments the shell's active-scope
+counter. When a reload triggers drain, the registry waits for every outstanding scope to
+release (bounded by the drain deadline) before running `IDrainHandler` services and
+disposing the provider. In-flight requests finish cleanly against the old generation's
+provider — no `ObjectDisposedException`s.
+
+---
+
+## 6. Observe lifecycle events
+
+```csharp
+public sealed class ShellMonitor(IShellRegistry registry, ILogger<ShellMonitor> logger)
     : IShellLifecycleSubscriber
 {
     public void StartObserving() => registry.Subscribe(this);
@@ -113,9 +177,8 @@ public class ShellMonitor(IShellRegistry registry, ILogger<ShellMonitor> logger)
         CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Shell {Name}@{Version} transitioned {Previous} → {Current}",
-            shell.Descriptor.Name,
-            shell.Descriptor.Version,
+            "Shell {Descriptor} transitioned {Previous} → {Current}",
+            shell.Descriptor, // formats as "payments#3"
             previous,
             current);
 
@@ -124,12 +187,12 @@ public class ShellMonitor(IShellRegistry registry, ILogger<ShellMonitor> logger)
 }
 ```
 
-The library automatically registers a structured-logging subscriber; no manual wiring is required
-for basic log output.
+The library automatically registers a structured-logging subscriber; no manual wiring is
+required for basic log output of every generation's transitions.
 
 ---
 
-## 6. Configure drain timeout policies
+## 7. Configure drain timeout policies
 
 ```csharp
 // Fixed timeout (default, 30 s)
@@ -144,26 +207,46 @@ services.AddSingleton<IDrainPolicy>(new ExtensibleTimeoutDrainPolicy(
 services.AddSingleton<IDrainPolicy>(new UnboundedDrainPolicy());
 ```
 
+Or, equivalently, via the builder: `cshells.ConfigureDrainPolicy(...)`.
+
 ---
 
-## 7. Force-complete a drain
+## 8. Force-complete a drain
 
 ```csharp
-var drainOp = await registry.DrainAsync(shell, ct);
+var reload = await registry.ReloadAsync("payments", ct);
 
-// Later — e.g. SIGTERM received with no time to wait
-await drainOp.ForceAsync(ct);
-var result = await drainOp.WaitAsync(ct); // Status == DrainStatus.Forced
+if (reload.Drain is not null)
+{
+    // Later — e.g. SIGTERM received with no time to wait.
+    await reload.Drain.ForceAsync(ct);
+    var result = await reload.Drain.WaitAsync(ct); // Status == DrainStatus.Forced
+}
 ```
+
+`ForceAsync` cancels the scope-wait phase immediately as well, so forcing during phase 1
+transitions straight to handler cancellation with no further waiting.
 
 ---
 
 ## State transition summary
 
 ```
-CreateAsync  →  Initializing
-PromoteAsync →  Active
-ReplaceAsync →  (new shell) Active, (old shell) Deactivating → Draining → Drained → Disposed
-DrainAsync   →  Draining → Drained → Disposed
-DisposeAsync →  Disposed (any state, skips drain)
+ActivateAsync  →  Initializing → Active
+                    │              │
+                    └─ initializers run sequentially before promoting
+
+ReloadAsync    →  (new)  Initializing → Active
+                  (old)  Active → Deactivating → Draining → Drained → Disposed
+                                                   │
+                                                   ├─ phase 1: scope wait
+                                                   ├─ phase 2: drain handlers (parallel)
+                                                   └─ phase 3: grace after deadline / force
+
+DrainAsync     →  Active | Deactivating → Draining → Drained → Disposed
+
+DisposeAsync   →  Disposed (any state, skips drain)
 ```
+
+The diagram applies per generation. Multiple generations for the same name can coexist:
+exactly one `Active`, any number `Deactivating` / `Draining` / `Drained`.

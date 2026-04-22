@@ -1,4 +1,4 @@
-# Data Model: Shell Draining & Disposal Lifecycle
+# Data Model: Shell Generations, Reload & Disposal Lifecycle
 
 **Phase 1 output**
 
@@ -6,24 +6,20 @@
 
 ## Entities
 
-### ShellId *(breaking change to existing type)*
+### ShellId *(unchanged)*
 
 **Location**: `CShells.Abstractions` — `ShellId.cs`
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `Name` | `string` | Case-insensitive shell name |
-| `Version` | `string` | Free-form version string; not interpreted semantically |
 
-**Equality**: `(Name, Version)` — both compared case-insensitively.
+**Equality**: case-insensitive on `Name`.
 
-**Validation**: Both `Name` and `Version` must be non-null, non-whitespace (guard at constructor).
-
-**Breaking change**: The implicit `string → ShellId` conversion and single-argument constructor are
-removed. Callers must supply `new ShellId("name", "version")`. The `Name`-only constructor used by
-the existing `IShellManager`/`DefaultShellHost` path will be updated to supply a sentinel version
-(e.g. `"__unversioned__"`) so the existing code continues to compile; this is an internal concern
-and transparent to users of `IShellRegistry`.
+**Notes**: `ShellId` remains a name-only value type. Generation is **not** part of identity
+and is never observable through `ShellId`. The `(Name, Generation)` pair is never needed as an
+equatable key — callers look up shells by name and observe generation via
+`IShell.Descriptor.Generation`.
 
 ---
 
@@ -33,18 +29,16 @@ and transparent to users of `IShellRegistry`.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `Name` | `string` | Shell name — matches `ShellId.Name` |
-| `Version` | `string` | Shell version — matches `ShellId.Version` |
+| `Name` | `string` | Shell name |
+| `Generation` | `int` | Library-assigned monotonic counter, 1-based |
 | `CreatedAt` | `DateTimeOffset` | UTC timestamp at shell creation |
-| `Metadata` | `IReadOnlyDictionary<string, string>` | Opaque host-supplied metadata; empty by default |
+| `Metadata` | `IReadOnlyDictionary<string, string>` | Sourced from the blueprint's `Metadata`; empty by default |
 
 **Constraints**:
 - Immutable record.
-- `Name` and `Version` are non-null, non-whitespace.
+- `Name` non-null / non-whitespace; `Generation >= 1`.
 - `Metadata` is never null; defaults to `ImmutableDictionary<string, string>.Empty`.
-- `ShellId` is derivable: `new ShellId(Name, Version)`.
-
-**State transitions**: N/A — descriptor is created once and never mutated.
+- Formatted as `"{Name}#{Generation}"` in `ToString()` for structured log fields.
 
 ---
 
@@ -58,10 +52,10 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Value | Meaning |
 |-------|---------|
-| `Initializing` | Shell is being constructed; service provider not yet ready |
-| `Active` | Shell is promoted; service provider available; eligible for requests |
-| `Deactivating` | Shell has been superseded; transitioning to drain |
-| `Draining` | Drain handlers are running; service provider still available |
+| `Initializing` | Shell is being constructed; provider built; initializers running |
+| `Active` | Shell is promoted; provider available; eligible for scopes |
+| `Deactivating` | Shell has been superseded by a newer generation; transitioning to drain |
+| `Draining` | Scope-wait + drain handlers running; provider still available |
 | `Drained` | All handlers completed (or timed out); provider still valid until disposal |
 | `Disposed` | `IServiceProvider` has been disposed; terminal state |
 
@@ -69,20 +63,68 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | From | To | Trigger |
 |------|-----|---------|
-| `Initializing` | `Active` | `PromoteAsync` called |
-| `Active` | `Deactivating` | A newer shell is promoted for the same name |
+| `Initializing` | `Active` | Internal: after initializers succeed inside `ActivateAsync` / `ReloadAsync` |
+| `Active` | `Deactivating` | Internal: a newer generation is promoted for the same name |
 | `Active` | `Draining` | `DrainAsync` called directly (no replacement) |
-| `Active` | `Disposed` | `DisposeAsync` called directly (skips drain) |
+| `Any non-terminal` | `Disposed` | `DisposeAsync` called directly (skips drain) |
 | `Deactivating` | `Draining` | Internal lifecycle engine starts drain |
-| `Draining` | `Drained` | All handlers complete, time out, or drain is forced |
-| `Drained` | `Disposed` | `DisposeAsync` called (or automatic post-drain disposal) |
-| Any non-`Disposed` | `Disposed` | `DisposeAsync` called directly |
+| `Draining` | `Drained` | Scope-wait + all handlers complete, time out, or drain is forced |
+| `Drained` | `Disposed` | Registry disposes the provider after drain completes |
 
 **Rules**:
-- Transitions are monotonic; backward moves are no-ops or throw.
-- Only `Active` shells are eligible for `PromoteAsync`-based replacement target; calling
-  `PromoteAsync` on a non-`Initializing` shell throws.
-- `DisposeAsync` on an undrained shell transitions directly to `Disposed` (skipping drain).
+- Transitions are monotonic; backward moves are no-ops.
+- Internal promote (used by `ActivateAsync` / `ReloadAsync`) only fires when initializers
+  have completed successfully.
+- `DisposeAsync` on an undrained shell transitions directly to `Disposed`, skipping drain.
+
+---
+
+### IShellBlueprint *(new)*
+
+**Location**: `CShells.Abstractions/Lifecycle/IShellBlueprint.cs`
+
+| Member | Type | Notes |
+|--------|------|-------|
+| `Name` | `string` | The shell name this blueprint is registered for |
+| `Metadata` | `IReadOnlyDictionary<string, string>` | Static descriptor metadata (owner, tags); flows onto every generation's `ShellDescriptor` unchanged |
+| `Task<ShellSettings> ComposeAsync(CancellationToken ct)` | | Produces a fresh `ShellSettings` on each invocation — called for every `ActivateAsync` / `ReloadAsync` |
+
+**Built-in implementations** (in `CShells/Lifecycle/Blueprints/`):
+
+| Type | Source | Behaviour |
+|------|--------|-----------|
+| `DelegateShellBlueprint` | Fluent (`AddShell(name, b => ...)`) | Invokes a stored `Action<ShellBuilder>` against a fresh `ShellBuilder(name)` on each compose |
+| `ConfigurationShellBlueprint` | Config-backed | Re-reads the bound `IConfigurationSection` (or named `ShellConfig`) on each compose, so edits to the underlying source are picked up on reload |
+
+**Constraints**:
+- `ComposeAsync` MUST be re-invocable and MUST NOT mutate shared external state.
+- `ComposeAsync` MAY be async (IO-bound config reads) but should complete promptly.
+- If composition throws, the exception propagates out of `ActivateAsync` / `ReloadAsync`
+  (FR-014).
+- The returned `ShellSettings` MUST carry `Name` matching the blueprint; the registry
+  validates this and throws `InvalidOperationException` on mismatch.
+
+---
+
+### IShellScope *(new)*
+
+**Location**: `CShells.Abstractions/Lifecycle/IShellScope.cs`
+
+| Member | Type | Notes |
+|--------|------|-------|
+| `Shell` | `IShell` | The owning shell |
+| `ServiceProvider` | `IServiceProvider` | A DI scope built from `Shell.ServiceProvider` |
+| `DisposeAsync` | | Releases the DI scope and decrements the shell's active-scope counter |
+
+**Behaviour**:
+- Obtained via `IShell.BeginScope()`.
+- Outstanding scopes delay drain-handler invocation (FR-022). Drain's scope-wait phase
+  completes once every `IShellScope` obtained from the shell has been disposed, or the drain
+  deadline elapses — whichever comes first.
+- Scope handles outstanding at the drain deadline are not forcibly disposed; drain proceeds
+  to handler invocation with the cancelled token and the handles dispose naturally when
+  their callers eventually release them.
+- Thread-safe: multiple concurrent callers can `BeginScope` on the same shell.
 
 ---
 
@@ -92,9 +134,32 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Member | Type | Notes |
 |--------|------|-------|
-| `Descriptor` | `ShellDescriptor` | Immutable identity + metadata |
+| `Descriptor` | `ShellDescriptor` | Immutable identity + metadata (includes generation) |
 | `State` | `ShellLifecycleState` | Current lifecycle state; changes atomically |
 | `ServiceProvider` | `IServiceProvider` | Resolvable until `Disposed` |
+| `BeginScope()` | `IShellScope` | Creates a tracked DI scope |
+
+Extends `IAsyncDisposable`.
+
+---
+
+### IShellInitializer *(new)*
+
+**Location**: `CShells.Abstractions/Lifecycle/IShellInitializer.cs`
+
+| Member | Notes |
+|--------|-------|
+| `Task InitializeAsync(CancellationToken cancellationToken)` | Called once during `Initializing → Active`. |
+
+**Registration**: Registered in the shell's `IServiceCollection` via
+`IShellFeature.ConfigureServices`. Resolved at activation time via
+`IEnumerable<IShellInitializer>` from the newly-built shell's provider.
+
+**Semantics**:
+- Initializers run sequentially in DI-registration order (FR-016).
+- If any initializer throws, the exception propagates out of `ActivateAsync` /
+  `ReloadAsync`; the shell never reaches `Active`; its provider is disposed; no partial
+  entry is retained (FR-014).
 
 ---
 
@@ -104,10 +169,11 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Member | Notes |
 |--------|-------|
-| `Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken cancellationToken)` | Called when shell enters `Draining`. Token is cancelled at deadline. |
+| `Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken cancellationToken)` | Called when shell enters `Draining`, after the scope-wait phase. Token is cancelled at deadline. |
 
 **Registration**: Registered as transient in the shell's `IServiceCollection` via
-`IShellFeature.ConfigureServices`. Resolved at drain time via `IEnumerable<IDrainHandler>`.
+`IShellFeature.ConfigureServices`. Resolved at drain time via `IEnumerable<IDrainHandler>`
+from the draining generation's provider.
 
 ---
 
@@ -117,7 +183,7 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Member | Notes |
 |--------|-------|
-| `bool TryExtend(TimeSpan requested, out TimeSpan granted)` | Ask the policy for a deadline extension. Returns false if policy rejects. |
+| `bool TryExtend(TimeSpan requested, out TimeSpan granted)` | Ask the policy for a deadline extension. Returns `false` if policy rejects. |
 
 ---
 
@@ -128,15 +194,15 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 | Member | Notes |
 |--------|-------|
 | `TimeSpan? InitialTimeout` | `null` means unbounded |
-| `bool IsUnbounded` | True for `UnboundedDrainPolicy` |
-| `bool TryExtend(TimeSpan requested, out TimeSpan granted)` | Called by `IDrainExtensionHandle`; fixed/unbounded always return false / true respectively |
+| `bool IsUnbounded` | `true` for `UnboundedDrainPolicy` |
+| `bool TryExtend(TimeSpan requested, out TimeSpan granted)` | Called by `IDrainExtensionHandle`; fixed/unbounded always return `false` / `true` respectively |
 
 **Concrete implementations** (in `CShells/Lifecycle/Policies/`):
 
 | Type | Behaviour |
 |------|-----------|
-| `FixedTimeoutDrainPolicy(TimeSpan timeout)` | Default; `TryExtend` always returns false |
-| `ExtensibleTimeoutDrainPolicy(TimeSpan initial, TimeSpan cap)` | Grants extensions up to cap |
+| `FixedTimeoutDrainPolicy(TimeSpan timeout)` | Default; `TryExtend` always returns `false` |
+| `ExtensibleTimeoutDrainPolicy(TimeSpan initial, TimeSpan cap)` | Grants extensions cumulatively up to cap |
 | `UnboundedDrainPolicy` | No deadline; logs a warning on first use; `TryExtend` grants anything |
 
 ---
@@ -147,10 +213,10 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Member | Type | Notes |
 |--------|------|-------|
-| `Status` | `DrainStatus` | Pending / Completed / TimedOut / Forced |
+| `Status` | `DrainStatus` | `Pending` / `Completed` / `TimedOut` / `Forced` |
 | `Deadline` | `DateTimeOffset?` | Null when policy is unbounded |
-| `Task<DrainResult> WaitAsync(CancellationToken)` | Awaitable; resolves when drain finishes |
-| `Task ForceAsync(CancellationToken)` | Cancels all handler tokens; transitions shell to Drained promptly |
+| `Task<DrainResult> WaitAsync(CancellationToken)` | | Awaitable; resolves when drain finishes |
+| `Task ForceAsync(CancellationToken)` | | Cancels all handler tokens; transitions shell to `Drained` promptly |
 
 **DrainStatus** (enum, in `DrainResult.cs`):
 
@@ -161,6 +227,18 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 | `TimedOut` | Deadline elapsed; handlers cancelled |
 | `Forced` | `ForceAsync` was called |
 
+**Drain phases** *(implementation semantics)*:
+
+1. **Scope wait** — await the shell's active-scope counter reaching zero, bounded by the
+   drain deadline. No handler runs during this phase. If the deadline elapses first, proceed
+   to phase 2 with the cancelled token; outstanding scopes are abandoned.
+2. **Handler invocation** — resolve `IEnumerable<IDrainHandler>` from the shell's provider
+   and invoke all handlers in parallel. Each handler receives an extension handle and a
+   cancellation token linked to the remaining deadline budget.
+3. **Grace** — after deadline or `ForceAsync`, wait up to the grace period (default 3 s) for
+   handlers to observe cancellation. Transition to `Drained` regardless of remaining handler
+   state.
+
 ---
 
 ### DrainResult *(new)*
@@ -169,8 +247,9 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `Shell` | `ShellDescriptor` | The drained shell |
+| `Shell` | `ShellDescriptor` | The drained shell (carries generation) |
 | `Status` | `DrainStatus` | Overall outcome |
+| `ScopeWaitElapsed` | `TimeSpan` | How long phase 1 took |
 | `HandlerResults` | `IReadOnlyList<DrainHandlerResult>` | One entry per registered handler |
 
 ---
@@ -188,6 +267,22 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 
 ---
 
+### ReloadResult *(new)*
+
+**Location**: `CShells.Abstractions/Lifecycle/ReloadResult.cs`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `Name` | `string` | Shell name |
+| `NewShell` | `IShell?` | The newly-activated generation; null if composition or activation failed |
+| `Drain` | `IDrainOperation?` | Drain operation on the previous generation; null if there was none or composition failed |
+| `Error` | `Exception?` | Non-null if blueprint composition, provider build, or initializer threw |
+
+Used as the return type of individual `ReloadAsync` calls and as the element type of the
+collection returned by `ReloadAllAsync`.
+
+---
+
 ### IShellLifecycleSubscriber *(new)*
 
 **Location**: `CShells.Abstractions/Lifecycle/IShellLifecycleSubscriber.cs`
@@ -196,8 +291,8 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 |--------|-------|
 | `Task OnStateChangedAsync(IShell shell, ShellLifecycleState previous, ShellLifecycleState current, CancellationToken cancellationToken)` | Called for every state transition on any shell in the registry |
 
-**Isolation**: Subscriber exceptions are caught, logged, and swallowed (Principle VII) so they
-cannot block other subscribers or the state transition itself.
+**Isolation**: Subscriber exceptions are caught, logged, and swallowed so they cannot block
+other subscribers or the state transition itself.
 
 ---
 
@@ -207,14 +302,20 @@ cannot block other subscribers or the state transition itself.
 
 | Member | Signature | Notes |
 |--------|-----------|-------|
-| `CreateAsync` | `Task<IShell> CreateAsync(string name, string version, Action<IServiceCollection> configure, IReadOnlyDictionary<string,string>? metadata, CancellationToken)` | Creates + registers shell in `Initializing` state. Throws if `ShellId` already exists (FR-019). Exception propagates; no partial entry retained (FR-020). |
-| `GetActive` | `IShell? GetActive(string name)` | Returns the single `Active` shell for `name`; null if none (FR-011) |
-| `GetAll` | `IReadOnlyCollection<IShell> GetAll(string name)` | All shells for `name` regardless of state (FR-012) |
-| `PromoteAsync` | `Task PromoteAsync(IShell shell, CancellationToken)` | Transitions `shell` from `Initializing` → `Active`; transitions previous active to `Deactivating`. Serialized per name (FR-013). Only valid for `Initializing` shells. |
-| `DrainAsync` | `Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken)` | Initiates drain on `shell`. Concurrent calls return the same operation (FR-018). |
-| `ReplaceAsync` | `Task<IDrainOperation> ReplaceAsync(IShell newShell, CancellationToken)` | Promotes `newShell` and drains the previous active in one atomic call (FR-014). Returns the drain operation for the old shell. |
-| `Subscribe` | `void Subscribe(IShellLifecycleSubscriber subscriber)` | Thread-safe subscriber registration |
-| `Unsubscribe` | `void Unsubscribe(IShellLifecycleSubscriber subscriber)` | Thread-safe subscriber removal |
+| `RegisterBlueprint` | `void RegisterBlueprint(IShellBlueprint blueprint)` | Registers a blueprint for a name. Throws `InvalidOperationException` on duplicate (FR-003). |
+| `GetBlueprint` | `IShellBlueprint? GetBlueprint(string name)` | Looks up the registered blueprint for a name; null if none. |
+| `GetBlueprintNames` | `IReadOnlyCollection<string> GetBlueprintNames()` | Enumerates every registered name. |
+| `ActivateAsync` | `Task<IShell> ActivateAsync(string name, CancellationToken ct)` | Composes via blueprint, builds generation 1, runs initializers, promotes to `Active` (FR-009). |
+| `ReloadAsync` | `Task<ReloadResult> ReloadAsync(string name, CancellationToken ct)` | Composes fresh settings, builds generation N+1, runs initializers, promotes, drains previous (FR-010). If no active generation exists, behaves like `ActivateAsync` (FR-011). |
+| `ReloadAllAsync` | `Task<IReadOnlyList<ReloadResult>> ReloadAllAsync(CancellationToken ct)` | Reloads every registered blueprint; per-name results (FR-012). |
+| `DrainAsync` | `Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken ct)` | Explicit cooperative drain on a specific shell instance. Concurrent calls return the same operation (FR-028). |
+| `GetActive` | `IShell? GetActive(string name)` | The currently `Active` shell for `name`; null if none (FR-031). |
+| `GetAll` | `IReadOnlyCollection<IShell> GetAll(string name)` | All generations currently held for `name` regardless of state (FR-032). |
+| `Subscribe` | `void Subscribe(IShellLifecycleSubscriber subscriber)` | Thread-safe subscriber registration. |
+| `Unsubscribe` | `void Unsubscribe(IShellLifecycleSubscriber subscriber)` | Thread-safe subscriber removal. |
+
+Activate and reload compose + build + initialize + promote as a single unit of work; those
+phases are not separately callable.
 
 ---
 
@@ -222,32 +323,38 @@ cannot block other subscribers or the state transition itself.
 
 | Rule | Enforcement |
 |------|-------------|
-| `ShellId` must be unique in registry | `CreateAsync` throws `InvalidOperationException` (FR-019) |
-| `PromoteAsync` target must be in `Initializing` state | Throws `InvalidOperationException` if not |
-| `DrainAsync` / `ReplaceAsync` target must be `Active` or `Deactivating` | Throws `InvalidOperationException` if already `Draining`, `Drained`, or `Disposed` |
+| Blueprint name must be unique | `RegisterBlueprint` throws `InvalidOperationException` (FR-003) |
+| `ActivateAsync` / `ReloadAsync` require a registered blueprint | Throws `InvalidOperationException` with "No blueprint registered for name '{name}'" |
+| Blueprint-produced `ShellSettings.Id.Name` matches the blueprint name | `ActivateAsync` / `ReloadAsync` throws `InvalidOperationException` on mismatch |
+| Blueprint composition / provider build / initializer exceptions propagate | No partial generation retained; partial provider disposed (FR-014) |
+| Concurrent reloads for the same name are serialized | Per-name `SemaphoreSlim(1,1)`; generation numbers assigned in acquire order (FR-013) |
 | State transitions are monotonic | CAS on `_state`; backward attempts are no-ops |
 | Handler exceptions do not abort drain | Caught; stored in `DrainHandlerResult.Error` |
 | Subscriber exceptions do not abort state transitions | Caught, logged, swallowed |
+| Outstanding scopes delay drain-handler invocation | Scope-wait phase bounded by drain deadline (FR-022) |
 
 ---
 
 ## State Transition Diagram
 
 ```
-                    PromoteAsync
+                           (per generation)
+
+          internal Promote
   [Initializing] ─────────────────► [Active]
                                        │
                               ┌────────┴────────┐
-                    replace / │                 │ direct
-                    promote   │                 │ DrainAsync
-                    other     ▼                 │
+                      reload  │                 │ direct
+                   supersedes │                 │ DrainAsync
+                              ▼                 │
                         [Deactivating]          │
                               │                 │
                               ▼                 ▼
                            [Draining] ◄─────────┘
                               │
-                     handlers complete
-                     / timeout / force
+                 (1) scope-wait phase
+                 (2) handler invocation
+                 (3) grace after deadline / force
                               │
                               ▼
                            [Drained]
@@ -255,3 +362,20 @@ cannot block other subscribers or the state transition itself.
                               ▼
                           [Disposed] ◄── DisposeAsync (from any state)
 ```
+
+The diagram applies to a single generation. A reload produces a new generation alongside the
+old one; both progress through the diagram independently (new goes `Initializing → Active`,
+old goes `Active → Deactivating → Draining → Drained → Disposed`).
+
+---
+
+## Generation Numbering
+
+| Rule | Notes |
+|------|-------|
+| Start value | `1` on first `ActivateAsync` for a name |
+| Increment | `+1` on each successful `ReloadAsync` step inside the name's serialization lock |
+| Uniqueness | Unique per `(Name)` within the process lifetime — never reused, even on failure |
+| Failure handling | If composition, build, or initializer fails after the number is assigned, that number is **skipped**; the next successful reload uses the next available value |
+| Visibility | Read-only via `shell.Descriptor.Generation`; never mutable |
+| Storage | Per-name counter held on the `ShellRegistry`'s name-slot record; increments happen under the per-name semaphore |

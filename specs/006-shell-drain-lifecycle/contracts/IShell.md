@@ -5,8 +5,10 @@
 
 ## Purpose
 
-`IShell` is the handle to a named, versioned shell instance. It exposes the shell's descriptor,
-current lifecycle state, and service provider. Implementations are terminal once `Disposed`.
+`IShell` is the runtime handle to a single generation of a named shell. It exposes the
+shell's descriptor (name + generation + metadata), current lifecycle state, and service
+provider, and lets callers obtain tracked DI scopes via `BeginScope`. Implementations are
+terminal once `Disposed`.
 
 ## Interface Definition
 
@@ -14,7 +16,7 @@ current lifecycle state, and service provider. Implementations are terminal once
 namespace CShells.Lifecycle;
 
 /// <summary>
-/// Represents a named, versioned shell with an explicit lifecycle state machine.
+/// Represents a single generation of a named shell with an explicit lifecycle state machine.
 /// </summary>
 /// <remarks>
 /// A shell transitions monotonically through
@@ -29,7 +31,7 @@ namespace CShells.Lifecycle;
 public interface IShell : IAsyncDisposable
 {
     /// <summary>
-    /// Gets the immutable descriptor that identifies this shell.
+    /// Gets the immutable descriptor identifying this shell generation.
     /// </summary>
     ShellDescriptor Descriptor { get; }
 
@@ -47,14 +49,33 @@ public interface IShell : IAsyncDisposable
     /// <see cref="ShellLifecycleState.Draining"/> phase.
     /// </remarks>
     IServiceProvider ServiceProvider { get; }
+
+    /// <summary>
+    /// Creates a tracked DI scope from this shell's provider.
+    /// </summary>
+    /// <returns>
+    /// An <see cref="IShellScope"/> whose <see cref="IShellScope.ServiceProvider"/> serves
+    /// scoped services and whose disposal releases both the DI scope and the active-scope
+    /// reference this shell holds.
+    /// </returns>
+    /// <remarks>
+    /// Every outstanding <see cref="IShellScope"/> obtained from this shell delays drain's
+    /// handler-invocation phase until the scope is disposed or the drain deadline elapses.
+    /// This is how the library preserves in-flight request correctness across reloads.
+    /// </remarks>
+    IShellScope BeginScope();
 }
 ```
 
 ## Behaviour Contract
 
-- `State` is read without locking; writes use `Interlocked.CompareExchange` on the backing field.
+- `State` is read without locking; writes use `Interlocked.CompareExchange` on the backing
+  field.
 - `DisposeAsync` transitions the shell directly to `Disposed`, regardless of current state
   (including bypassing drain if called during `Draining`).
 - Calling `DisposeAsync` on an already-`Disposed` shell is a no-op.
 - `ServiceProvider` MUST NOT be accessed after `Disposed`; doing so may throw
   `ObjectDisposedException`.
+- `BeginScope` MUST throw `InvalidOperationException` if called after the shell has reached
+  `Disposed`. Calling `BeginScope` during `Draining` is permitted — the new scope joins the
+  active-scope counter and delays phase-1 completion until released.

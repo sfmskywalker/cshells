@@ -5,8 +5,10 @@
 
 ## Purpose
 
-`IShellRegistry` is the primary API for creating, promoting, draining, and replacing named,
-versioned shells. It is the authoritative source of truth for all shell lifecycle state.
+`IShellRegistry` is the authoritative API for registering **shell blueprints**, activating
+and reloading shells to produce monotonic **generations**, and draining superseded or
+explicitly-drained shells. Host code never authors generation numbers — the registry stamps
+them in the order reloads are serialized.
 
 ## Interface Definition
 
@@ -14,95 +16,113 @@ versioned shells. It is the authoritative source of truth for all shell lifecycl
 namespace CShells.Lifecycle;
 
 /// <summary>
-/// The authoritative registry for named, versioned shells with explicit lifecycle management.
+/// The authoritative registry for named, generation-stamped shells.
 /// </summary>
 /// <remarks>
-/// Shells are created in <see cref="ShellLifecycleState.Initializing"/> state and must be
-/// promoted to <see cref="ShellLifecycleState.Active"/> before they can serve requests.
-/// Only one shell per name may be <see cref="ShellLifecycleState.Active"/> at a time.
-/// Draining a shell allows in-flight work to complete before the service provider is disposed.
+/// One <see cref="IShellBlueprint"/> is registered per shell name. Each call to
+/// <see cref="ActivateAsync"/> or <see cref="ReloadAsync"/> re-invokes the blueprint to
+/// produce a fresh <see cref="ShellSettings"/>, builds a shell stamped with the next
+/// monotonic generation number, runs its <see cref="IShellInitializer"/> services, promotes
+/// it to <see cref="ShellLifecycleState.Active"/>, and initiates cooperative drain on the
+/// previously-active generation (if any).
+/// Multiple generations for the same name may coexist: exactly one is
+/// <see cref="ShellLifecycleState.Active"/>, and any number may be in
+/// <see cref="ShellLifecycleState.Deactivating"/>,
+/// <see cref="ShellLifecycleState.Draining"/>, or <see cref="ShellLifecycleState.Drained"/>.
 /// </remarks>
 public interface IShellRegistry
 {
     /// <summary>
-    /// Creates a new shell and registers it in <see cref="ShellLifecycleState.Initializing"/> state.
+    /// Registers a blueprint for a shell name. Subsequent
+    /// <see cref="ActivateAsync"/> / <see cref="ReloadAsync"/> calls invoke this blueprint
+    /// to compose fresh settings.
     /// </summary>
-    /// <param name="name">The shell name. Multiple shells can share a name; only one may be active.</param>
-    /// <param name="version">The shell version. Combined with <paramref name="name"/> forms the unique identity.</param>
-    /// <param name="configure">Delegate invoked to register services into the shell's <see cref="IServiceCollection"/>.</param>
-    /// <param name="metadata">Optional opaque metadata carried on the shell descriptor.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The created <see cref="IShell"/> in <see cref="ShellLifecycleState.Initializing"/> state.</returns>
-    /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="name"/> or <paramref name="version"/> is null or whitespace.
-    /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a shell with the same <c>(name, version)</c> identity already exists in the registry.
+    /// Thrown when a blueprint for <c>blueprint.Name</c> is already registered (FR-003).
     /// </exception>
-    /// <remarks>
-    /// If <paramref name="configure"/> throws, the exception propagates to the caller and no shell
-    /// entry is added to the registry.
-    /// </remarks>
-    Task<IShell> CreateAsync(
-        string name,
-        string version,
-        Action<IServiceCollection> configure,
-        IReadOnlyDictionary<string, string>? metadata = null,
-        CancellationToken cancellationToken = default);
+    void RegisterBlueprint(IShellBlueprint blueprint);
 
     /// <summary>
-    /// Returns the single <see cref="ShellLifecycleState.Active"/> shell for the given name,
-    /// or <c>null</c> if no active shell exists.
+    /// Returns the blueprint registered for <paramref name="name"/>, or <c>null</c> if none.
+    /// </summary>
+    IShellBlueprint? GetBlueprint(string name);
+
+    /// <summary>
+    /// Returns every registered blueprint name.
+    /// </summary>
+    IReadOnlyCollection<string> GetBlueprintNames();
+
+    /// <summary>
+    /// Composes fresh settings from the registered blueprint, builds generation 1, runs its
+    /// <see cref="IShellInitializer"/> services, and promotes it to
+    /// <see cref="ShellLifecycleState.Active"/> (FR-009).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no blueprint is registered for <paramref name="name"/>, or when a shell
+    /// for <paramref name="name"/> is already active (callers should use
+    /// <see cref="ReloadAsync"/> to roll over).
+    /// </exception>
+    /// <remarks>
+    /// Propagates any exception thrown during blueprint composition, provider construction,
+    /// or initializer invocation. The partial provider (if built) is disposed; no partial
+    /// shell entry is retained (FR-014).
+    /// </remarks>
+    Task<IShell> ActivateAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Composes fresh settings from the registered blueprint, builds the next generation,
+    /// runs its initializers, promotes it to <see cref="ShellLifecycleState.Active"/>, and
+    /// initiates cooperative drain on the previously-active generation — all in a single
+    /// call (FR-010).
+    /// </summary>
+    /// <remarks>
+    /// If no generation is currently active, behaves equivalently to
+    /// <see cref="ActivateAsync"/>: generation 1 is produced and no prior generation is
+    /// drained (FR-011).
+    ///
+    /// Concurrent calls for the same <paramref name="name"/> are serialized. Generation
+    /// numbers are assigned in arrival order; the last call to complete becomes the active
+    /// generation (FR-013).
+    ///
+    /// If blueprint composition, provider build, or any initializer throws, the exception
+    /// propagates to the caller, the current active generation (if any) is unaffected, the
+    /// partial provider is disposed, and no partial generation is retained (FR-014).
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no blueprint is registered for <paramref name="name"/>.
+    /// </exception>
+    Task<ReloadResult> ReloadAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reloads every registered blueprint. Independent names reload in parallel; per-name
+    /// outcomes are returned so callers can distinguish successes from composition failures
+    /// without aborting the batch (FR-012).
+    /// </summary>
+    Task<IReadOnlyList<ReloadResult>> ReloadAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Initiates a cooperative drain on <paramref name="shell"/>. The drain runs three
+    /// phases: (1) wait for all active <see cref="IShellScope"/> handles to release,
+    /// (2) invoke all registered <see cref="IDrainHandler"/> services in parallel,
+    /// (3) grace after deadline or force. Concurrent calls for the same shell return the
+    /// same in-flight operation (FR-028).
+    /// </summary>
+    Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The single <see cref="ShellLifecycleState.Active"/> shell for <paramref name="name"/>,
+    /// or <c>null</c> if no active shell exists (FR-031).
     /// </summary>
     IShell? GetActive(string name);
 
     /// <summary>
-    /// Returns all shells registered under <paramref name="name"/>, regardless of lifecycle state.
+    /// All generations currently held for <paramref name="name"/> regardless of lifecycle
+    /// state, including draining generations and the currently active one (FR-032).
     /// </summary>
     IReadOnlyCollection<IShell> GetAll(string name);
 
     /// <summary>
-    /// Promotes <paramref name="shell"/> to <see cref="ShellLifecycleState.Active"/>,
-    /// transitioning any previously active shell for the same name to
-    /// <see cref="ShellLifecycleState.Deactivating"/>.
-    /// </summary>
-    /// <param name="shell">The shell to promote. Must be in <see cref="ShellLifecycleState.Initializing"/> state.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <paramref name="shell"/> is not in <see cref="ShellLifecycleState.Initializing"/> state.
-    /// </exception>
-    /// <remarks>
-    /// Concurrent <c>PromoteAsync</c> calls for the same shell name are serialized; both succeed in
-    /// arrival order and the last one to complete becomes the active shell.
-    /// </remarks>
-    Task PromoteAsync(IShell shell, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Initiates a drain on <paramref name="shell"/>, invoking all registered
-    /// <see cref="IDrainHandler"/> instances in parallel.
-    /// </summary>
-    /// <param name="shell">The shell to drain.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>
-    /// The <see cref="IDrainOperation"/> handle. Concurrent calls for the same shell return
-    /// the same in-flight operation.
-    /// </returns>
-    Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Promotes <paramref name="newShell"/> to active and initiates drain on the shell it replaces,
-    /// in a single atomic operation.
-    /// </summary>
-    /// <param name="newShell">The shell to promote. Must be in <see cref="ShellLifecycleState.Initializing"/> state.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>
-    /// The <see cref="IDrainOperation"/> for the shell that was displaced (the previous active shell),
-    /// or <c>null</c> if there was no previously active shell.
-    /// </returns>
-    Task<IDrainOperation?> ReplaceAsync(IShell newShell, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Registers a lifecycle subscriber that will be notified of all shell state transitions.
+    /// Registers a lifecycle subscriber notified of every state transition on every shell.
     /// </summary>
     void Subscribe(IShellLifecycleSubscriber subscriber);
 
@@ -115,31 +135,56 @@ public interface IShellRegistry
 
 ## Behaviour Contract
 
-### CreateAsync
+### RegisterBlueprint
 
-- Builds the shell's `IServiceProvider` by calling `configure` on a new `ServiceCollection`.
-  Root services (logging, configuration) are copied in first; shell services registered in
-  `configure` override them via "last-wins" semantics.
-- The shell is registered atomically; if `configure` throws the registry is unchanged.
-- Fires `OnStateChangedAsync(shell, null → Initializing)` on all subscribers after registration.
+- Adds the blueprint to the registry keyed case-insensitively by `blueprint.Name`.
+- Throws `InvalidOperationException` if a blueprint for that name is already registered
+  (FR-003). Duplicate registration is a programming error.
+- Does not trigger activation; the built-in startup hosted service calls `ActivateAsync`
+  for every registered blueprint at host start (FR-035). Hosts calling
+  `RegisterBlueprint` after startup must call `ActivateAsync` themselves.
 
-### PromoteAsync
+### ActivateAsync
 
-- Serialized per shell name via `SemaphoreSlim(1,1)`.
-- Atomically sets the promoted shell to `Active` and any existing `Active` shell to `Deactivating`.
-- Fires `Active` transition event for the promoted shell.
-- Fires `Deactivating` transition event for the displaced shell (if any).
-- The displaced shell automatically progresses to `Draining` after `Deactivating`.
+- Acquires the per-name serialization semaphore.
+- Invokes `blueprint.ComposeAsync(ct)` to obtain a fresh `ShellSettings`; validates that
+  `settings.Id.Name` matches the blueprint name.
+- Builds a new `IServiceCollection`, applies root-service copying + feature
+  `ConfigureServices`, and constructs the shell's `IServiceProvider`.
+- Increments the name's generation counter (starts at 1) and stamps the `ShellDescriptor`,
+  copying the blueprint's `Metadata` onto the descriptor.
+- Registers the shell as `Initializing`.
+- Resolves `IEnumerable<IShellInitializer>` from the provider and awaits each
+  sequentially in DI-registration order.
+- Promotes the shell to `Active` and releases the semaphore.
+- Fires `null → Initializing` and `Initializing → Active` transitions on subscribers.
+
+### ReloadAsync
+
+- Identical to `ActivateAsync` for the first generation when no prior active shell exists
+  (FR-011).
+- Otherwise: after promoting the new generation to `Active`, transitions the previous
+  generation to `Deactivating` under the same semaphore, then — after releasing the
+  semaphore — kicks off `DrainAsync(previous)` in the background.
+- Returns a `ReloadResult { Name, NewShell, Drain, Error }`. `Drain` is non-null exactly
+  when there was a previous active generation to drain. `Error` is non-null when blueprint
+  composition, provider build, or any initializer threw; in that case `NewShell` is null
+  and the current active generation is unchanged.
+
+### ReloadAllAsync
+
+- Enumerates every registered blueprint name, snapshots it, and runs `ReloadAsync` per
+  name via `Task.WhenAll`.
+- Aggregates per-name `ReloadResult` values; one failing name does not abort the others
+  (FR-012).
+- Blueprints for different names reload in parallel; a single name's reloads remain
+  serialized per `ReloadAsync`'s contract.
 
 ### DrainAsync
 
-- Returns an existing `IDrainOperation` if drain is already in progress (idempotent).
-- Transitions shell from `Deactivating` or `Active` → `Draining`.
-- Resolves all `IDrainHandler` registrations from the shell's `IServiceProvider`.
-- Invokes all handlers in parallel, each receiving a `CancellationToken` cancelled at deadline.
-- Transitions to `Drained` when all handlers complete (or time out / are forced).
-
-### ReplaceAsync
-
-- Equivalent to `PromoteAsync(newShell)` followed by `DrainAsync(displaced)`.
-- Both operations share the same promote serialization lock.
+- Idempotent via `Interlocked.CompareExchange` on a per-shell `DrainOperation?` slot
+  (FR-028).
+- Transitions the shell from `Deactivating` or `Active` to `Draining`.
+- Runs drain phases 1–3 as described in `IDrainOperation.md`.
+- Transitions to `Drained` when phases complete, then disposes the shell's service
+  provider; fires the `Drained → Disposed` transition.

@@ -5,9 +5,12 @@
 
 ## Purpose
 
-`IDrainHandler` is the host-extensibility point for cooperative drain. Hosts register one or more
-implementations to perform graceful-shutdown work (e.g., drain a message bus, wait for active
-workflows) before the shell's service provider is disposed.
+`IDrainHandler` is the host-extensibility point for cooperative drain. Hosts register one
+or more implementations to perform graceful-shutdown work (e.g., drain a message bus, wait
+for active workflows) *after* drain's scope-wait phase completes and *before* the shell's
+service provider is disposed.
+
+Replaces the legacy `IShellDeactivatingHandler`.
 
 ## Interface Definitions
 
@@ -16,12 +19,13 @@ namespace CShells.Lifecycle;
 
 /// <summary>
 /// Performs cooperative drain work when a shell enters
-/// <see cref="ShellLifecycleState.Draining"/>.
+/// <see cref="ShellLifecycleState.Draining"/>, after the scope-wait phase has completed (or
+/// been bounded out by the drain deadline).
 /// </summary>
 /// <remarks>
-/// Register implementations as transient services in
-/// <see cref="IShellFeature.ConfigureServices"/>. All handlers are resolved from the draining
-/// shell's <see cref="IServiceProvider"/> and invoked in parallel.
+/// Register implementations as transient services via <see cref="IShellFeature.ConfigureServices"/>.
+/// All handlers on a draining shell are resolved from the shell's
+/// <see cref="IServiceProvider"/> and invoked in parallel.
 /// </remarks>
 public interface IDrainHandler
 {
@@ -54,8 +58,8 @@ public interface IDrainExtensionHandle
     /// <paramref name="requested"/>.
     /// </param>
     /// <returns>
-    /// <c>true</c> if the policy granted at least some extension; <c>false</c> if the policy
-    /// rejects all extensions (e.g., <see cref="FixedTimeoutDrainPolicy"/>).
+    /// <c>true</c> if the policy granted at least some extension; <c>false</c> if the
+    /// policy rejects all extensions (e.g., <see cref="FixedTimeoutDrainPolicy"/>).
     /// </returns>
     bool TryExtend(TimeSpan requested, out TimeSpan granted);
 }
@@ -65,19 +69,21 @@ public interface IDrainExtensionHandle
 
 - Handlers are resolved fresh from the shell's `IServiceProvider` on each drain.
 - All handlers are invoked concurrently via `Task.WhenAll` (or equivalent).
-- A handler that throws stores the exception in `DrainHandlerResult.Error`; it does **not** abort
-  other handlers or prevent the shell from reaching `Drained`.
-- A handler that does not complete within the deadline has its `CancellationToken` cancelled;
-  its `DrainHandlerResult.Completed` is `false`.
-- After the configured grace period, handlers still running are abandoned (not awaited) and the
-  shell transitions to `Drained`.
+- A handler that throws stores the exception in `DrainHandlerResult.Error`; it does **not**
+  abort other handlers or prevent the shell from reaching `Drained`.
+- A handler that does not complete within the deadline has its `CancellationToken`
+  cancelled; its `DrainHandlerResult.Completed` is `false`.
+- After the configured grace period, handlers still running are abandoned (not awaited) and
+  the shell transitions to `Drained`.
+- Handlers run **after** the scope-wait phase. If the scope-wait phase was bounded out by
+  the drain deadline, handlers receive an already-cancelled token immediately.
 
 ## Registration Example
 
 ```csharp
 public class WorkflowFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services, ShellFeatureContext context)
     {
         services.AddTransient<IDrainHandler, WorkflowDrainHandler>();
     }
@@ -87,7 +93,6 @@ internal sealed class WorkflowDrainHandler(IWorkflowEngine engine) : IDrainHandl
 {
     public async Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken cancellationToken)
     {
-        // Request an extension if needed
         if (engine.ActiveCount > 0)
             extensionHandle.TryExtend(TimeSpan.FromSeconds(10), out _);
 
