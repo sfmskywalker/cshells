@@ -5,6 +5,14 @@ namespace CShells.Hosting;
 /// </summary>
 public class ShellContext(ShellSettings settings, IServiceProvider serviceProvider, IReadOnlyList<string> enabledFeatures, IReadOnlyCollection<string>? missingFeatures = null)
 {
+    private int _activeScopes;
+    private volatile bool _pendingDisposal;
+
+    // CAS flag that ensures DisposeShellContextAsync is entered by at most one caller even when
+    // both DisposeOrDeferContextAsync (double-check path) and ShellContextScopeHandle.DisposeAsync
+    // race to trigger disposal in the same narrow window. 0 = not yet disposing, 1 = disposing.
+    private int _disposing;
+
     /// <summary>
     /// Gets the shell settings.
     /// </summary>
@@ -38,4 +46,42 @@ public class ShellContext(ShellSettings settings, IServiceProvider serviceProvid
     /// when this shell was built. Empty when all configured features were available.
     /// </summary>
     public IReadOnlyCollection<string> MissingFeatures { get; } = missingFeatures ?? [];
+
+    /// <summary>
+    /// Gets the number of active request scopes currently using this shell context.
+    /// </summary>
+    internal int ActiveScopes => Volatile.Read(ref _activeScopes);
+
+    /// <summary>
+    /// Gets whether this context has been marked for deferred disposal once all active scopes release.
+    /// </summary>
+    internal bool IsPendingDisposal => _pendingDisposal;
+
+    internal void IncrementActiveScopes() => Interlocked.Increment(ref _activeScopes);
+
+    /// <summary>
+    /// Decrements the active scope counter and returns the new count.
+    /// </summary>
+    internal int DecrementActiveScopes() => Interlocked.Decrement(ref _activeScopes);
+
+    /// <summary>
+    /// Marks this context for deferred disposal. The actual disposal will happen when
+    /// <see cref="ActiveScopes"/> reaches zero.
+    /// </summary>
+    internal void MarkPendingDisposal() => _pendingDisposal = true;
+
+    /// <summary>
+    /// Atomically claims the right to dispose this context. Returns <see langword="true"/> exactly
+    /// once across all concurrent callers; all subsequent calls return <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// Used to prevent double-disposal in the race where both
+    /// <c>DisposeOrDeferContextAsync</c> (the double-check path) and
+    /// <c>ShellContextScopeHandle.DisposeAsync</c> determine simultaneously that
+    /// <see cref="ActiveScopes"/> has reached zero. <see cref="IServiceProvider"/> disposal is
+    /// idempotent in .NET, so double-disposal would not crash, but this keeps the code clean and
+    /// avoids spurious <see cref="ObjectDisposedException"/> log warnings.
+    /// </remarks>
+    internal bool TryBeginDispose() =>
+        Interlocked.CompareExchange(ref _disposing, 1, 0) == 0;
 }

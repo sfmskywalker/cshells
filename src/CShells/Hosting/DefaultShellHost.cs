@@ -347,7 +347,7 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
         if (commit.PreviousContext is not null && !ReferenceEquals(commit.PreviousContext, candidate.CandidateContext))
         {
-            await DisposeShellContextAsync(commit.PreviousContext).ConfigureAwait(false);
+            await DisposeOrDeferContextAsync(commit.PreviousContext).ConfigureAwait(false);
         }
     }
 
@@ -368,7 +368,7 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
 
         if (result.PreviousContext is not null)
         {
-            await DisposeShellContextAsync(result.PreviousContext).ConfigureAwait(false);
+            await DisposeOrDeferContextAsync(result.PreviousContext).ConfigureAwait(false);
         }
     }
 
@@ -709,6 +709,61 @@ public class DefaultShellHost : IShellHost, IShellHostInitializer, IAsyncDisposa
             _logger.LogDebug("Evicting cached shell context for '{ShellId}'", context.Settings.Id);
             await DisposeShellContextAsync(context).ConfigureAwait(false);
         }
+    }
+
+    /// <inheritdoc/>
+    public IAsyncDisposable AcquireContextScope(ShellContext context)
+        => new ShellContextScopeHandle(context, this);
+
+    /// <summary>
+    /// Disposes <paramref name="context"/> immediately if no active request scopes are using it,
+    /// otherwise marks it for deferred disposal. The last scope handle to release will dispose it
+    /// via <see cref="TryDisposePendingContextAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why deferred disposal?</b> When a shell is reloaded its new <see cref="IServiceProvider"/>
+    /// is committed while the HTTP request that triggered the reload is still executing inside the
+    /// old shell's DI scope. Disposing the old root provider synchronously would invalidate all
+    /// outstanding child scopes immediately, causing <see cref="ObjectDisposedException"/> when the
+    /// endpoint tries to serialize its response. We instead defer disposal until every in-flight
+    /// request scope (tracked by <see cref="ShellContextScopeHandle"/>) has released.
+    /// </para>
+    /// <para>
+    /// <b>Double-check pattern:</b> there is a narrow race between the initial
+    /// <c>ActiveScopes == 0</c> check and <see cref="ShellContext.MarkPendingDisposal"/>. If the
+    /// last scope releases in that window it would see <c>IsPendingDisposal == false</c> and skip
+    /// disposal; the second check below catches this. <see cref="ShellContext.TryBeginDispose"/>
+    /// ensures only one caller wins even if both paths fire concurrently.
+    /// </para>
+    /// </remarks>
+    private async ValueTask DisposeOrDeferContextAsync(ShellContext context)
+    {
+        if (context.ActiveScopes == 0)
+        {
+            if (context.TryBeginDispose())
+                await DisposeShellContextAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        context.MarkPendingDisposal();
+
+        // Double-check: all scopes may have released between the ActiveScopes check above and
+        // MarkPendingDisposal(). If so, we must dispose now — no scope handle will do it.
+        // TryBeginDispose() ensures we don't double-dispose if ShellContextScopeHandle wins the
+        // race and calls TryDisposePendingContextAsync at the same instant.
+        if (context.ActiveScopes == 0 && context.TryBeginDispose())
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Disposes <paramref name="context"/> if it is pending disposal and has no active scopes.
+    /// Called by <see cref="ShellContextScopeHandle"/> when the last scope releases.
+    /// </summary>
+    internal async ValueTask TryDisposePendingContextAsync(ShellContext context)
+    {
+        if (context.IsPendingDisposal && context.ActiveScopes == 0 && context.TryBeginDispose())
+            await DisposeShellContextAsync(context).ConfigureAwait(false);
     }
 
     private async ValueTask DisposeShellContextAsync(ShellContext context)

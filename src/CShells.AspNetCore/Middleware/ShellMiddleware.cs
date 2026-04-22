@@ -79,11 +79,24 @@ public class ShellMiddleware(
 
         var shellContext = _host.GetShell(shellId.Value);
 
+        // Acquire a scope handle so that DefaultShellHost can defer disposal of this shell
+        // context if it is replaced (e.g. via a reload) while this request is still in flight.
+        //
+        // The handle is released via OnCompleted (not `await using`) so that it outlives
+        // InvokeAsync returning. This matters because upstream middleware may do post-processing
+        // after awaiting _next that still reads from context.RequestServices — releasing the
+        // handle at InvokeAsync return could dispose the root provider prematurely and cause
+        // ObjectDisposedException in that post-processing code or in OnCompleted callbacks.
+        var scopeHandle = _host.AcquireContextScope(shellContext);
+        context.Response.OnCompleted(() => scopeHandle.DisposeAsync().AsTask());
+
         var scope = shellContext.ServiceProvider.CreateScope();
         context.RequestServices = scope.ServiceProvider;
 
-        // Register the scope for disposal when the request completes
-        // This ensures the scope lives for the entire request, including endpoint execution
+        // Register the scope for disposal when the request completes.
+        // This ensures the scope lives for the entire request, including endpoint execution.
+        // Fires after OnCompleted, so the root provider disposal (triggered by the scope handle
+        // above) always precedes the request scope's own cleanup.
         context.Response.RegisterForDispose(scope);
 
         await _next(context);

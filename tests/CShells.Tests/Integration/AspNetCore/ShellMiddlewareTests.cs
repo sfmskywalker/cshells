@@ -2,6 +2,7 @@ using CShells.AspNetCore.Middleware;
 using CShells.Hosting;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -194,6 +195,54 @@ public class ShellMiddlewareTests
         // Note: We can't directly test disposal, but the test verifies the exception is properly propagated
     }
 
+    [Fact(DisplayName = "InvokeAsync acquires a context scope that is active during the request and released at response completion")]
+    public async Task InvokeAsync_AcquiresContextScope_HeldDuringRequestReleasedAtResponseCompletion()
+    {
+        // Arrange
+        var shellServices = new ServiceCollection();
+        var shellServiceProvider = shellServices.BuildServiceProvider();
+        var settings = new ShellSettings(new("TestShell"));
+        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
+
+        var host = new TrackingShellHost(shellContext);
+        int activeScopesDuringNext = -1;
+
+        // Inject a custom response feature that captures OnCompleted callbacks so we can
+        // fire them on demand, simulating what the ASP.NET Core server does after the
+        // response is sent. DefaultHttpContext has no built-in mechanism for this in tests.
+        var httpContext = new DefaultHttpContext();
+        var responseFeature = new FireableResponseFeature();
+        httpContext.Features.Set<IHttpResponseFeature>(responseFeature);
+
+        var middleware = CreateMiddleware(
+            ctx =>
+            {
+                // Capture the counter while inside _next — the scope must be active here.
+                activeScopesDuringNext = shellContext.ActiveScopes;
+                return Task.CompletedTask;
+            },
+            new FixedShellResolver(new("TestShell")),
+            host);
+
+        // Act
+        await middleware.InvokeAsync(httpContext);
+
+        // Assert — scope was held while _next executed.
+        Assert.Equal(1, activeScopesDuringNext);
+
+        // After InvokeAsync returns but before OnCompleted fires, the handle must still be active.
+        // (In a real server OnCompleted fires after all middleware return. In tests it does not
+        // fire automatically, so the counter stays at 1 here — proving the handle is NOT released
+        // at middleware return but deferred to request completion.)
+        Assert.Equal(1, shellContext.ActiveScopes);
+
+        // Simulate the server firing OnCompleted callbacks.
+        await responseFeature.FireOnCompletedAsync();
+
+        // Now the scope must be released.
+        Assert.Equal(0, shellContext.ActiveScopes);
+    }
+
     [Theory(DisplayName = "Constructor guard clauses throw ArgumentNullException")]
     [InlineData(true, false, false, false, false, "next")]
     [InlineData(false, true, false, false, false, "resolver")]
@@ -242,5 +291,59 @@ public class ShellMiddlewareTests
 
         public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
         public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        public virtual IAsyncDisposable AcquireContextScope(ShellContext context) => NoOpDisposable.Instance;
+
+        private sealed class NoOpDisposable : IAsyncDisposable
+        {
+            public static readonly NoOpDisposable Instance = new();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// A <see cref="TestShellHost"/> that overrides <see cref="IShellHost.AcquireContextScope"/>
+    /// to use the real active-scope counter on <see cref="ShellContext"/>, letting tests observe
+    /// when the scope handle is acquired and released.
+    /// </summary>
+    private sealed class TrackingShellHost(ShellContext? shellContext = null) : TestShellHost(shellContext)
+    {
+        public override IAsyncDisposable AcquireContextScope(ShellContext context)
+        {
+            context.IncrementActiveScopes();
+            return new ScopeHandle(context);
+        }
+
+        private sealed class ScopeHandle(ShellContext context) : IAsyncDisposable
+        {
+            private int _released;
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _released, 1) != 0)
+                    return ValueTask.CompletedTask;
+                context.DecrementActiveScopes();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A custom <see cref="IHttpResponseFeature"/> that captures <c>OnCompleted</c> callbacks
+    /// so tests can fire them on demand, simulating what the ASP.NET Core server does after
+    /// the response is sent. <see cref="DefaultHttpContext"/> has no built-in mechanism to
+    /// trigger these callbacks outside of a running server.
+    /// </summary>
+    private sealed class FireableResponseFeature : HttpResponseFeature
+    {
+        private readonly List<(Func<object, Task> Callback, object State)> _onCompleted = new();
+
+        public override void OnCompleted(Func<object, Task> callback, object state)
+            => _onCompleted.Add((callback, state));
+
+        public async Task FireOnCompletedAsync()
+        {
+            foreach (var (callback, state) in _onCompleted)
+                await callback(state);
+        }
     }
 }

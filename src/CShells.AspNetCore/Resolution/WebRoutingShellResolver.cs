@@ -204,6 +204,14 @@ public class WebRoutingShellResolver : IShellResolverStrategy
             return ValueTask.CompletedTask;
         }
 
+        public IAsyncDisposable AcquireContextScope(ShellContext context) => NoOpDisposable.Instance;
+
+        private sealed class NoOpDisposable : IAsyncDisposable
+        {
+            public static readonly NoOpDisposable Instance = new();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+
         private IReadOnlyCollection<ShellContext> GetAllShells()
         {
             lock (allShellsLock)

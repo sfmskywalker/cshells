@@ -37,4 +37,11 @@ public interface IShellHost
     /// The next access to any shell will rebuild it from the latest shell settings.
     /// </summary>
     ValueTask EvictAllShellsAsync();
+
+    /// <summary>
+    /// Acquires a scope tracking handle for the specified shell context.
+    /// The handle must be disposed when the scope ends so that the host can safely defer disposal
+    /// of shells that are replaced while request scopes are still active.
+    /// </summary>
+    IAsyncDisposable AcquireContextScope(ShellContext context);
 }
