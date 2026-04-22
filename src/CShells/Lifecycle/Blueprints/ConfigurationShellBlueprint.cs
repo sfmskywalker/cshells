@@ -10,9 +10,11 @@ namespace CShells.Lifecycle.Blueprints;
 /// <see cref="ComposeAsync"/> call so configuration edits between reloads are picked up.
 /// </summary>
 /// <remarks>
-/// Accepts any <see cref="IConfiguration"/> section; typically a subsection of
-/// <c>Shells:{name}</c> or a standalone file registered via
-/// <c>builder.Configuration.AddJsonFile("Shells/payments.json")</c>.
+/// Accepts the <see cref="Features"/> entry both as a JSON string array
+/// (<c>"Features": ["Core", "Posts"]</c>) and as an array of objects
+/// (<c>"Features": [ { "Name": "Core" }, { "Name": "Analytics", "Settings": { "Top": 10 } } ]</c>),
+/// plus an optional <see cref="Configuration"/> subsection whose keys flow into
+/// <see cref="ShellSettings.ConfigurationData"/>.
 /// </remarks>
 public sealed class ConfigurationShellBlueprint : IShellBlueprint
 {
@@ -36,35 +38,68 @@ public sealed class ConfigurationShellBlueprint : IShellBlueprint
     /// <inheritdoc />
     public Task<ShellSettings> ComposeAsync(CancellationToken cancellationToken = default)
     {
-        // Bind into ShellConfig to reuse the existing Shells/*.json schema + converter plumbing.
-        var config = new ShellConfig { Name = Name };
-        _section.Bind(config);
+        var settings = new ShellSettings(new ShellId(Name));
+        var enabledFeatures = new List<string>();
 
-        var settings = new ShellSettings(new ShellId(Name))
+        var featuresSection = _section.GetSection("Features");
+        foreach (var featureSection in featuresSection.GetChildren())
         {
-            EnabledFeatures = [..config.Features
-                .Select(f => f.Name)
-                .Where(static id => !string.IsNullOrWhiteSpace(id))],
-        };
+            // Three shapes supported:
+            //   Array + string:     "Features": [ "Core" ]           → Value="Core", Key="0"
+            //   Array + object:     "Features": [ { "Name": "Core" } ] → Name="Core", Key="0"
+            //   Object map:         "Features": { "Core": {} }        → Key="Core"
+            var featureName = featureSection.Value
+                              ?? featureSection["Name"]
+                              ?? (IsNumericKey(featureSection.Key) ? null : featureSection.Key);
 
-        foreach (var feature in config.Features)
-        {
-            if (string.IsNullOrWhiteSpace(feature.Name))
+            if (string.IsNullOrWhiteSpace(featureName))
                 continue;
 
-            foreach (var kv in feature.Settings)
+            enabledFeatures.Add(featureName);
+
+            // Settings in array+object form live under `Settings:*`; in object-map form the
+            // feature section's direct children (other than `Name`) ARE the settings.
+            var settingsSection = featureSection.GetSection("Settings");
+            if (settingsSection.Exists())
             {
-                if (kv.Value is not null)
-                    settings.ConfigurationData[$"{feature.Name}:{kv.Key}"] = kv.Value;
+                foreach (var kv in Flatten(settingsSection))
+                    settings.ConfigurationData[$"{featureName}:{kv.Key}"] = kv.Value;
+            }
+            else if (!IsNumericKey(featureSection.Key))
+            {
+                foreach (var kv in Flatten(featureSection))
+                {
+                    if (string.Equals(kv.Key, "Name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    settings.ConfigurationData[$"{featureName}:{kv.Key}"] = kv.Value;
+                }
             }
         }
 
-        foreach (var kv in config.Configuration)
-        {
-            if (kv.Value is not null)
-                settings.ConfigurationData[kv.Key] = kv.Value;
-        }
+        settings.EnabledFeatures = [.. enabledFeatures];
+
+        var configurationSection = _section.GetSection("Configuration");
+        foreach (var kv in Flatten(configurationSection))
+            settings.ConfigurationData[kv.Key] = kv.Value;
 
         return Task.FromResult(settings);
+    }
+
+    private static bool IsNumericKey(string key) => int.TryParse(key, out _);
+
+    /// <summary>Flattens a configuration section to a flat key → value map using colon joins.</summary>
+    private static IEnumerable<KeyValuePair<string, string>> Flatten(IConfiguration section)
+    {
+        foreach (var child in section.GetChildren())
+        {
+            if (child.Value is not null)
+            {
+                yield return new KeyValuePair<string, string>(child.Key, child.Value);
+                continue;
+            }
+
+            foreach (var descendant in Flatten(child))
+                yield return new KeyValuePair<string, string>($"{child.Key}:{descendant.Key}", descendant.Value);
+        }
     }
 }

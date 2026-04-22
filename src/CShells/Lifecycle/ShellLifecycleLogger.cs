@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Lifecycle;
 
@@ -19,11 +20,9 @@ internal sealed class ShellLifecycleLogger : IShellLifecycleSubscriber
 
     private readonly ILogger<ShellLifecycleLogger> _logger;
 
-    public ShellLifecycleLogger(IShellRegistry registry, ILogger<ShellLifecycleLogger> logger)
+    public ShellLifecycleLogger(ILogger<ShellLifecycleLogger>? logger = null)
     {
-        Guard.Against.Null(registry);
-        _logger = Guard.Against.Null(logger);
-        registry.Subscribe(this);
+        _logger = logger ?? NullLogger<ShellLifecycleLogger>.Instance;
     }
 
     /// <inheritdoc />

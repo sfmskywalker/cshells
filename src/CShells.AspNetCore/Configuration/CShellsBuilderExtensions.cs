@@ -3,7 +3,7 @@ using CShells.AspNetCore.Authorization;
 using CShells.AspNetCore.Resolution;
 using CShells.AspNetCore.Routing;
 using CShells.DependencyInjection;
-using CShells.Notifications;
+using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -206,10 +206,15 @@ public static class CShellsBuilderExtensions
             // Register the application builder accessor to capture IApplicationBuilder during MapShells()
             builder.Services.TryAddSingleton<ApplicationBuilderAccessor>();
 
-            // Register the endpoint registration notification handler
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellActivated>, Notifications.ShellEndpointRegistrationHandler>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellDeactivating>, Notifications.ShellEndpointRegistrationHandler>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<INotificationHandler<ShellRemoved>, Notifications.ShellEndpointRegistrationHandler>());
+            // Register the endpoint registration handler as a lifecycle subscriber. It
+            // self-subscribes to IShellRegistry in its constructor and rebuilds endpoints on
+            // Initializing → Active / tears them down on Deactivating.
+            if (!builder.Services.Any(d => d.ServiceType == typeof(Notifications.ShellEndpointRegistrationHandler)))
+            {
+                builder.Services.AddSingleton<Notifications.ShellEndpointRegistrationHandler>();
+                builder.Services.AddSingleton<IShellLifecycleSubscriber>(
+                    sp => sp.GetRequiredService<Notifications.ShellEndpointRegistrationHandler>());
+            }
 
             return builder;
         }

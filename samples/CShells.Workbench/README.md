@@ -48,7 +48,7 @@ The Analytics feature demonstrates `IConfigurableFeature<AnalyticsOptions>` with
 
 ### 5. Background Work with Shell Scopes
 
-`ShellDemoWorker` demonstrates running background tasks within each shell's service scope using `IShellHost` and `IShellContextScopeFactory`.
+`ShellDemoWorker` demonstrates running background tasks within each shell's service scope using `IShellRegistry` and `IShell.BeginScope()`.
 
 ### 6. Desired vs. Applied Runtime Status
 

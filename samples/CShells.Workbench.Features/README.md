@@ -18,5 +18,5 @@ Feature library for the CShells Workbench sample application — a multi-tenant 
 - **`IWebShellFeature`**: All features — service registration + endpoint mapping
 - **`[ShellFeature]`**: Feature metadata + `DependsOn` chains
 - **`IConfigurableFeature<T>`**: `AnalyticsFeature` — typed per-shell options
-- **`IShellActivatedHandler`**: `SeedPostsHandler` — per-shell startup work
+- **`IShellInitializer`**: `SeedPostsHandler` — per-shell startup work
 - **Feature isolation**: Each shell gets its own in-memory data stores

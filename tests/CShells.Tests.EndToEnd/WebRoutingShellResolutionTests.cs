@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using CShells.Management;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,32 +16,6 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
 {
     private readonly WorkbenchApplicationFactory _factory = factory;
     private readonly HttpClient _client = factory.CreateClient();
-
-    [Fact(DisplayName = "Explicit Default with missing features activates with partial features and is routable")]
-    public async Task ExplicitDefault_WithMissingFeatures_ActivatesWithPartialFeaturesAndIsRoutable()
-    {
-        await using var customFactory = CreateFactoryWithMissingFeaturesDefault();
-        using var client = customFactory.CreateClient();
-
-        var accessor = customFactory.Services.GetRequiredService<IShellRuntimeStateAccessor>();
-        var statuses = accessor.GetAllShells().ToDictionary(status => status.ShellId.Name, StringComparer.OrdinalIgnoreCase);
-
-        Assert.True(statuses["Default"].IsRoutable);
-        Assert.True(statuses["Default"].IsInSync);
-        Assert.Equal(ShellReconciliationOutcome.ActiveWithMissingFeatures, statuses["Default"].Outcome);
-        Assert.Equal(["MissingFeature", "StillMissingFeature"], statuses["Default"].MissingFeatures.OrderBy(feature => feature, StringComparer.OrdinalIgnoreCase).ToArray());
-        Assert.True(statuses["Acme"].IsRoutable);
-        Assert.True(statuses["Contoso"].IsRoutable);
-
-        // Default shell is routable but has no loaded features/endpoints, so root returns 404
-        var rootResponse = await client.GetAsync("/");
-        Assert.Equal(HttpStatusCode.NotFound, rootResponse.StatusCode);
-
-        var acmeResponse = await client.GetAsync("/acme/");
-        acmeResponse.EnsureSuccessStatusCode();
-        var acmePayload = JsonDocument.Parse(await acmeResponse.Content.ReadAsStringAsync());
-        Assert.Equal("Acme", acmePayload.RootElement.GetProperty("tenant").GetString());
-    }
 
     [Fact(DisplayName = "Shell with WebRouting path configuration resolves correctly")]
     public async Task Shell_WithWebRoutingPath_ResolvesCorrectly()
@@ -247,18 +220,4 @@ public class WebRoutingShellResolutionTests(WorkbenchApplicationFactory factory)
         }
     }
 
-    private WebApplicationFactory<Program> CreateFactoryWithMissingFeaturesDefault()
-    {
-        return _factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((_, configurationBuilder) =>
-            {
-                configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CShells:Shells:0:Features:0"] = "MissingFeature",
-                    ["CShells:Shells:0:Features:1"] = "StillMissingFeature"
-                });
-            });
-        });
-    }
 }

@@ -1,6 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using CShells.Hosting;
+using CShells.Lifecycle;
 using CShells.Workbench.Features.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -22,8 +22,8 @@ public class PostsFeature : IWebShellFeature
         // Each shell gets its own isolated in-memory store
         services.AddSingleton<IPostRepository, InMemoryPostRepository>();
 
-        // Seed a tenant-specific welcome post when the shell activates
-        services.AddSingleton<IShellActivatedHandler, SeedPostsHandler>();
+        // Seed a tenant-specific welcome post when the shell activates.
+        services.AddTransient<IShellInitializer, SeedPostsHandler>();
     }
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {

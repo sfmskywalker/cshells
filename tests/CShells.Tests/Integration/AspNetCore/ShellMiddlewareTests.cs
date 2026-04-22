@@ -1,5 +1,5 @@
 using CShells.AspNetCore.Middleware;
-using CShells.Hosting;
+using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
@@ -9,238 +9,214 @@ using Microsoft.Extensions.Options;
 namespace CShells.Tests.Integration.AspNetCore;
 
 /// <summary>
-/// Tests for <see cref="ShellMiddleware"/>.
+/// Tests for <see cref="ShellMiddleware"/> — the middleware that resolves a shell per request
+/// and sets <see cref="HttpContext.RequestServices"/> to a scope from that shell's provider.
 /// </summary>
 public class ShellMiddlewareTests
 {
-    private static ShellMiddleware CreateMiddleware(
-        RequestDelegate next,
-        IShellResolver? resolver = null,
-        IShellHost? host = null,
-        IMemoryCache? cache = null,
-        IOptions<ShellMiddlewareOptions>? options = null)
-    {
-        cache ??= new MemoryCache(new MemoryCacheOptions());
-        options ??= Options.Create(new ShellMiddlewareOptions());
-        return new(next, resolver ?? new NullShellResolver(), host ?? new TestShellHost(), cache, options);
-    }
-
     [Fact(DisplayName = "InvokeAsync with no shells registered continues without setting scope")]
-    public async Task InvokeAsync_WithNoShellsRegistered_ContinuesWithoutSettingScope()
+    public async Task InvokeAsync_NoShellsRegistered_ContinuesWithoutSettingScope()
     {
-        // Arrange
         var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
-        var resolver = new NullShellResolver();
-        var host = new TestShellHost(); // Empty host with no shells
         var nextCalled = false;
 
         var middleware = CreateMiddleware(
-            ctx =>
-            {
-                nextCalled = true;
-                return Task.CompletedTask;
-            },
-            resolver,
-            host);
+            ctx => { nextCalled = true; return Task.CompletedTask; },
+            registry: new FakeRegistry());
 
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = originalServiceProvider
-        };
+        var httpContext = new DefaultHttpContext { RequestServices = originalServiceProvider };
 
-        // Act
         await middleware.InvokeAsync(httpContext);
 
-        // Assert
         Assert.True(nextCalled);
         Assert.Same(originalServiceProvider, httpContext.RequestServices);
     }
 
-    [Fact(DisplayName = "InvokeAsync with null ShellId continues without setting scope")]
-    public async Task InvokeAsync_WithNullShellId_ContinuesWithoutSettingScope()
+    [Fact(DisplayName = "InvokeAsync with null resolved ShellId continues without setting scope")]
+    public async Task InvokeAsync_NullResolvedId_ContinuesWithoutSettingScope()
     {
-        // Arrange
         var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
-        var shellServices = new ServiceCollection();
-        var shellServiceProvider = shellServices.BuildServiceProvider();
-
-        var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
-
-        var resolver = new NullShellResolver();
-        var host = new TestShellHost(shellContext); // Host with a shell, but resolver returns null
-        var nextCalled = false;
+        var shell = FakeShell.WithServices(_ => { });
+        var registry = new FakeRegistry(shell);
 
         var middleware = CreateMiddleware(
-            ctx =>
-            {
-                nextCalled = true;
-                return Task.CompletedTask;
-            },
-            resolver,
-            host);
+            _ => Task.CompletedTask,
+            resolver: new NullShellResolver(),
+            registry: registry);
 
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = originalServiceProvider
-        };
+        var httpContext = new DefaultHttpContext { RequestServices = originalServiceProvider };
 
-        // Act
         await middleware.InvokeAsync(httpContext);
 
-        // Assert
-        Assert.True(nextCalled);
         Assert.Same(originalServiceProvider, httpContext.RequestServices);
     }
 
-    [Fact(DisplayName = "InvokeAsync with valid ShellId sets RequestServices from shell scope")]
-    public async Task InvokeAsync_WithValidShellId_SetsRequestServicesFromShellScope()
+    [Fact(DisplayName = "InvokeAsync with a resolved shell sets RequestServices to a shell scope")]
+    public async Task InvokeAsync_ValidShell_SetsRequestServices_FromShellScope()
     {
-        // Arrange
         var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
-        var shellServices = new ServiceCollection();
-        shellServices.AddSingleton<ITestService, TestService>();
-        var shellServiceProvider = shellServices.BuildServiceProvider();
-
-        var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
-
-        var resolver = new FixedShellResolver(new("TestShell"));
-        var host = new TestShellHost(shellContext);
+        var shell = FakeShell.WithServices(s => s.AddSingleton<ITestService, TestService>(), name: "TestShell");
 
         IServiceProvider? capturedRequestServices = null;
-        ITestService? capturedTestService = null;
+        ITestService? capturedService = null;
+
         var middleware = CreateMiddleware(
             ctx =>
             {
                 capturedRequestServices = ctx.RequestServices;
-                // Capture the service while within the scope
-                capturedTestService = ctx.RequestServices.GetService<ITestService>();
+                capturedService = ctx.RequestServices.GetService<ITestService>();
                 return Task.CompletedTask;
             },
-            resolver,
-            host);
+            resolver: new FixedShellResolver("TestShell"),
+            registry: new FakeRegistry(shell));
 
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = originalServiceProvider
-        };
+        var httpContext = new DefaultHttpContext { RequestServices = originalServiceProvider };
 
-        // Act
         await middleware.InvokeAsync(httpContext);
 
-        // Assert
         Assert.NotNull(capturedRequestServices);
         Assert.NotSame(originalServiceProvider, capturedRequestServices);
-
-        // Verify services from shell are available (captured while in scope)
-        Assert.NotNull(capturedTestService);
+        Assert.NotNull(capturedService);
+        Assert.Equal(0, shell.ActiveScopeCount); // scope disposed after request
     }
 
-    [Fact(DisplayName = "InvokeAsync sets RequestServices to shell scope for the request lifetime")]
-    public async Task InvokeAsync_SetsRequestServicesToShellScope_ForRequestLifetime()
+    [Fact(DisplayName = "InvokeAsync increments the shell's scope counter for the request lifetime")]
+    public async Task InvokeAsync_IncrementsScopeCounter_ForRequestLifetime()
     {
-        // Arrange
-        var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
-        var shellServices = new ServiceCollection();
-        shellServices.AddSingleton<ITestService, TestService>();
-        var shellServiceProvider = shellServices.BuildServiceProvider();
+        var shell = FakeShell.WithServices(_ => { }, name: "TestShell");
+        var registry = new FakeRegistry(shell);
 
-        var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
+        var middleware = CreateMiddleware(
+            _ =>
+            {
+                Assert.Equal(1, shell.ActiveScopeCount);
+                return Task.CompletedTask;
+            },
+            resolver: new FixedShellResolver("TestShell"),
+            registry: registry);
 
-        var resolver = new FixedShellResolver(new("TestShell"));
-        var host = new TestShellHost(shellContext);
-
-        var middleware = CreateMiddleware(ctx => Task.CompletedTask, resolver, host);
-
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = originalServiceProvider
-        };
-
-        // Act
-        await middleware.InvokeAsync(httpContext);
-
-        // Assert - RequestServices should remain set to shell scope (needed for endpoints)
-        Assert.NotSame(originalServiceProvider, httpContext.RequestServices);
-        Assert.NotNull(httpContext.RequestServices.GetService<ITestService>());
+        await middleware.InvokeAsync(new DefaultHttpContext());
+        Assert.Equal(0, shell.ActiveScopeCount);
     }
 
-    [Fact(DisplayName = "InvokeAsync disposes shell scope even after exception")]
-    public async Task InvokeAsync_DisposesShellScope_EvenAfterException()
+    [Fact(DisplayName = "InvokeAsync disposes shell scope even after downstream exception")]
+    public async Task InvokeAsync_DisposesScope_EvenAfterException()
     {
-        // Arrange
-        var originalServiceProvider = new ServiceCollection().BuildServiceProvider();
-        var shellServices = new ServiceCollection();
-        var shellServiceProvider = shellServices.BuildServiceProvider();
+        var shell = FakeShell.WithServices(_ => { }, name: "TestShell");
+        var middleware = CreateMiddleware(
+            _ => throw new InvalidOperationException("boom"),
+            resolver: new FixedShellResolver("TestShell"),
+            registry: new FakeRegistry(shell));
 
-        var settings = new ShellSettings(new("TestShell"));
-        var shellContext = new ShellContext(settings, shellServiceProvider, Array.Empty<string>());
-
-        var resolver = new FixedShellResolver(new("TestShell"));
-        var host = new TestShellHost(shellContext);
-
-        var middleware = CreateMiddleware(_ => throw new InvalidOperationException("Test exception"), resolver, host);
-
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = originalServiceProvider
-        };
-
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
-        // The scope should be disposed even if an exception occurs
-        // Note: We can't directly test disposal, but the test verifies the exception is properly propagated
+        await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(new DefaultHttpContext()));
+        Assert.Equal(0, shell.ActiveScopeCount);
     }
 
     [Theory(DisplayName = "Constructor guard clauses throw ArgumentNullException")]
     [InlineData(true, false, false, false, false, "next")]
     [InlineData(false, true, false, false, false, "resolver")]
-    [InlineData(false, false, true, false, false, "host")]
+    [InlineData(false, false, true, false, false, "registry")]
     [InlineData(false, false, false, true, false, "cache")]
     [InlineData(false, false, false, false, true, "options")]
-    public void Constructor_GuardClauses_ThrowArgumentNullException(bool nullNext, bool nullResolver, bool nullHost, bool nullCache, bool nullOptions, string expectedParam)
+    public void Constructor_GuardClauses_ThrowArgumentNullException(
+        bool nullNext, bool nullResolver, bool nullRegistry, bool nullCache, bool nullOptions, string expectedParam)
     {
         RequestDelegate? next = nullNext ? null : _ => Task.CompletedTask;
-        var resolver = nullResolver ? null : new NullShellResolver();
-        var host = nullHost ? null : new TestShellHost();
-        var cache = nullCache ? null : new MemoryCache(new MemoryCacheOptions());
-        var options = nullOptions ? null : Options.Create(new ShellMiddlewareOptions());
+        IShellResolver? resolver = nullResolver ? null : new NullShellResolver();
+        IShellRegistry? registry = nullRegistry ? null : new FakeRegistry();
+        IMemoryCache? cache = nullCache ? null : new MemoryCache(new MemoryCacheOptions());
+        IOptions<ShellMiddlewareOptions>? options = nullOptions ? null : Options.Create(new ShellMiddlewareOptions());
 
-        var exception = Assert.Throws<ArgumentNullException>(() => new ShellMiddleware(next!, resolver!, host!, cache!, options!));
-        Assert.Equal(expectedParam, exception.ParamName);
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellMiddleware(next!, resolver!, registry!, cache!, options!));
+        Assert.Equal(expectedParam, ex.ParamName);
     }
 
-    // Test helpers
-    private interface ITestService { }
-    private class TestService : ITestService { }
+    // =================================================================
+    // Test doubles
+    // =================================================================
 
-    private class NullShellResolver : IShellResolver
+    private static ShellMiddleware CreateMiddleware(
+        RequestDelegate next,
+        IShellResolver? resolver = null,
+        IShellRegistry? registry = null,
+        IMemoryCache? cache = null,
+        IOptions<ShellMiddlewareOptions>? options = null) =>
+        new(
+            next,
+            resolver ?? new NullShellResolver(),
+            registry ?? new FakeRegistry(),
+            cache ?? new MemoryCache(new MemoryCacheOptions()),
+            options ?? Options.Create(new ShellMiddlewareOptions()));
+
+    private interface ITestService;
+
+    private sealed class TestService : ITestService;
+
+    private sealed class NullShellResolver : IShellResolver
     {
         public ShellId? Resolve(ShellResolutionContext context) => null;
     }
 
-    private class FixedShellResolver(ShellId shellId) : IShellResolver
+    private sealed class FixedShellResolver(ShellId shellId) : IShellResolver
     {
         public ShellId? Resolve(ShellResolutionContext context) => shellId;
     }
 
-    private class TestShellHost(ShellContext? shellContext = null) : IShellHost
+    internal sealed class FakeRegistry(FakeShell? shell = null) : IShellRegistry
     {
-        public ShellContext DefaultShell => shellContext ?? throw new InvalidOperationException("No shell configured");
-        public IReadOnlyCollection<ShellContext> AllShells => shellContext != null ? [shellContext] : [];
+        private readonly FakeShell? _shell = shell;
 
-        public ShellContext GetShell(ShellId id)
+        public void RegisterBlueprint(IShellBlueprint blueprint) => throw new NotSupportedException();
+        public IShellBlueprint? GetBlueprint(string name) => null;
+        public IReadOnlyCollection<string> GetBlueprintNames() => _shell is null ? [] : [_shell.Descriptor.Name];
+        public Task<IShell> ActivateAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ReloadResult> ReloadAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ReloadResult>> ReloadAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken ct = default) => throw new NotSupportedException();
+        public IShell? GetActive(string name)
+            => _shell is not null && string.Equals(_shell.Descriptor.Name, name, StringComparison.OrdinalIgnoreCase) ? _shell : null;
+        public IReadOnlyCollection<IShell> GetAll(string name) => _shell is null ? [] : [_shell];
+        public void Subscribe(IShellLifecycleSubscriber subscriber) { }
+        public void Unsubscribe(IShellLifecycleSubscriber subscriber) { }
+    }
+
+    internal sealed class FakeShell(ShellDescriptor descriptor, IServiceProvider provider) : IShell
+    {
+        private int _activeScopes;
+
+        public ShellDescriptor Descriptor { get; } = descriptor;
+        public ShellLifecycleState State => ShellLifecycleState.Active;
+        public IServiceProvider ServiceProvider { get; } = provider;
+        public int ActiveScopeCount => Volatile.Read(ref _activeScopes);
+
+        public IShellScope BeginScope()
         {
-            if (shellContext == null)
-            {
-                throw new KeyNotFoundException($"Shell '{id}' not found");
-            }
-            return shellContext;
+            Interlocked.Increment(ref _activeScopes);
+            var scope = ServiceProvider.CreateAsyncScope();
+            return new FakeScope(this, scope);
         }
 
-        public ValueTask EvictShellAsync(ShellId shellId) => ValueTask.CompletedTask;
-        public ValueTask EvictAllShellsAsync() => ValueTask.CompletedTask;
+        public static FakeShell WithServices(Action<IServiceCollection> configure, string name = "TestShell")
+        {
+            var services = new ServiceCollection();
+            configure(services);
+            return new FakeShell(ShellDescriptor.Create(name, 1), services.BuildServiceProvider());
+        }
+
+        private sealed class FakeScope(FakeShell owner, AsyncServiceScope inner) : IShellScope
+        {
+            private int _disposed;
+
+            public IShell Shell => owner;
+            public IServiceProvider ServiceProvider => inner.ServiceProvider;
+
+            public async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                    return;
+                try { await inner.DisposeAsync(); }
+                finally { Interlocked.Decrement(ref owner._activeScopes); }
+            }
+        }
     }
 }

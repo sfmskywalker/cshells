@@ -1,33 +1,30 @@
 using System.Text.Json;
 using CShells.Configuration;
+using CShells.Lifecycle;
+using CShells.Lifecycle.Blueprints;
 using FluentStorage.Blobs;
+using Microsoft.Extensions.Configuration;
 
 namespace CShells.Providers.FluentStorage;
 
 /// <summary>
-/// Provides shell settings from blob storage using FluentStorage.
-/// Each blob in the specified path represents a shell configuration in JSON format.
+/// Loads shell blueprints from blob storage using FluentStorage. Each <c>*.json</c> blob at
+/// the configured path represents one shell's configuration; the loader returns a
+/// <see cref="ConfigurationShellBlueprint"/> per blob that re-reads the blob on every
+/// activation / reload.
 /// </summary>
-public class FluentStorageShellSettingsProvider : IShellSettingsProvider
+public sealed class FluentStorageShellBlueprintLoader
 {
     private readonly IBlobStorage _blobStorage;
     private readonly string _path;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FluentStorageShellSettingsProvider"/> class.
-    /// </summary>
-    /// <param name="blobStorage">The blob storage instance to read shell configurations from.</param>
-    /// <param name="path">The path/prefix within the blob storage where shell JSON files are located. If null, reads from root.</param>
-    /// <param name="jsonOptions">Optional JSON serialization options. If null, uses default options with case-insensitive property names.</param>
-    public FluentStorageShellSettingsProvider(
+    public FluentStorageShellBlueprintLoader(
         IBlobStorage blobStorage,
         string? path = null,
         JsonSerializerOptions? jsonOptions = null)
     {
-        Guard.Against.Null(blobStorage);
-
-        _blobStorage = blobStorage;
+        _blobStorage = Guard.Against.Null(blobStorage);
         _path = path ?? string.Empty;
         _jsonOptions = jsonOptions ?? new JsonSerializerOptions
         {
@@ -36,10 +33,13 @@ public class FluentStorageShellSettingsProvider : IShellSettingsProvider
         };
     }
 
-    /// <inheritdoc />
-    public async Task<IEnumerable<ShellSettings>> GetShellSettingsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Enumerates a blueprint per shell-config blob. Each blueprint wraps an
+    /// <see cref="IConfiguration"/> built from the blob's current JSON, so subsequent reloads
+    /// pick up blob updates.
+    /// </summary>
+    public async Task<IReadOnlyList<IShellBlueprint>> LoadAsync(CancellationToken cancellationToken = default)
     {
-        // List all blobs in the specified path
         var blobs = await _blobStorage.ListAsync(
             new()
             {
@@ -49,45 +49,42 @@ public class FluentStorageShellSettingsProvider : IShellSettingsProvider
             },
             cancellationToken);
 
-        if (blobs == null || !blobs.Any())
-        {
+        if (blobs is null || !blobs.Any())
             return [];
-        }
 
-        var shellSettings = new List<ShellSettings>();
+        var blueprints = new List<IShellBlueprint>();
 
         foreach (var blob in blobs.Where(b => b.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
         {
-            try
-            {
-                // Read the blob content
-                await using var stream = await _blobStorage.OpenReadAsync(blob.FullPath, cancellationToken);
+            await using var stream = await _blobStorage.OpenReadAsync(blob.FullPath, cancellationToken);
+            var shellConfig = await JsonSerializer.DeserializeAsync<ShellConfig>(stream, _jsonOptions, cancellationToken)
+                ?? throw new InvalidOperationException($"Failed to deserialize shell configuration from '{blob.Name}'.");
 
-                // Deserialize to ShellConfig
-                var shellConfig = await JsonSerializer.DeserializeAsync<ShellConfig>(stream, _jsonOptions, cancellationToken);
+            if (string.IsNullOrWhiteSpace(shellConfig.Name))
+                throw new InvalidOperationException($"Shell config in blob '{blob.Name}' is missing its Name property.");
 
-                if (shellConfig == null)
-                {
-                    throw new InvalidOperationException($"Failed to deserialize shell configuration from '{blob.Name}'.");
-                }
-
-                // Convert to ShellSettings
-                var settings = ShellSettingsFactory.Create(shellConfig);
-                shellSettings.Add(settings);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error reading shell configuration from blob '{blob.Name}': {ex.Message}", ex);
-            }
+            // Build an in-memory IConfiguration from the deserialized ShellConfig so the
+            // blueprint's ComposeAsync re-binds into fresh ShellSettings on every call.
+            var memory = BuildMemoryConfiguration(shellConfig);
+            blueprints.Add(new ConfigurationShellBlueprint(shellConfig.Name, memory));
         }
 
-        return shellSettings;
+        return blueprints;
     }
 
-    /// <inheritdoc />
-    public async Task<ShellSettings?> GetShellSettingsAsync(ShellId shellId, CancellationToken cancellationToken = default)
+    private static IConfiguration BuildMemoryConfiguration(ShellConfig config)
     {
-        var allShells = await GetShellSettingsAsync(cancellationToken);
-        return allShells.FirstOrDefault(s => s.Id.Equals(shellId));
+        var pairs = new Dictionary<string, string?>();
+        for (var i = 0; i < config.Features.Count; i++)
+        {
+            var entry = config.Features[i];
+            pairs[$"Features:{i}:Name"] = entry.Name;
+            foreach (var kv in entry.Settings)
+                pairs[$"Features:{i}:Settings:{kv.Key}"] = kv.Value?.ToString();
+        }
+        foreach (var kv in config.Configuration)
+            pairs[$"Configuration:{kv.Key}"] = kv.Value?.ToString();
+
+        return new ConfigurationBuilder().AddInMemoryCollection(pairs).Build();
     }
 }

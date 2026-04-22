@@ -23,11 +23,23 @@ internal sealed class ShellRegistry : IShellRegistry
         IEnumerable<IShellBlueprint>? blueprints = null,
         ShellProviderBuilder? providerBuilder = null,
         IServiceProvider? rootProvider = null,
-        ILogger<ShellRegistry>? logger = null)
+        ILogger<ShellRegistry>? logger = null,
+        IEnumerable<IShellLifecycleSubscriber>? subscribers = null)
     {
         _providerBuilder = providerBuilder;
         _rootProvider = rootProvider;
         _logger = logger ?? NullLogger<ShellRegistry>.Instance;
+
+        // Subscribers registered in DI are subscribed at construction time so they observe
+        // every transition — including the first activation kicked off by the startup hosted
+        // service. Without this, factory-based registrations (e.g., AddSingleton<…>(sp => …))
+        // would only materialize on the first GetServices<IShellLifecycleSubscriber>() call,
+        // which never happens in the normal flow.
+        if (subscribers is not null)
+        {
+            foreach (var subscriber in subscribers)
+                Subscribe(subscriber);
+        }
 
         if (blueprints is null)
             return;
@@ -38,7 +50,7 @@ internal sealed class ShellRegistry : IShellRegistry
 
     // Convenience ctor used by tests that don't need the provider-build pipeline.
     internal ShellRegistry(ILogger<ShellRegistry>? logger)
-        : this(blueprints: null, providerBuilder: null, rootProvider: null, logger)
+        : this(blueprints: null, providerBuilder: null, rootProvider: null, logger, subscribers: null)
     {
     }
 

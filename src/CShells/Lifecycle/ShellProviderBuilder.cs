@@ -15,16 +15,12 @@ namespace CShells.Lifecycle;
 /// Builds a shell generation's <see cref="IServiceProvider"/> from its <see cref="ShellSettings"/>.
 /// </summary>
 /// <remarks>
-/// Responsible for replicating the legacy <c>DefaultShellHost.BuildServiceProvider</c> flow in
-/// the new lifecycle world: copy root services (minus exclusions), register shell-scoped core
-/// services (<see cref="ShellSettings"/>, <see cref="ShellId"/>, <see cref="ShellConfiguration"/>,
-/// <see cref="IConfiguration"/>, feature descriptors, <see cref="IShell"/>), invoke each enabled
-/// feature's <see cref="IShellFeature.ConfigureServices"/> in dependency order, then build.
-///
-/// <para>
-/// No post-configure / holder-for-ShellContext plumbing is carried over — the new world drops
-/// <c>ShellContext</c> entirely; features that need "the shell I belong to" inject <see cref="IShell"/>.
-/// </para>
+/// The build pipeline: copy root services (minus infrastructure exclusions), register shell-scoped
+/// core services (<see cref="ShellSettings"/>, <see cref="ShellId"/>,
+/// <see cref="ShellConfiguration"/>, <see cref="IConfiguration"/>, feature descriptors,
+/// <see cref="IShell"/>), invoke each enabled feature's <see cref="IShellFeature.ConfigureServices"/>
+/// in dependency order, then build. Features that need "the shell I belong to" inject
+/// <see cref="IShell"/> directly.
 /// </remarks>
 internal sealed class ShellProviderBuilder(
     IRootServiceCollectionAccessor rootServicesAccessor,

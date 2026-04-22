@@ -4,16 +4,18 @@ A modular multi-tenancy framework for .NET that enables building feature-based a
 
 ## Purpose
 
-CShells is the core runtime package that provides shell hosting, feature discovery, dependency injection container management, and configuration-driven multi-tenancy.
+CShells is the core runtime package that provides blueprint-driven shell activation, cooperative drain-based reload, feature discovery, per-shell DI containers, and configuration-driven multi-tenancy.
 
 ## Key Features
 
-- **Multi-shell architecture** - Each shell has its own isolated DI container
-- **Feature-based modularity** - Features are discovered automatically via attributes
-- **Dependency resolution** - Features can depend on other features with topological ordering
-- **Configuration-driven** - Shells and their features are configured via appsettings.json or code
-- **Background worker support** - Execute work in shell contexts via `IShellContextScopeFactory`
-- **Runtime shell management** - Add, update, or remove shells at runtime
+- **Multi-shell architecture** — each shell has its own isolated DI container
+- **Feature-based modularity** — features are discovered automatically via attributes
+- **Dependency resolution** — features can depend on other features with topological ordering
+- **Configuration-driven** — shells and their features are configured via `appsettings.json` or code
+- **Generation lifecycle** — `Initializing → Active → Deactivating → Draining → Drained → Disposed`
+- **Cooperative reload** — `IShellRegistry.ReloadAsync(name)` builds the next generation while draining the previous one; in-flight request scopes finish against the old provider
+- **Observable events** — `IShellLifecycleSubscriber` receives every state transition
+- **Configurable drain policies** — fixed, extensible, and unbounded timeouts
 
 ## Installation
 
@@ -58,37 +60,30 @@ public class CoreFeature : IShellFeature
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddCShells();
+builder.Services.AddCShells(cshells =>
+    cshells.WithConfigurationProvider(builder.Configuration));
 
 var app = builder.Build();
 app.Run();
 ```
 
-## Shell Context Scopes & Background Work
+## Shell Scopes & Background Work
 
-Use `IShellContextScopeFactory` to create scoped services within a shell's service provider:
+`IShell.BeginScope()` returns a tracked `IShellScope` that (a) exposes a scoped `IServiceProvider` built from the shell's container and (b) delays drain-handler invocation while the scope is outstanding:
 
 ```csharp
-public class ShellBackgroundWorker : BackgroundService
+public class ShellBackgroundWorker(IShellRegistry registry) : BackgroundService
 {
-    private readonly IShellHost _shellHost;
-    private readonly IShellContextScopeFactory _scopeFactory;
-
-    public ShellBackgroundWorker(
-        IShellHost shellHost,
-        IShellContextScopeFactory scopeFactory)
-    {
-        _shellHost = shellHost;
-        _scopeFactory = scopeFactory;
-    }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            foreach (var shell in _shellHost.AllShells)
+            foreach (var name in registry.GetBlueprintNames())
             {
-                using var scope = _scopeFactory.CreateScope(shell);
+                var shell = registry.GetActive(name);
+                if (shell is null) continue;
+
+                await using var scope = shell.BeginScope();
                 var service = scope.ServiceProvider.GetService<IMyService>();
                 service?.Execute();
             }
@@ -99,9 +94,7 @@ public class ShellBackgroundWorker : BackgroundService
 }
 ```
 
-## Configuration Options
-
-### Code-first Configuration
+## Code-First Shell Registration
 
 ```csharp
 builder.Services.AddCShells(cshells =>
@@ -113,22 +106,33 @@ builder.Services.AddCShells(cshells =>
 });
 ```
 
-### Custom Shell Settings Provider
+## Per-Shell Initialization & Drain
+
+Register `IShellInitializer` services for per-shell startup work and `IDrainHandler` services for cooperative shutdown:
 
 ```csharp
-public class DatabaseShellSettingsProvider : IShellSettingsProvider
+public class PaymentsFeature : IShellFeature
 {
-    public async Task<IEnumerable<ShellSettings>> GetAllAsync()
+    public void ConfigureServices(IServiceCollection services)
     {
-        // Load from database, API, etc.
-        return Enumerable.Empty<ShellSettings>();
+        services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
+        services.AddTransient<IShellInitializer, PaymentsInitializer>();
+        services.AddTransient<IDrainHandler, PaymentsDrainHandler>();
     }
 }
+```
 
-builder.Services.AddCShells(cshells =>
-{
-    cshells.WithProvider<DatabaseShellSettingsProvider>();
-});
+Initializers run sequentially in DI-registration order during `Initializing → Active`. Drain handlers run in parallel during `Draining`, after all outstanding `IShellScope` handles have been released (or the drain deadline elapses).
+
+## Reload
+
+```csharp
+var result = await registry.ReloadAsync("payments");
+
+// result.NewShell.Descriptor.Generation == previous + 1
+// result.Drain (when non-null) is the cooperative drain on the previous generation.
+if (result.Drain is not null)
+    await result.Drain.WaitAsync();
 ```
 
 ## Learn More
