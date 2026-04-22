@@ -1,20 +1,19 @@
 <!--
   Sync Impact Report
   ===================
-  Version change: 1.0.1 → 1.0.2
+  Version change: 1.0.2 → 1.1.0
   Modified principles:
-    - I. Abstraction-First Architecture
-  Added sections:
     - None
+  Added sections:
+    - VII. Lifecycle & Concurrency Contracts (new principle)
   Removed sections:
     - None
   Templates requiring updates:
-    - .specify/templates/plan-template.md ✅ (uses dynamic Constitution Check)
+    - .specify/templates/plan-template.md ✅ (Constitution Check is dynamic; picks up new principle automatically)
     - .specify/templates/spec-template.md ✅ (no principle references)
     - .specify/templates/tasks-template.md ✅ (no principle references)
-    - .specify/templates/checklist-template.md ✅ (no principle references)
   Follow-up TODOs:
-    - Keep future analysis aligned with the internal-seam and notification-record exceptions
+    - Ensure implementation of 006-shell-drain-lifecycle applies Principle VII throughout
 -->
 
 # CShells Constitution
@@ -151,6 +150,38 @@ current requirements.
   surrounding refactors. A feature does not include speculative
   extensibility.
 
+### VII. Lifecycle & Concurrency Contracts
+
+Shell state machines and shared mutable state MUST be correct under
+concurrent access. Async coordination primitives replace lock-based
+approaches wherever async work is involved.
+
+- **Monotonic state machines**: Shell lifecycle states MUST only advance
+  forward (e.g., Active → Deactivating → Draining → Drained → Disposed).
+  Backward transitions MUST NOT be possible; any attempt MUST be a
+  no-op or throw, never silently corrupt state.
+- **Async-safe serialization**: State transitions and registry mutations
+  MUST be serialized using async-compatible locks (e.g.,
+  `SemaphoreSlim(1,1)`) — never `lock()` around async paths.
+- **Idempotent concurrent operations**: When the same logical operation
+  (e.g., drain, promote) is initiated concurrently for the same entity,
+  all callers MUST receive the same in-flight handle. Duplicate
+  operations MUST NOT be started.
+- **Cancellation discipline**: Every public async API MUST accept and
+  propagate a `CancellationToken`. Long-running internal operations
+  (drain handlers, policy callbacks) MUST observe cancellation promptly
+  and return rather than throwing `OperationCanceledException` unless
+  the caller must be notified of cancellation explicitly.
+- **Event subscriber isolation**: When fan-out event notification is
+  used, exceptions thrown by one subscriber MUST be caught, logged, and
+  swallowed so they cannot block other subscribers or disrupt the
+  triggering state transition. Subscriber registration and removal MUST
+  be thread-safe.
+- **Disposal ordering**: Resources that depend on a shell's
+  `IServiceProvider` MUST be fully wound down (via drain) before
+  `DisposeAsync` is called on the provider. Disposing a provider while
+  services resolved from it are still in active use is NOT permitted.
+
 ## Technology Stack & Constraints
 
 - **Runtime**: .NET 10 (C# 14, `LangVersion` latest). Source projects
@@ -210,4 +241,4 @@ supersedes ad-hoc conventions or undocumented habits.
   requirement, document the deviation in the PR with a justification.
   Recurring deviations signal that the constitution needs amendment.
 
-**Version**: 1.0.2 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08
+**Version**: 1.1.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-04-22
