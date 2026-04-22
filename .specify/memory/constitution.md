@@ -1,7 +1,7 @@
 <!--
   Sync Impact Report
   ===================
-  Version change: 1.0.2 → 1.1.0
+  Version change: 1.0.2 → 1.1.1 (cumulative; 1.1.0 added Principle VII, 1.1.1 adds backward-compat stance to Principle VI)
   Modified principles:
     - None
   Added sections:
@@ -149,6 +149,11 @@ current requirements.
 - Changes MUST be focused and minimal. A bug fix does not include
   surrounding refactors. A feature does not include speculative
   extensibility.
+- **Backward compatibility is not a constraint.** Breaking changes are
+  acceptable — and actively embraced — when they improve architecture,
+  API clarity, or overall library quality. Do not retain old code, shims,
+  or deprecated paths purely to avoid breaking callers. Callers are
+  expected to migrate.
 
 ### VII. Lifecycle & Concurrency Contracts
 
@@ -241,4 +246,4 @@ supersedes ad-hoc conventions or undocumented habits.
   requirement, document the deviation in the PR with a justification.
   Recurring deviations signal that the constitution needs amendment.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-04-22
+**Version**: 1.1.1 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-04-22

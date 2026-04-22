@@ -90,8 +90,11 @@ A host developer wants to control how long a drain waits for handlers to complet
 
 ### Edge Cases
 
+- What happens when `CreateAsync` is called with a `ShellId` that already exists in the registry? An exception is thrown; duplicate registration is rejected.
+- What happens when `CreateAsync` fails during shell construction (e.g., configure action throws)? The exception propagates to the caller and the shell is not registered; the registry remains unchanged.
 - What happens when drain is initiated concurrently for the same shell? Only one drain operation is created; all callers receive the same in-flight handle.
 - What happens when a shell is already Draining and promotion is attempted on it? Promotion is only valid for Active shells; the call fails with a clear error.
+- What happens when two concurrent `PromoteAsync` calls target different shells with the same name? Both calls succeed in arrival order; each promotion serializes, and the last one to complete becomes the active shell.
 - What happens when a drain handler resolves services from the shell being drained? It succeeds, because disposal only occurs after drain completes.
 - What happens when `DisposeAsync` is called directly on a shell that has not been drained? The shell transitions immediately to Disposed, skipping the drain phase.
 - What happens when no drain handlers are registered? Drain completes immediately with no handler results, transitioning through Draining → Drained without delay.
@@ -115,12 +118,15 @@ A host developer wants to control how long a drain waits for handlers to complet
 - **FR-010**: The library MUST allow multiple shells with the same name to coexist, with exactly one Active at a time.
 - **FR-011**: The registry MUST provide a way to retrieve the single Active shell for a given name.
 - **FR-012**: The registry MUST provide a way to retrieve all shells with a given name regardless of state.
-- **FR-013**: Promoting a shell MUST atomically designate it as Active and transition the previous Active shell (if any) to Deactivating.
+- **FR-013**: Promoting a shell MUST atomically designate it as Active and transition the previous Active shell (if any) to Deactivating. Concurrent `PromoteAsync` calls for the same shell name MUST be serialized; both calls succeed in arrival order and the last one to complete becomes the active shell.
 - **FR-014**: The library MUST provide a replace operation that promotes a new shell and initiates drain on the previous shell in a single call.
 - **FR-015**: Callers MUST be able to await drain completion and receive a structured result including per-handler status and elapsed time.
 - **FR-016**: Callers MUST be able to force-complete a drain at any time, cancelling outstanding handler tokens.
 - **FR-017**: Shell descriptor metadata MUST be opaque to the library and surfaced unchanged in events and queries.
 - **FR-018**: Concurrent drain calls for the same shell MUST return the same in-flight operation rather than starting a second drain.
+- **FR-019**: `CreateAsync` MUST throw an exception if the registry already contains a shell with the same `ShellId` (name + version). Duplicate registration is a programming error and MUST be rejected loudly.
+- **FR-020**: If `CreateAsync` fails for any reason (e.g., the configure action throws, or the service provider build fails), the exception MUST propagate to the caller and the shell MUST NOT be added to the registry. No partial or failed shell entry is retained.
+- **FR-021**: The library MUST automatically register a structured-logging subscriber backed by `ILogger` when CShell is added to the host's service collection. This subscriber MUST emit a structured log entry for every shell lifecycle transition, including the shell descriptor metadata. No host configuration is required to activate it.
 
 ### Key Entities
 
@@ -141,17 +147,27 @@ A host developer wants to control how long a drain waits for handlers to complet
 - **SC-002**: Drain handler registration, invocation, and result collection work correctly for shells with 0 to 50 registered handlers without special configuration.
 - **SC-003**: Shell state-change events reach all registered subscribers within the same logical operation that caused the transition, with no events silently dropped under normal conditions.
 - **SC-004**: Concurrent drain calls for the same shell always return the same operation handle; no duplicate drains are ever started.
-- **SC-005**: Configuring a drain timeout of T seconds results in drain completing within T + 3 seconds (accounting for cancellation grace period) under all built-in policy types.
-- **SC-006**: All shell lifecycle transitions are observable via structured events carrying the shell descriptor metadata, enabling downstream logging and diagnostics without polling.
-- **SC-007**: The library introduces no breaking changes to the existing shell creation, resolution, and disposal flow for consumers who do not opt into the new drain capabilities.
+- **SC-005**: Configuring a drain timeout of T seconds results in drain completing within T + G seconds, where G is the configurable cancellation grace period (default 3 seconds), under all built-in policy types. After force or timeout, the shell MUST reach Drained within G seconds regardless of handler behaviour.
+- **SC-006**: All shell lifecycle transitions are observable via structured events carrying the shell descriptor metadata, enabling downstream logging and diagnostics without polling. The library emits these as structured log entries by default without any host configuration.
+- **SC-007**: Shells with no registered drain handlers complete drain immediately and transition to Drained without delay, error, or special configuration.
 
 ---
+
+## Clarifications
+
+### Session 2026-04-22
+
+- Q: What happens when `CreateAsync` is called with a `ShellId` that already exists in the registry? → A: Throw an exception; duplicate `ShellId` is rejected.
+- Q: What happens when `CreateAsync` fails during shell construction? → A: Exception propagates to caller; shell is never added to the registry.
+- Q: Does the library ship a default structured-logging subscriber or does the host wire its own? → A: Library registers a default `ILogger`-backed subscriber automatically; no host configuration required.
+- Q: What happens when two concurrent `PromoteAsync` calls target different shells with the same name? → A: Serialized; both succeed in arrival order; last one wins as active.
+- Q: What is the maximum time allowed between force/timeout and the shell reaching Drained? → A: Configurable grace period, default 3 seconds.
 
 ## Assumptions
 
 - Shell version is a free-form string; the library does not interpret or compare versions semantically. Hosts that need semver can enforce it themselves.
 - Drain handlers that do not complete within the configured timeout are considered timed out; their completed flag in the result is false.
-- The short grace period after forced cancellation (default 2 seconds) is configurable but not the same as the main drain timeout.
+- The cancellation grace period — the maximum time allowed between force/timeout and the shell reaching Drained — is configurable with a default of 3 seconds. It is separate from the main drain timeout.
 - Drain handlers are registered as transient services resolved at drain time from the draining shell's provider.
 - The registry holds shells until they are Disposed; callers are not responsible for lifecycle management beyond triggering drain.
 - The unbounded policy is intended for development and test environments only; using it in production should produce a log warning.
