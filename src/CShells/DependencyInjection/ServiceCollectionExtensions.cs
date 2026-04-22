@@ -1,6 +1,7 @@
 using CShells.Configuration;
 using CShells.Features;
 using CShells.Hosting;
+using CShells.Lifecycle;
 using CShells.Management;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -139,9 +140,22 @@ public static class ServiceCollectionExtensions
             return provider;
         });
         
+        // ==================================================================================
+        // Lifecycle (new API — runs alongside legacy until Phase 15 deletes the legacy surface).
+        // Registers the generation-based `IShellRegistry` and auto-subscribes the structured
+        // logging subscriber so hosts get lifecycle log output without configuration.
+        // ==================================================================================
+        services.TryAddSingleton<ShellRegistry>();
+        services.TryAddSingleton<IShellRegistry>(sp => sp.GetRequiredService<ShellRegistry>());
+        services.AddSingleton<ShellLifecycleLogger>();
+        // Eager instantiation: resolve the logger during startup so it subscribes before any
+        // activation events fire. Hosted services are the canonical seam for this; a lightweight
+        // marker service works too because the IShellRegistry constructor path resolves the logger.
+        services.AddSingleton<IShellLifecycleSubscriber>(sp => sp.GetRequiredService<ShellLifecycleLogger>());
+
         configure?.Invoke(builder);
-            
+
         return builder;
     }
-    
+
 }

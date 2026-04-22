@@ -39,9 +39,9 @@ consumers off the legacy surface. Phase 15 deletes the legacy types. Phase 16 is
 
 **Purpose**: Create directory scaffolding for the new lifecycle surface.
 
-- [ ] T001 Create directory `src/CShells.Abstractions/Lifecycle/`
-- [ ] T002 [P] Create directories `src/CShells/Lifecycle/`, `src/CShells/Lifecycle/Blueprints/`, and `src/CShells/Lifecycle/Policies/`
-- [ ] T003 [P] Create directories `tests/CShells.Tests/Unit/Lifecycle/`, `tests/CShells.Tests/Unit/Lifecycle/Blueprints/`, and `tests/CShells.Tests/Integration/Lifecycle/`
+- [X] T001 Create directory `src/CShells.Abstractions/Lifecycle/`
+- [X] T002 [P] Create directories `src/CShells/Lifecycle/`, `src/CShells/Lifecycle/Blueprints/`, and `src/CShells/Lifecycle/Policies/`
+- [X] T003 [P] Create directories `tests/CShells.Tests/Unit/Lifecycle/`, `tests/CShells.Tests/Unit/Lifecycle/Blueprints/`, and `tests/CShells.Tests/Integration/Lifecycle/`
 
 ---
 
@@ -52,20 +52,20 @@ implementation work begins.
 
 **⚠️ CRITICAL**: `ShellId` stays unchanged. No types are modified in this phase; only added.
 
-- [ ] T004 [P] Create `ShellLifecycleState` enum (`Initializing`, `Active`, `Deactivating`, `Draining`, `Drained`, `Disposed`) in `src/CShells.Abstractions/Lifecycle/ShellLifecycleState.cs` (FR-017)
-- [ ] T005 [P] Create `ShellDescriptor` immutable record (`Name`, `Generation`, `CreatedAt`, `Metadata`, `ToString → "Name#Generation"`) with `ImmutableDictionary<string,string>.Empty` default metadata in `src/CShells.Abstractions/Lifecycle/ShellDescriptor.cs` (FR-004, FR-033)
-- [ ] T006 [P] Create `IShellScope : IAsyncDisposable` interface (`Shell`, `ServiceProvider`) in `src/CShells.Abstractions/Lifecycle/IShellScope.cs` (FR-020)
-- [ ] T007 [P] Create `IShell` interface (`Descriptor`, `State`, `ServiceProvider`, `BeginScope() → IShellScope`) in `src/CShells.Abstractions/Lifecycle/IShell.cs` — depends on T005, T006. **`IShell` does NOT implement `IDisposable` / `IAsyncDisposable`**; shell disposal is registry-owned (FR-037)
-- [ ] T008 [P] Create `IShellBlueprint` interface (`Name`, `Metadata`, `ComposeAsync`) in `src/CShells.Abstractions/Lifecycle/IShellBlueprint.cs` (FR-001, research Decision 2)
-- [ ] T009 [P] Create `IShellInitializer` interface (`InitializeAsync`) in `src/CShells.Abstractions/Lifecycle/IShellInitializer.cs` (FR-015, research Decision 6)
-- [ ] T010 [P] Create `IShellLifecycleSubscriber` interface (`OnStateChangedAsync`) in `src/CShells.Abstractions/Lifecycle/IShellLifecycleSubscriber.cs` (FR-019)
-- [ ] T011 [P] Create `IDrainExtensionHandle` and `IDrainHandler` interfaces in `src/CShells.Abstractions/Lifecycle/IDrainExtensionHandle.cs` and `src/CShells.Abstractions/Lifecycle/IDrainHandler.cs` (FR-023, FR-025, FR-026). Bundled because the two interfaces reference each other (`IDrainHandler.DrainAsync` takes an `IDrainExtensionHandle`); authoring them in a single commit avoids a temporary forward reference
-- [ ] T012 [P] Create `IDrainPolicy` interface (`InitialTimeout`, `IsUnbounded`, `TryExtend`) in `src/CShells.Abstractions/Lifecycle/IDrainPolicy.cs` (FR-027)
-- [ ] T013 [P] Create `DrainStatus` enum, `DrainResult` record (including `ScopeWaitElapsed`), and `DrainHandlerResult` record in `src/CShells.Abstractions/Lifecycle/DrainResult.cs` and `src/CShells.Abstractions/Lifecycle/DrainHandlerResult.cs` (FR-029)
-- [ ] T014 [P] Create `IDrainOperation` interface (`Status`, `Deadline`, `WaitAsync`, `ForceAsync`) in `src/CShells.Abstractions/Lifecycle/IDrainOperation.cs` (FR-029, FR-030)
-- [ ] T015 [P] Create `ReloadResult` record (`Name`, `NewShell`, `Drain`, `Error`) in `src/CShells.Abstractions/Lifecycle/ReloadResult.cs` (FR-012)
-- [ ] T016 Create `IShellRegistry` interface with the full surface from `contracts/IShellRegistry.md` in `src/CShells.Abstractions/Lifecycle/IShellRegistry.cs` — depends on T004–T015
-- [ ] T016a [P] Add a regression test `ShellIdShapeTests.cs` under `tests/CShells.Tests/Unit/` asserting via reflection that `ShellId` is a `readonly record struct` with exactly one public instance property named `Name` of type `string` and no `Generation` / `Version` / equivalent field — guards FR-008 against silent reintroduction of a composite identity
+- [X] T004 [P] Create `ShellLifecycleState` enum (`Initializing`, `Active`, `Deactivating`, `Draining`, `Drained`, `Disposed`) in `src/CShells.Abstractions/Lifecycle/ShellLifecycleState.cs` (FR-017)
+- [X] T005 [P] Create `ShellDescriptor` immutable record (`Name`, `Generation`, `CreatedAt`, `Metadata`, `ToString → "Name#Generation"`) with `ImmutableDictionary<string,string>.Empty` default metadata in `src/CShells.Abstractions/Lifecycle/ShellDescriptor.cs` (FR-004, FR-033)
+- [X] T006 [P] Create `IShellScope : IAsyncDisposable` interface (`Shell`, `ServiceProvider`) in `src/CShells.Abstractions/Lifecycle/IShellScope.cs` (FR-020)
+- [X] T007 [P] Create `IShell` interface (`Descriptor`, `State`, `ServiceProvider`, `BeginScope() → IShellScope`) in `src/CShells.Abstractions/Lifecycle/IShell.cs` — depends on T005, T006. **`IShell` does NOT implement `IDisposable` / `IAsyncDisposable`**; shell disposal is registry-owned (FR-037)
+- [X] T008 [P] Create `IShellBlueprint` interface (`Name`, `Metadata`, `ComposeAsync`) in `src/CShells.Abstractions/Lifecycle/IShellBlueprint.cs` (FR-001, research Decision 2)
+- [X] T009 [P] Create `IShellInitializer` interface (`InitializeAsync`) in `src/CShells.Abstractions/Lifecycle/IShellInitializer.cs` (FR-015, research Decision 6)
+- [X] T010 [P] Create `IShellLifecycleSubscriber` interface (`OnStateChangedAsync`) in `src/CShells.Abstractions/Lifecycle/IShellLifecycleSubscriber.cs` (FR-019)
+- [X] T011 [P] Create `IDrainExtensionHandle` and `IDrainHandler` interfaces in `src/CShells.Abstractions/Lifecycle/IDrainExtensionHandle.cs` and `src/CShells.Abstractions/Lifecycle/IDrainHandler.cs` (FR-023, FR-025, FR-026). Bundled because the two interfaces reference each other (`IDrainHandler.DrainAsync` takes an `IDrainExtensionHandle`); authoring them in a single commit avoids a temporary forward reference
+- [X] T012 [P] Create `IDrainPolicy` interface (`InitialTimeout`, `IsUnbounded`, `TryExtend`) in `src/CShells.Abstractions/Lifecycle/IDrainPolicy.cs` (FR-027)
+- [X] T013 [P] Create `DrainStatus` enum, `DrainResult` record (including `ScopeWaitElapsed`), and `DrainHandlerResult` record in `src/CShells.Abstractions/Lifecycle/DrainResult.cs` and `src/CShells.Abstractions/Lifecycle/DrainHandlerResult.cs` (FR-029)
+- [X] T014 [P] Create `IDrainOperation` interface (`Status`, `Deadline`, `WaitAsync`, `ForceAsync`) in `src/CShells.Abstractions/Lifecycle/IDrainOperation.cs` (FR-029, FR-030)
+- [X] T015 [P] Create `ReloadResult` record (`Name`, `NewShell`, `Drain`, `Error`) in `src/CShells.Abstractions/Lifecycle/ReloadResult.cs` (FR-012)
+- [X] T016 Create `IShellRegistry` interface with the full surface from `contracts/IShellRegistry.md` in `src/CShells.Abstractions/Lifecycle/IShellRegistry.cs` — depends on T004–T015
+- [X] T016a [P] Add a regression test `ShellIdShapeTests.cs` under `tests/CShells.Tests/Unit/` asserting via reflection that `ShellId` is a `readonly record struct` with exactly one public instance property named `Name` of type `string` and no `Generation` / `Version` / equivalent field — guards FR-008 against silent reintroduction of a composite identity
 
 **Checkpoint**: Abstractions compile; no implementation code yet; no legacy code touched.
 
@@ -87,14 +87,14 @@ transition fires an event with correct old/new values and descriptor metadata.
 
 ### Tests for User Story 8 ⚠️
 
-- [ ] T017 [P] [US8] Unit tests for CAS-based state machine in `tests/CShells.Tests/Unit/Lifecycle/ShellStateMachineTests.cs` — forward transitions per data-model table; backward attempts are no-ops; event ordering preserved; subscriber exceptions caught + logged + swallowed per research Decision 12; emergency-dispose path from any non-terminal state transitions directly to `Disposed` (this is the only non-`Drained → Disposed` path and is used by the registry on shutdown-timeout breach per FR-036); `IShell` does NOT expose `DisposeAsync` on its public surface (assert via reflection / compile-time) (FR-017, FR-018, FR-019, FR-037)
+- [X] T017 [P] [US8] Unit tests for CAS-based state machine in `tests/CShells.Tests/Unit/Lifecycle/ShellStateMachineTests.cs` — forward transitions per data-model table; backward attempts are no-ops; event ordering preserved; subscriber exceptions caught + logged + swallowed per research Decision 12; emergency-dispose path from any non-terminal state transitions directly to `Disposed` (this is the only non-`Drained → Disposed` path and is used by the registry on shutdown-timeout breach per FR-036); `IShell` does NOT expose `DisposeAsync` on its public surface (assert via reflection / compile-time) (FR-017, FR-018, FR-019, FR-037)
 
 ### Implementation for User Story 8
 
-- [ ] T018 [US8] Implement `Shell` class in `src/CShells/Lifecycle/Shell.cs` with `Interlocked.CompareExchange`-based `int _state`, a `ShellDescriptor`, the owned `IServiceProvider`, and per-instance state-change hooks the registry invokes. Shell disposal is registry-owned: expose an `internal ValueTask DisposeAsync()` that the registry calls after drain completes (normal path) or on shutdown-timeout breach (emergency path, FR-036); do NOT implement `IAsyncDisposable` on the public `IShell` surface (FR-037). Leave scope counter + `BeginScope` as TODO stubs (US6 will fill them in)
-- [ ] T019 [US8] Create `ShellRegistry` skeleton in `src/CShells/Lifecycle/ShellRegistry.cs` with thread-safe `Subscribe` / `Unsubscribe`, a `FireStateChangedAsync` helper that awaits subscribers sequentially but catches + logs each subscriber's exception so one bad subscriber cannot block others (research Decision 12, Principle VII)
-- [ ] T020 [P] [US8] Implement `ShellLifecycleLogger : IShellLifecycleSubscriber` in `src/CShells/Lifecycle/ShellLifecycleLogger.cs` — emits one structured `ILogger` entry per transition with required properties `ShellName` (string), `Generation` (int), `PreviousState` (string, null for initial `Initializing`), `CurrentState` (string); drain-completion entries additionally include `ScopeWaitElapsedMs` (long) and `HandlerCount` (int). Routine transitions at `LogLevel.Information`; drain timeouts / forced drains / abandoned scopes at `LogLevel.Warning`. Event IDs are stable and live in the reserved range 1000–1099 (1000–1009 transitions, 1010–1019 drain warnings). Add `ShellLifecycleLoggerTests.cs` under `tests/CShells.Tests/Unit/Lifecycle/` using a `FakeLogger` (or equivalent) to assert property presence, log level, and event ID for each scenario (FR-034, FR-034a, SC-008)
-- [ ] T021 [US8] Rewrite `AddCShells` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` to register `IShellRegistry` as a singleton and auto-register + subscribe `ShellLifecycleLogger`. Remove all legacy wiring (`IShellHost`, `IShellManager`, `IShellSettingsProvider`, `IShellContextScopeFactory`, caches, hosted services) from this file (FR-034, FR-038)
+- [X] T018 [US8] Implement `Shell` class in `src/CShells/Lifecycle/Shell.cs` with `Interlocked.CompareExchange`-based `int _state`, a `ShellDescriptor`, the owned `IServiceProvider`, and per-instance state-change hooks the registry invokes. Shell disposal is registry-owned: expose an `internal ValueTask DisposeAsync()` that the registry calls after drain completes (normal path) or on shutdown-timeout breach (emergency path, FR-036); do NOT implement `IAsyncDisposable` on the public `IShell` surface (FR-037). Leave scope counter + `BeginScope` as TODO stubs (US6 will fill them in)
+- [X] T019 [US8] Create `ShellRegistry` skeleton in `src/CShells/Lifecycle/ShellRegistry.cs` with thread-safe `Subscribe` / `Unsubscribe`, a `FireStateChangedAsync` helper that awaits subscribers sequentially but catches + logs each subscriber's exception so one bad subscriber cannot block others (research Decision 12, Principle VII)
+- [X] T020 [P] [US8] Implement `ShellLifecycleLogger : IShellLifecycleSubscriber` in `src/CShells/Lifecycle/ShellLifecycleLogger.cs` — emits one structured `ILogger` entry per transition with required properties `ShellName` (string), `Generation` (int), `PreviousState` (string, null for initial `Initializing`), `CurrentState` (string); drain-completion entries additionally include `ScopeWaitElapsedMs` (long) and `HandlerCount` (int). Routine transitions at `LogLevel.Information`; drain timeouts / forced drains / abandoned scopes at `LogLevel.Warning`. Event IDs are stable and live in the reserved range 1000–1099 (1000–1009 transitions, 1010–1019 drain warnings). Add `ShellLifecycleLoggerTests.cs` under `tests/CShells.Tests/Unit/Lifecycle/` using a `FakeLogger` (or equivalent) to assert property presence, log level, and event ID for each scenario (FR-034, FR-034a, SC-008)
+- [X] T021 [US8] Rewrite `AddCShells` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` to register `IShellRegistry` as a singleton and auto-register + subscribe `ShellLifecycleLogger`. Remove all legacy wiring (`IShellHost`, `IShellManager`, `IShellSettingsProvider`, `IShellContextScopeFactory`, caches, hosted services) from this file (FR-034, FR-038)
 
 **Checkpoint**: A `Shell` can be advanced through states; every transition is observable via
 the auto-registered logger; no activation or drain logic exists yet.
