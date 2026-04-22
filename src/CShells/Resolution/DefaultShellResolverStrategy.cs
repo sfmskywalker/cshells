@@ -21,7 +21,11 @@ public class DefaultShellResolverStrategy(IShellRegistry registry) : IShellResol
         if (defaultShell is not null)
             return new ShellId(defaultShell.Descriptor.Name);
 
-        foreach (var name in _registry.GetBlueprintNames())
+        // Deterministic fallback: `GetBlueprintNames` makes no ordering guarantee (it's a
+        // ConcurrentDictionary projection), so pick the first active shell in a stable,
+        // culture-invariant, case-insensitive order. Without this, routing behaviour could
+        // drift across process restarts simply because the dictionary's bucket order changed.
+        foreach (var name in _registry.GetBlueprintNames().OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
             var shell = _registry.GetActive(name);
             if (shell is not null)

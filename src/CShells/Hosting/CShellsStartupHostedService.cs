@@ -6,20 +6,27 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace CShells.Hosting;
 
 /// <summary>
-/// Activates every registered blueprint at host start and drains every active shell at host
-/// stop (bounded by the host's shutdown timeout; providers are disposed on breach so the host
-/// actually exits — FR-036).
+/// Host startup coordinator:
+/// (1) resolves every registered <see cref="IShellBlueprintProvider"/> and registers the
+/// blueprints they return;
+/// (2) activates every registered blueprint in parallel (FR-035);
+/// (3) on stop, drains every active shell using the configured drain policy and disposes them,
+/// emergency-disposing any that don't complete within the host's shutdown timeout (FR-036).
 /// </summary>
 internal sealed class CShellsStartupHostedService(
     IShellRegistry registry,
+    IEnumerable<IShellBlueprintProvider> blueprintProviders,
     ILogger<CShellsStartupHostedService>? logger = null) : IHostedService
 {
     private readonly IShellRegistry _registry = Guard.Against.Null(registry);
+    private readonly IEnumerable<IShellBlueprintProvider> _blueprintProviders = Guard.Against.Null(blueprintProviders);
     private readonly ILogger<CShellsStartupHostedService> _logger = logger ?? NullLogger<CShellsStartupHostedService>.Instance;
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        await RegisterAsyncBlueprintsAsync(cancellationToken).ConfigureAwait(false);
+
         var names = _registry.GetBlueprintNames();
         if (names.Count == 0)
         {
@@ -40,13 +47,52 @@ internal sealed class CShellsStartupHostedService(
             {
                 await _registry.ActivateAsync(name, cancellationToken).ConfigureAwait(false);
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("already has an Active", StringComparison.Ordinal))
+            catch (InvalidOperationException)
             {
-                // Benign race with an explicit ActivateAsync call from host code.
+                // Benign race with an explicit ActivateAsync call from host code: another
+                // caller activated the shell between our pre-check and this call. Verify via
+                // the registry's state (not the exception message — message text is not a
+                // stable API) and rethrow if the state isn't what the race would produce.
+                if (_registry.GetActive(name) is null)
+                    throw;
             }
         });
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task RegisterAsyncBlueprintsAsync(CancellationToken cancellationToken)
+    {
+        foreach (var provider in _blueprintProviders)
+        {
+            IReadOnlyList<IShellBlueprint> blueprints;
+            try
+            {
+                blueprints = await provider.GetBlueprintsAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Shell blueprint provider {ProviderType} threw during startup; no blueprints contributed from it.",
+                    provider.GetType().FullName);
+                throw;
+            }
+
+            foreach (var blueprint in blueprints)
+            {
+                // Ignore duplicates: a blueprint already registered by fluent AddShell or a
+                // prior provider wins — providers never overwrite existing registrations.
+                if (_registry.GetBlueprint(blueprint.Name) is not null)
+                {
+                    _logger.LogDebug(
+                        "Blueprint provider {ProviderType} returned blueprint '{Name}' but one is already registered; skipping.",
+                        provider.GetType().FullName, blueprint.Name);
+                    continue;
+                }
+
+                _registry.RegisterBlueprint(blueprint);
+            }
+        }
     }
 
     /// <inheritdoc />

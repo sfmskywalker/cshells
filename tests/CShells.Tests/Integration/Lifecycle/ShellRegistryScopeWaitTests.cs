@@ -2,6 +2,7 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Policies;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -12,12 +13,19 @@ public class ShellRegistryScopeWaitTests
     [Fact(DisplayName = "Outstanding scopes delay drain handler invocation (FR-022)")]
     public async Task OutstandingScopes_DelayHandlers()
     {
-        var handlerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        GateDrainFeature.HandlerStarted = handlerStarted;
+        // Collector registered in ROOT services so the shell inherits it via the copy-root
+        // step in ShellProviderBuilder. No static mutable state — the handler resolves it
+        // through the shell container.
+        var gate = new HandlerStartedGate();
 
-        await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton(gate);
+        services.AddCShells(cshells => cshells
             .WithAssemblyContaining<ShellRegistryScopeWaitTests>()
             .AddShell("gated", s => s.WithFeature<GateDrainFeature>()));
+
+        await using var host = services.BuildServiceProvider();
 
         var registry = host.GetRequiredService<IShellRegistry>();
         var shell = await registry.ActivateAsync("gated");
@@ -29,7 +37,7 @@ public class ShellRegistryScopeWaitTests
 
         // Handler must NOT have started while the scope is outstanding.
         var quickTimeout = Task.Delay(150);
-        var earlyStart = await Task.WhenAny(handlerStarted.Task, quickTimeout);
+        var earlyStart = await Task.WhenAny(gate.Started.Task, quickTimeout);
         Assert.Same(quickTimeout, earlyStart);
 
         // Release the scope; handler now starts, drain completes.
@@ -90,19 +98,26 @@ public class ShellRegistryScopeWaitTests
         Assert.True(result.ScopeWaitElapsed < TimeSpan.FromMilliseconds(200));
     }
 
+    /// <summary>
+    /// Coordinates test assertions with the drain handler via DI-injected instance (no
+    /// static mutable state, so tests are safe under xUnit parallelization).
+    /// </summary>
+    public sealed class HandlerStartedGate
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
     public sealed class GateDrainFeature : IShellFeature
     {
-        public static TaskCompletionSource? HandlerStarted;
-
         public void ConfigureServices(IServiceCollection services) =>
             services.AddTransient<IDrainHandler, GateHandler>();
     }
 
-    private sealed class GateHandler : IDrainHandler
+    private sealed class GateHandler(HandlerStartedGate gate) : IDrainHandler
     {
         public Task DrainAsync(IDrainExtensionHandle _, CancellationToken ct)
         {
-            GateDrainFeature.HandlerStarted?.TrySetResult();
+            gate.Started.TrySetResult();
             return Task.CompletedTask;
         }
     }

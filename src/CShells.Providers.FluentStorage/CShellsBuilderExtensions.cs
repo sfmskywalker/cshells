@@ -15,15 +15,16 @@ public static class CShellsBuilderExtensions
     extension(CShellsBuilder builder)
     {
         /// <summary>
-        /// Loads shell blueprints eagerly from blob storage and registers each as an
-        /// <see cref="IShellBlueprint"/>. Each JSON blob at the configured path becomes one
-        /// blueprint; reloads re-bind against a cached in-memory configuration snapshot built
-        /// from the blob contents at load time.
+        /// Registers an <see cref="IShellBlueprintProvider"/> that enumerates JSON blobs at the
+        /// given path asynchronously during host startup. Each blob yields a
+        /// <see cref="FluentStorageShellBlueprint"/> that re-opens and re-deserializes the blob
+        /// on every <see cref="IShellBlueprint.ComposeAsync"/> call — so reloads observe blob
+        /// updates without a host restart.
         /// </summary>
         /// <remarks>
-        /// For scenarios that need "fresh read on every reload" the host can register a
-        /// custom <see cref="IShellBlueprint"/> whose <c>ComposeAsync</c> re-opens the blob;
-        /// the default loader snapshot is sufficient for most use cases.
+        /// The provider does its I/O inside the startup hosted service's <c>StartAsync</c>, not
+        /// during DI registration — no sync-over-async, no container-build blocking, no
+        /// deadlocks in synchronization-context environments.
         /// </remarks>
         public CShellsBuilder WithFluentStorageBlueprints(
             IBlobStorage blobStorage,
@@ -33,17 +34,16 @@ public static class CShellsBuilderExtensions
             Guard.Against.Null(builder);
             Guard.Against.Null(blobStorage);
 
-            var loader = new FluentStorageShellBlueprintLoader(blobStorage, path, jsonOptions);
-            var blueprints = loader.LoadAsync().GetAwaiter().GetResult();
-
-            foreach (var blueprint in blueprints)
-                builder.Services.AddSingleton(blueprint);
+            builder.Services.AddSingleton<IShellBlueprintProvider>(
+                new FluentStorageShellBlueprintProvider(blobStorage, path, jsonOptions));
 
             return builder;
         }
 
         /// <summary>
         /// Overload that defers <see cref="IBlobStorage"/> creation to the caller's callback.
+        /// The callback is invoked synchronously at registration time; the blob I/O itself
+        /// (listing + deserializing) still runs asynchronously at host start.
         /// </summary>
         public CShellsBuilder WithFluentStorageBlueprints(
             Func<IBlobStorage> configureBlobStorage,
