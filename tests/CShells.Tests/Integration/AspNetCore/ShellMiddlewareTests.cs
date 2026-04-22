@@ -2,6 +2,7 @@ using CShells.AspNetCore.Middleware;
 using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,8 @@ namespace CShells.Tests.Integration.AspNetCore;
 /// <summary>
 /// Tests for <see cref="ShellMiddleware"/> — the middleware that resolves a shell per request
 /// and sets <see cref="HttpContext.RequestServices"/> to a scope from that shell's provider.
+/// The scope is released via <see cref="HttpResponse.OnCompleted"/> so upstream middleware can
+/// still read RequestServices during post-_next processing.
 /// </summary>
 public class ShellMiddlewareTests
 {
@@ -70,37 +73,50 @@ public class ShellMiddlewareTests
             resolver: new FixedShellResolver("TestShell"),
             registry: new FakeRegistry(shell));
 
-        var httpContext = new DefaultHttpContext { RequestServices = originalServiceProvider };
+        var (httpContext, responseFeature) = CreateHttpContextWithFireableResponse(originalServiceProvider);
 
         await middleware.InvokeAsync(httpContext);
 
         Assert.NotNull(capturedRequestServices);
         Assert.NotSame(originalServiceProvider, capturedRequestServices);
         Assert.NotNull(capturedService);
-        Assert.Equal(0, shell.ActiveScopeCount); // scope disposed after request
+
+        // Fire OnCompleted so the scope releases, then verify the counter dropped to zero.
+        await responseFeature.FireOnCompletedAsync();
+        Assert.Equal(0, shell.ActiveScopeCount);
     }
 
-    [Fact(DisplayName = "InvokeAsync increments the shell's scope counter for the request lifetime")]
-    public async Task InvokeAsync_IncrementsScopeCounter_ForRequestLifetime()
+    [Fact(DisplayName = "Scope is held during _next and released via Response.OnCompleted, not at InvokeAsync return")]
+    public async Task Scope_HeldDuringRequest_ReleasedAtResponseCompletion()
     {
         var shell = FakeShell.WithServices(_ => { }, name: "TestShell");
         var registry = new FakeRegistry(shell);
 
+        int activeScopesDuringNext = -1;
         var middleware = CreateMiddleware(
-            _ =>
-            {
-                Assert.Equal(1, shell.ActiveScopeCount);
-                return Task.CompletedTask;
-            },
+            _ => { activeScopesDuringNext = shell.ActiveScopeCount; return Task.CompletedTask; },
             resolver: new FixedShellResolver("TestShell"),
             registry: registry);
 
-        await middleware.InvokeAsync(new DefaultHttpContext());
+        var (httpContext, responseFeature) = CreateHttpContextWithFireableResponse();
+
+        await middleware.InvokeAsync(httpContext);
+
+        // Scope was active during _next.
+        Assert.Equal(1, activeScopesDuringNext);
+
+        // Scope is STILL held after InvokeAsync returns — deferred to OnCompleted so upstream
+        // middleware can read RequestServices during its post-_next work.
+        Assert.Equal(1, shell.ActiveScopeCount);
+
+        // Simulate the server firing OnCompleted callbacks after the response is written.
+        await responseFeature.FireOnCompletedAsync();
+
         Assert.Equal(0, shell.ActiveScopeCount);
     }
 
-    [Fact(DisplayName = "InvokeAsync disposes shell scope even after downstream exception")]
-    public async Task InvokeAsync_DisposesScope_EvenAfterException()
+    [Fact(DisplayName = "Downstream exception propagates; scope is released when OnCompleted fires on error paths")]
+    public async Task DownstreamException_Propagates()
     {
         var shell = FakeShell.WithServices(_ => { }, name: "TestShell");
         var middleware = CreateMiddleware(
@@ -108,7 +124,13 @@ public class ShellMiddlewareTests
             resolver: new FixedShellResolver("TestShell"),
             registry: new FakeRegistry(shell));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(new DefaultHttpContext()));
+        var (httpContext, responseFeature) = CreateHttpContextWithFireableResponse();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
+
+        // In a real server, OnCompleted fires even on error paths once the response is finalized.
+        // Simulate that here; the scope should release cleanly.
+        await responseFeature.FireOnCompletedAsync();
         Assert.Equal(0, shell.ActiveScopeCount);
     }
 
@@ -147,6 +169,17 @@ public class ShellMiddlewareTests
             registry ?? new FakeRegistry(),
             cache ?? new MemoryCache(new MemoryCacheOptions()),
             options ?? Options.Create(new ShellMiddlewareOptions()));
+
+    private static (DefaultHttpContext Context, FireableResponseFeature Response) CreateHttpContextWithFireableResponse(
+        IServiceProvider? requestServices = null)
+    {
+        var ctx = new DefaultHttpContext();
+        if (requestServices is not null)
+            ctx.RequestServices = requestServices;
+        var response = new FireableResponseFeature();
+        ctx.Features.Set<IHttpResponseFeature>(response);
+        return (ctx, response);
+    }
 
     private interface ITestService;
 
@@ -217,6 +250,26 @@ public class ShellMiddlewareTests
                 try { await inner.DisposeAsync(); }
                 finally { Interlocked.Decrement(ref owner._activeScopes); }
             }
+        }
+    }
+
+    /// <summary>
+    /// A custom <see cref="HttpResponseFeature"/> that captures <c>OnCompleted</c> callbacks so
+    /// tests can fire them on demand, simulating what the ASP.NET Core server does after the
+    /// response is sent. <see cref="DefaultHttpContext"/> has no built-in mechanism to trigger
+    /// these callbacks outside of a running server.
+    /// </summary>
+    internal sealed class FireableResponseFeature : HttpResponseFeature
+    {
+        private readonly List<(Func<object, Task> Callback, object State)> _onCompleted = [];
+
+        public override void OnCompleted(Func<object, Task> callback, object state)
+            => _onCompleted.Add((callback, state));
+
+        public async Task FireOnCompletedAsync()
+        {
+            foreach (var (callback, state) in _onCompleted)
+                await callback(state);
         }
     }
 }

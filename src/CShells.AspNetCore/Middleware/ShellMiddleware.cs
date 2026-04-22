@@ -72,10 +72,14 @@ public class ShellMiddleware(
             return;
         }
 
-        // BeginScope increments the shell's active-scope counter; disposal on await-using end
-        // decrements it, letting any in-flight drain's phase-1 complete once this request ends.
-        await using var scope = shell.BeginScope();
+        // BeginScope increments the shell's active-scope counter (so in-flight drains' phase-1
+        // waits for this request to complete). The scope is released via OnCompleted (not
+        // `await using`) so upstream middleware can still read RequestServices during its
+        // post-_next processing — releasing at InvokeAsync return could dispose the DI scope
+        // out from under that post-processing and cause ObjectDisposedException.
+        var scope = shell.BeginScope();
         context.RequestServices = scope.ServiceProvider;
+        context.Response.OnCompleted(() => scope.DisposeAsync().AsTask());
 
         await _next(context);
     }
