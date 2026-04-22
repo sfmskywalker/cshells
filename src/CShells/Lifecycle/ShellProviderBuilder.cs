@@ -113,6 +113,13 @@ internal sealed class ShellProviderBuilder(
         // IShell: registered via the holder that the registry populates after construction.
         services.AddSingleton(holder);
         services.AddSingleton<IShell>(sp => sp.GetRequiredService<ShellHolder>().Shell);
+
+        // Root-delegation for IShellRegistry: shells legitimately need registry access (for
+        // reload triggers, enumerating sibling shells, etc.), but copying the root factory
+        // would cascade through excluded root-only infrastructure. Delegate back to the root
+        // singleton so shell-scoped resolves alias cleanly.
+        var rootProvider = _rootProvider;
+        services.AddSingleton<IShellRegistry>(_ => rootProvider.GetRequiredService<IShellRegistry>());
     }
 
     private void ConfigureFeatures(
