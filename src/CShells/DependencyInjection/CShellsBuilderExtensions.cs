@@ -1,9 +1,11 @@
 using System.Reflection;
 using CShells.Configuration;
 using CShells.Features;
+using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CShells.DependencyInjection;
 
@@ -256,5 +258,32 @@ public static class CShellsBuilderExtensions
 
         return builder.ConfigureResolverPipeline(pipeline => pipeline
             .Use<DefaultShellResolverStrategy>());
+    }
+
+    /// <summary>
+    /// Overrides the default <see cref="IDrainPolicy"/> (<c>FixedTimeoutDrainPolicy(30s)</c>)
+    /// applied to every drain in the registry.
+    /// </summary>
+    public static CShellsBuilder ConfigureDrainPolicy(this CShellsBuilder builder, IDrainPolicy policy)
+    {
+        Guard.Against.Null(builder);
+        Guard.Against.Null(policy);
+
+        builder.Services.Replace(ServiceDescriptor.Singleton(policy));
+        return builder;
+    }
+
+    /// <summary>
+    /// Overrides the default drain grace period (3 seconds) applied after the drain deadline
+    /// elapses or <see cref="IDrainOperation.ForceAsync"/> is called.
+    /// </summary>
+    public static CShellsBuilder ConfigureGracePeriod(this CShellsBuilder builder, TimeSpan gracePeriod)
+    {
+        Guard.Against.Null(builder);
+        if (gracePeriod <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(gracePeriod), "Grace period must be positive.");
+
+        builder.Services.Replace(ServiceDescriptor.Singleton(new DrainGracePeriod(gracePeriod)));
+        return builder;
     }
 }

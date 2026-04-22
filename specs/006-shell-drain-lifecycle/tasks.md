@@ -113,19 +113,19 @@ the auto-registered logger; no activation or drain logic exists yet.
 
 ### Tests ⚠️
 
-- [ ] T022 [P] [US1] Unit tests for `DelegateShellBlueprint` (ComposeAsync invokes the stored delegate against a fresh `ShellBuilder` each time; metadata flows onto descriptor) in `tests/CShells.Tests/Unit/Lifecycle/Blueprints/DelegateShellBlueprintTests.cs` (FR-001, FR-002)
-- [ ] T023 [P] [US1] Unit tests for `ConfigurationShellBlueprint` (ComposeAsync re-reads the bound section so edits between reloads are picked up) in `tests/CShells.Tests/Unit/Lifecycle/Blueprints/ConfigurationShellBlueprintTests.cs` (FR-002)
-- [ ] T024 [P] [US1] Integration tests for `ActivateAsync` in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryActivateTests.cs` — generation 1 stamped, transitions fire, duplicate blueprint throws per FR-003, activation without a blueprint throws, **activation when an `Active` generation already exists throws `InvalidOperationException` with a message pointing callers at `ReloadAsync` (FR-009)**, composition exception propagates and leaves no partial entry per FR-014, `ShellSettings.Id.Name` mismatch throws
-- [ ] T025 [P] [US4] Integration tests for initializer invocation in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryInitializerTests.cs` — sequential execution in DI-registration order, throwing initializer aborts activation and disposes partial provider (FR-014), shell with no initializers activates immediately (FR-015, FR-016)
+- [X] T022 [P] [US1] Unit tests for `DelegateShellBlueprint` (ComposeAsync invokes the stored delegate against a fresh `ShellBuilder` each time; metadata flows onto descriptor) in `tests/CShells.Tests/Unit/Lifecycle/Blueprints/DelegateShellBlueprintTests.cs` (FR-001, FR-002)
+- [X] T023 [P] [US1] Unit tests for `ConfigurationShellBlueprint` (ComposeAsync re-reads the bound section so edits between reloads are picked up) in `tests/CShells.Tests/Unit/Lifecycle/Blueprints/ConfigurationShellBlueprintTests.cs` (FR-002)
+- [X] T024 [P] [US1] Integration tests for `ActivateAsync` in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryActivateTests.cs` — generation 1 stamped, transitions fire, duplicate blueprint throws per FR-003, activation without a blueprint throws, **activation when an `Active` generation already exists throws `InvalidOperationException` with a message pointing callers at `ReloadAsync` (FR-009)**, composition exception propagates and leaves no partial entry per FR-014, `ShellSettings.Id.Name` mismatch throws
+- [X] T025 [P] [US4] Integration tests for initializer invocation in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryInitializerTests.cs` — sequential execution in DI-registration order, throwing initializer aborts activation and disposes partial provider (FR-014), shell with no initializers activates immediately (FR-015, FR-016)
 
 ### Implementation
 
-- [ ] T026 [P] [US1] Implement `DelegateShellBlueprint` in `src/CShells/Lifecycle/Blueprints/DelegateShellBlueprint.cs` — stores an `Action<ShellBuilder>` (or overloads), invokes it against a new `ShellBuilder(name)` in `ComposeAsync`, exposes optional static `Metadata`
-- [ ] T027 [P] [US1] Implement `ConfigurationShellBlueprint` in `src/CShells/Lifecycle/Blueprints/ConfigurationShellBlueprint.cs` — binds a named `IConfigurationSection` (or a `ShellConfig`) on each compose so config edits between reloads are picked up (research Decision 2)
-- [ ] T028 [US1] Add `RegisterBlueprint` / `GetBlueprint` / `GetBlueprintNames` to `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — case-insensitive name keying, duplicate registration throws `InvalidOperationException` (FR-003)
-- [ ] T029 [US1, US4] Implement `ActivateAsync(name, ct)` on `ShellRegistry` — acquires the per-name `SemaphoreSlim(1,1)`, invokes `blueprint.ComposeAsync`, validates `settings.Id.Name` matches, builds a fresh `IServiceCollection` (copies root services, applies feature `ConfigureServices`, registers a singleton `ShellConfiguration` for the merged `IConfiguration` view so services resolved from the shell provider see the shell-scoped configuration — this replaces the `DefaultShellHost.BuildProvider` wiring at the legacy equivalent site), constructs the provider, stamps generation 1 with blueprint metadata, registers as `Initializing`, resolves `IEnumerable<IShellInitializer>` and awaits each sequentially, promotes to `Active`, fires transitions, releases the semaphore; propagates any composition / build / initializer exception without retaining a partial entry (disposing the partial provider if built); throws `InvalidOperationException` if a generation is already `Active` for `name` (FR-009, FR-014, FR-015, FR-016, research Decisions 3, 6)
-- [ ] T030 [US1] Implement `GetActive(name)` and `GetAll(name)` on `ShellRegistry` (FR-031, FR-032)
-- [ ] T031 [US1] Add `AddShell(name, Action<ShellBuilder>)` and an overload accepting blueprint metadata to `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs` so hosts register blueprints fluently during `AddCShells(...)` (quickstart §1)
+- [X] T026 [P] [US1] Implement `DelegateShellBlueprint` in `src/CShells/Lifecycle/Blueprints/DelegateShellBlueprint.cs` — stores an `Action<ShellBuilder>` (or overloads), invokes it against a new `ShellBuilder(name)` in `ComposeAsync`, exposes optional static `Metadata`
+- [X] T027 [P] [US1] Implement `ConfigurationShellBlueprint` in `src/CShells/Lifecycle/Blueprints/ConfigurationShellBlueprint.cs` — binds a named `IConfigurationSection` (or a `ShellConfig`) on each compose so config edits between reloads are picked up (research Decision 2)
+- [X] T028 [US1] Add `RegisterBlueprint` / `GetBlueprint` / `GetBlueprintNames` to `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — case-insensitive name keying, duplicate registration throws `InvalidOperationException` (FR-003)
+- [X] T029 [US1, US4] Implement `ActivateAsync(name, ct)` on `ShellRegistry` — acquires the per-name `SemaphoreSlim(1,1)`, invokes `blueprint.ComposeAsync`, validates `settings.Id.Name` matches, builds a fresh `IServiceCollection` (copies root services, applies feature `ConfigureServices`, registers a singleton `ShellConfiguration` for the merged `IConfiguration` view so services resolved from the shell provider see the shell-scoped configuration — this replaces the `DefaultShellHost.BuildProvider` wiring at the legacy equivalent site), constructs the provider, stamps generation 1 with blueprint metadata, registers as `Initializing`, resolves `IEnumerable<IShellInitializer>` and awaits each sequentially, promotes to `Active`, fires transitions, releases the semaphore; propagates any composition / build / initializer exception without retaining a partial entry (disposing the partial provider if built); throws `InvalidOperationException` if a generation is already `Active` for `name` (FR-009, FR-014, FR-015, FR-016, research Decisions 3, 6)
+- [X] T030 [US1] Implement `GetActive(name)` and `GetAll(name)` on `ShellRegistry` (FR-031, FR-032)
+- [X] T031 [US1] Add `AddShell(name, Action<ShellBuilder>)` and an overload accepting blueprint metadata to `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs` so hosts register blueprints fluently during `AddCShells(...)` (quickstart §1)
 
 **Checkpoint**: Hosts can register blueprints and activate shells; initializers run in order;
 generation 1 is stamped automatically; the auto-logger shows the full activation transition
@@ -145,12 +145,12 @@ assert the handles' `ServiceProvider` behaves as an independent DI scope.
 
 ### Tests ⚠️
 
-- [ ] T032 [P] [US6] Unit tests for `Shell.BeginScope` and `ShellScope` in `tests/CShells.Tests/Unit/Lifecycle/ShellScopeTests.cs` — counter increments/decrements correctly under concurrent callers, disposing a scope disposes its DI scope, `BeginScope` on `Disposed` shell throws `InvalidOperationException`, `BeginScope` during `Draining` succeeds and joins the counter (FR-020, FR-021)
+- [X] T032 [P] [US6] Unit tests for `Shell.BeginScope` and `ShellScope` in `tests/CShells.Tests/Unit/Lifecycle/ShellScopeTests.cs` — counter increments/decrements correctly under concurrent callers, disposing a scope disposes its DI scope, `BeginScope` on `Disposed` shell throws `InvalidOperationException`, `BeginScope` during `Draining` succeeds and joins the counter (FR-020, FR-021)
 
 ### Implementation
 
-- [ ] T033 [US6] Implement `ShellScope : IShellScope` in `src/CShells/Lifecycle/ShellScope.cs` — wraps an `AsyncServiceScope`, exposes `Shell` and `ServiceProvider`, calls back into `Shell` on dispose to decrement the counter
-- [ ] T034 [US6] Flesh out the scope counter + `BeginScope` implementation on `Shell` in `src/CShells/Lifecycle/Shell.cs` — `Interlocked.Increment/Decrement` on `_activeScopes`, a `TaskCompletionSource` (or manual-reset event) signalling counter-drops for drain phase 1 to await, throws if called after `Disposed` (FR-020, FR-021, research Decision 11)
+- [X] T033 [US6] Implement `ShellScope : IShellScope` in `src/CShells/Lifecycle/ShellScope.cs` — wraps an `AsyncServiceScope`, exposes `Shell` and `ServiceProvider`, calls back into `Shell` on dispose to decrement the counter
+- [X] T034 [US6] Flesh out the scope counter + `BeginScope` implementation on `Shell` in `src/CShells/Lifecycle/Shell.cs` — `Interlocked.Increment/Decrement` on `_activeScopes`, a `TaskCompletionSource` (or manual-reset event) signalling counter-drops for drain phase 1 to await, throws if called after `Disposed` (FR-020, FR-021, research Decision 11)
 
 **Checkpoint**: Shells expose tracked scopes. Drain phase 1 will consume the counter
 mechanism in the next phase.
@@ -173,15 +173,15 @@ handler exceptions are captured and do not abort peers.
 
 ### Tests ⚠️
 
-- [ ] T035 [P] [US5] Integration tests for drain-handler invocation in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryDrainTests.cs` — single handler; multiple handlers in parallel; a `[Theory]` with `[InlineData(0)]`, `[InlineData(1)]`, `[InlineData(50)]` covering the full 0-to-50-handlers range asserted by SC-004 (zero-handler path also covers SC-009); throwing handler captured in `DrainHandlerResult.Error` without aborting peers (FR-024); concurrent `DrainAsync` returns the same operation (FR-028, SC-006)
-- [ ] T036 [P] [US5] Integration tests for drain scope-wait phase in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryScopeWaitTests.cs` — outstanding scopes delay handler invocation (FR-022), scope release during phase 1 proceeds to phase 2 immediately, scopes outstanding at the deadline are abandoned and phase 2 runs with cancelled token (SC-010), `DrainResult.ScopeWaitElapsed` is populated, `DrainResult.AbandonedScopeCount` is zero in the normal case and equals the outstanding-handle count when the deadline bounds out phase 1
+- [X] T035 [P] [US5] Integration tests for drain-handler invocation in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryDrainTests.cs` — single handler; multiple handlers in parallel; a `[Theory]` with `[InlineData(0)]`, `[InlineData(1)]`, `[InlineData(50)]` covering the full 0-to-50-handlers range asserted by SC-004 (zero-handler path also covers SC-009); throwing handler captured in `DrainHandlerResult.Error` without aborting peers (FR-024); concurrent `DrainAsync` returns the same operation (FR-028, SC-006)
+- [X] T036 [P] [US5] Integration tests for drain scope-wait phase in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryScopeWaitTests.cs` — outstanding scopes delay handler invocation (FR-022), scope release during phase 1 proceeds to phase 2 immediately, scopes outstanding at the deadline are abandoned and phase 2 runs with cancelled token (SC-010), `DrainResult.ScopeWaitElapsed` is populated, `DrainResult.AbandonedScopeCount` is zero in the normal case and equals the outstanding-handle count when the deadline bounds out phase 1
 
 ### Implementation
 
-- [ ] T037 [P] [US5] Implement `FixedTimeoutDrainPolicy` (default 30 s; `TryExtend` always `false`) in `src/CShells/Lifecycle/Policies/FixedTimeoutDrainPolicy.cs` (FR-027)
-- [ ] T038 [US5] Implement `DrainOperation : IDrainOperation` in `src/CShells/Lifecycle/DrainOperation.cs` — phase 1 awaits `Shell`'s active-scope counter reaching zero bounded by the deadline (captures elapsed time into `DrainResult.ScopeWaitElapsed`); phase 2 resolves `IEnumerable<IDrainHandler>`, creates per-handler linked `CancellationTokenSource`s tied to the remaining deadline, invokes all handlers in parallel via `Task.WhenAll`, captures exceptions into `DrainHandlerResult`; uses a `TaskCompletionSource<DrainResult>` for `WaitAsync`; implements `IDrainExtensionHandle` by delegating to the resolved `IDrainPolicy` (FR-022, FR-024–FR-026, FR-029, research Decisions 7–9, 11)
-- [ ] T039 [US5] Implement `DrainAsync(shell, ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — idempotent via `Interlocked.CompareExchange` on per-shell `DrainOperation?` slot (FR-028), transitions `Active`/`Deactivating → Draining`, awaits phase completion, transitions to `Drained`, disposes the shell provider, fires `Drained → Disposed`
-- [ ] T040 [US5] Register default `IDrainPolicy` (`FixedTimeoutDrainPolicy(TimeSpan.FromSeconds(30))`) via `TryAddSingleton` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` so host overrides still win
+- [X] T037 [P] [US5] Implement `FixedTimeoutDrainPolicy` (default 30 s; `TryExtend` always `false`) in `src/CShells/Lifecycle/Policies/FixedTimeoutDrainPolicy.cs` (FR-027)
+- [X] T038 [US5] Implement `DrainOperation : IDrainOperation` in `src/CShells/Lifecycle/DrainOperation.cs` — phase 1 awaits `Shell`'s active-scope counter reaching zero bounded by the deadline (captures elapsed time into `DrainResult.ScopeWaitElapsed`); phase 2 resolves `IEnumerable<IDrainHandler>`, creates per-handler linked `CancellationTokenSource`s tied to the remaining deadline, invokes all handlers in parallel via `Task.WhenAll`, captures exceptions into `DrainHandlerResult`; uses a `TaskCompletionSource<DrainResult>` for `WaitAsync`; implements `IDrainExtensionHandle` by delegating to the resolved `IDrainPolicy` (FR-022, FR-024–FR-026, FR-029, research Decisions 7–9, 11)
+- [X] T039 [US5] Implement `DrainAsync(shell, ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — idempotent via `Interlocked.CompareExchange` on per-shell `DrainOperation?` slot (FR-028), transitions `Active`/`Deactivating → Draining`, awaits phase completion, transitions to `Drained`, disposes the shell provider, fires `Drained → Disposed`
+- [X] T040 [US5] Register default `IDrainPolicy` (`FixedTimeoutDrainPolicy(TimeSpan.FromSeconds(30))`) via `TryAddSingleton` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` so host overrides still win
 
 **Checkpoint**: Full drain path works end-to-end; scope-tracked request work completes
 before handlers run; shells complete the full `Active → Disposed` sequence after
@@ -201,13 +201,13 @@ and the shell reached `Drained` within the grace window (SC-007).
 
 ### Tests ⚠️
 
-- [ ] T041 [P] [US7] Unit tests for `DrainOperation` in `tests/CShells.Tests/Unit/Lifecycle/DrainOperationTests.cs` — completed path populates per-handler `Elapsed`/`Completed`/`Error`; force path cancels handlers and reports `Forced` within grace period; timeout path reports `TimedOut`; overall `DrainStatus` reflects the dominant outcome (FR-029, FR-030, SC-007); force during phase 1 skips remaining scope-wait
+- [X] T041 [P] [US7] Unit tests for `DrainOperation` in `tests/CShells.Tests/Unit/Lifecycle/DrainOperationTests.cs` — completed path populates per-handler `Elapsed`/`Completed`/`Error`; force path cancels handlers and reports `Forced` within grace period; timeout path reports `TimedOut`; overall `DrainStatus` reflects the dominant outcome (FR-029, FR-030, SC-007); force during phase 1 skips remaining scope-wait
 
 ### Implementation
 
-- [ ] T042 [US7] Implement `ForceAsync` on `DrainOperation` in `src/CShells/Lifecycle/DrainOperation.cs` — cancels the scope-wait and every handler CTS, waits up to the grace period (default 3 s, configurable), forces `DrainStatus.Forced`, transitions the shell to `Drained` even if handlers ignore cancellation (FR-030, SC-007)
-- [ ] T043 [US7] Populate `DrainResult` / `DrainHandlerResult` fully in `DrainOperation` — `HandlerTypeName = handler.GetType().Name`, `Completed` flag, `Elapsed` from a per-handler `Stopwatch`, `Error` from captured exception; attach the shell's `ShellDescriptor` to `DrainResult.Shell`; snapshot `AbandonedScopeCount` from the scope counter at the moment phase 1 completes (FR-029, data-model)
-- [ ] T044 [US7] Expose a configurable grace period (default 3 s) via a simple options record resolved by `DrainOperation`; register the default via `TryAddSingleton` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` and expose `ConfigureGracePeriod(TimeSpan)` on `CShellsBuilderExtensions` (SC-007, quickstart §1)
+- [X] T042 [US7] Implement `ForceAsync` on `DrainOperation` in `src/CShells/Lifecycle/DrainOperation.cs` — cancels the scope-wait and every handler CTS, waits up to the grace period (default 3 s, configurable), forces `DrainStatus.Forced`, transitions the shell to `Drained` even if handlers ignore cancellation (FR-030, SC-007)
+- [X] T043 [US7] Populate `DrainResult` / `DrainHandlerResult` fully in `DrainOperation` — `HandlerTypeName = handler.GetType().Name`, `Completed` flag, `Elapsed` from a per-handler `Stopwatch`, `Error` from captured exception; attach the shell's `ShellDescriptor` to `DrainResult.Shell`; snapshot `AbandonedScopeCount` from the scope counter at the moment phase 1 completes (FR-029, data-model)
+- [X] T044 [US7] Expose a configurable grace period (default 3 s) via a simple options record resolved by `DrainOperation`; register the default via `TryAddSingleton` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs` and expose `ConfigureGracePeriod(TimeSpan)` on `CShellsBuilderExtensions` (SC-007, quickstart §1)
 
 **Checkpoint**: Operators can force a drain, observe per-handler outcomes, and rely on
 `Drained` within `T + G` seconds.
@@ -226,13 +226,13 @@ newly-added feature's services, and the previous generation is in `Draining` or 
 
 ### Tests ⚠️
 
-- [ ] T045 [P] [US2] Integration tests in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryReloadTests.cs` — gen N+1 becomes `Active` while gen N moves through `Deactivating → Draining → Drained → Disposed`; services resolved from gen N continue to work during its drain; calling reload before any activation behaves like `ActivateAsync` (FR-011); reload with no blueprint throws; composition/initializer exceptions propagate without affecting the current active generation and without retaining a partial entry (FR-014); `ReloadResult.Drain` is null when no prior active generation existed; `ReloadResult.NewShell` carries the new generation
-- [ ] T046 [P] [US2] Integration tests for concurrency in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryConcurrencyTests.cs` — concurrent `ReloadAsync` for the same name serialize and assign strictly monotonic generations (FR-013, SC-005); concurrent `ReloadAsync` for different names run in parallel; generation number is "skipped" when composition/initializer fails (research Decision 3)
+- [X] T045 [P] [US2] Integration tests in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryReloadTests.cs` — gen N+1 becomes `Active` while gen N moves through `Deactivating → Draining → Drained → Disposed`; services resolved from gen N continue to work during its drain; calling reload before any activation behaves like `ActivateAsync` (FR-011); reload with no blueprint throws; composition/initializer exceptions propagate without affecting the current active generation and without retaining a partial entry (FR-014); `ReloadResult.Drain` is null when no prior active generation existed; `ReloadResult.NewShell` carries the new generation
+- [X] T046 [P] [US2] Integration tests for concurrency in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryConcurrencyTests.cs` — concurrent `ReloadAsync` for the same name serialize and assign strictly monotonic generations (FR-013, SC-005); concurrent `ReloadAsync` for different names run in parallel; generation number is "skipped" when composition/initializer fails (research Decision 3)
 
 ### Implementation
 
-- [ ] T047 [US2] Implement `ReloadAsync(name, ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — acquires the per-name semaphore, increments the generation counter, composes via the blueprint, builds the new generation in `Initializing`, runs initializers, promotes to `Active`, transitions the previous `Active` (if any) to `Deactivating` under the same semaphore, releases the semaphore, then kicks off `DrainAsync(previous)` outside the lock; returns a populated `ReloadResult` including the drain operation (FR-010, FR-013, FR-014, research Decision 3)
-- [ ] T048 [US2] Ensure `ReloadAsync` falls through to the single-generation path when no prior active exists so it behaves exactly like `ActivateAsync` with `ReloadResult.Drain == null` (FR-011)
+- [X] T047 [US2] Implement `ReloadAsync(name, ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — acquires the per-name semaphore, increments the generation counter, composes via the blueprint, builds the new generation in `Initializing`, runs initializers, promotes to `Active`, transitions the previous `Active` (if any) to `Deactivating` under the same semaphore, releases the semaphore, then kicks off `DrainAsync(previous)` outside the lock; returns a populated `ReloadResult` including the drain operation (FR-010, FR-013, FR-014, research Decision 3)
+- [X] T048 [US2] Ensure `ReloadAsync` falls through to the single-generation path when no prior active exists so it behaves exactly like `ActivateAsync` with `ReloadResult.Drain == null` (FR-011)
 
 **Checkpoint**: Full reload rollover works end-to-end; new generation serves new traffic
 while the old generation drains cooperatively and in-flight scopes finish.
@@ -246,11 +246,11 @@ abort the batch.
 
 ### Tests ⚠️
 
-- [ ] T049 [P] [US3] Integration tests in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryReloadAllTests.cs` — all registered names reload to a new generation; one failing blueprint surfaces its exception in the per-name `ReloadResult.Error` without aborting peers (FR-012, SC-003); a name never activated is activated as generation 1 with `Drain == null`; independent names reload in parallel
+- [X] T049 [P] [US3] Integration tests in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryReloadAllTests.cs` — all registered names reload to a new generation; one failing blueprint surfaces its exception in the per-name `ReloadResult.Error` without aborting peers (FR-012, SC-003); a name never activated is activated as generation 1 with `Drain == null`; independent names reload in parallel
 
 ### Implementation
 
-- [ ] T050 [US3] Implement `ReloadAllAsync(ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — snapshots the current blueprint-name set, awaits a `ReloadAsync` per name via `Task.WhenAll`, captures exceptions into `ReloadResult.Error` so the batch never throws (FR-012)
+- [X] T050 [US3] Implement `ReloadAllAsync(ct)` on `ShellRegistry` in `src/CShells/Lifecycle/ShellRegistry.cs` — snapshots the current blueprint-name set, awaits a `ReloadAsync` per name via `Task.WhenAll`, captures exceptions into `ReloadResult.Error` so the batch never throws (FR-012)
 
 **Checkpoint**: Operators can roll over every shell with one call and inspect per-name
 outcomes.
@@ -266,16 +266,16 @@ indefinitely, trigger drain, assert completion within ~1 s + grace with `TimedOu
 
 ### Tests ⚠️
 
-- [ ] T051 [P] [US9] Unit tests for `FixedTimeoutDrainPolicy` in `tests/CShells.Tests/Unit/Lifecycle/FixedTimeoutPolicyTests.cs`
-- [ ] T052 [P] [US9] Unit tests for `ExtensibleTimeoutDrainPolicy` (grants up to cap, rejects once cap reached, cumulative extension tracking) in `tests/CShells.Tests/Unit/Lifecycle/ExtensibleTimeoutPolicyTests.cs`
-- [ ] T053 [P] [US9] Unit tests for `UnboundedDrainPolicy` (`InitialTimeout == null`, `IsUnbounded == true`, warning logged on first use) in `tests/CShells.Tests/Unit/Lifecycle/UnboundedPolicyTests.cs`
+- [X] T051 [P] [US9] Unit tests for `FixedTimeoutDrainPolicy` in `tests/CShells.Tests/Unit/Lifecycle/FixedTimeoutPolicyTests.cs`
+- [X] T052 [P] [US9] Unit tests for `ExtensibleTimeoutDrainPolicy` (grants up to cap, rejects once cap reached, cumulative extension tracking) in `tests/CShells.Tests/Unit/Lifecycle/ExtensibleTimeoutPolicyTests.cs`
+- [X] T053 [P] [US9] Unit tests for `UnboundedDrainPolicy` (`InitialTimeout == null`, `IsUnbounded == true`, warning logged on first use) in `tests/CShells.Tests/Unit/Lifecycle/UnboundedPolicyTests.cs`
 
 ### Implementation
 
-- [ ] T054 [P] [US9] Implement `ExtensibleTimeoutDrainPolicy(initial, cap)` with thread-safe cumulative extension tracking in `src/CShells/Lifecycle/Policies/ExtensibleTimeoutDrainPolicy.cs` (FR-026)
-- [ ] T055 [P] [US9] Implement `UnboundedDrainPolicy` (`null` `InitialTimeout`, `IsUnbounded = true`, `TryExtend` always true, `ILogger` warning on first drain) in `src/CShells/Lifecycle/Policies/UnboundedDrainPolicy.cs`
-- [ ] T056 [US9] Add `ConfigureDrainPolicy(IDrainPolicy)` builder method to `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs` so hosts can override the default per quickstart §1 and §7
-- [ ] T057 [US9] Ensure `DrainOperation` resolves the configured `IDrainPolicy` from the root service provider (not the shell provider) so policy is a host-level concern (research Decision 10)
+- [X] T054 [P] [US9] Implement `ExtensibleTimeoutDrainPolicy(initial, cap)` with thread-safe cumulative extension tracking in `src/CShells/Lifecycle/Policies/ExtensibleTimeoutDrainPolicy.cs` (FR-026)
+- [X] T055 [P] [US9] Implement `UnboundedDrainPolicy` (`null` `InitialTimeout`, `IsUnbounded = true`, `TryExtend` always true, `ILogger` warning on first drain) in `src/CShells/Lifecycle/Policies/UnboundedDrainPolicy.cs`
+- [X] T056 [US9] Add `ConfigureDrainPolicy(IDrainPolicy)` builder method to `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs` so hosts can override the default per quickstart §1 and §7
+- [X] T057 [US9] Ensure `DrainOperation` resolves the configured `IDrainPolicy` from the root service provider (not the shell provider) so policy is a host-level concern (research Decision 10)
 
 **Checkpoint**: All three policy types behave per spec; hosts can swap policies.
 
@@ -289,12 +289,12 @@ bounded by the host's shutdown timeout; providers are disposed on timeout regard
 
 ### Tests ⚠️
 
-- [ ] T058 [P] Integration tests for startup + shutdown in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryShutdownTests.cs` — every registered blueprint activates in parallel; a failing blueprint surfaces its exception and fails host start (FR-035); shutdown drains every active shell in parallel using the configured policy; shutdown completes even when a drain exceeds the host's shutdown timeout, disposing providers regardless (FR-036); the emergency-dispose path — and only this path — transitions a shell from a non-`Drained` state directly to `Disposed`, fires the corresponding state-change event, and disposes the provider; `IShell` exposes no public disposal method (FR-037)
+- [X] T058 [P] Integration tests for startup + shutdown in `tests/CShells.Tests/Integration/Lifecycle/ShellRegistryShutdownTests.cs` — every registered blueprint activates in parallel; a failing blueprint surfaces its exception and fails host start (FR-035); shutdown drains every active shell in parallel using the configured policy; shutdown completes even when a drain exceeds the host's shutdown timeout, disposing providers regardless (FR-036); the emergency-dispose path — and only this path — transitions a shell from a non-`Drained` state directly to `Disposed`, fires the corresponding state-change event, and disposes the provider; `IShell` exposes no public disposal method (FR-037)
 
 ### Implementation
 
-- [ ] T059 Implement `CShellsStartupHostedService` in `src/CShells/Hosting/CShellsStartupHostedService.cs` — `StartAsync` iterates `registry.GetBlueprintNames()` and awaits `registry.ActivateAsync(name)` via `Task.WhenAll`, surfacing any exception; `StopAsync` hooks `IHostApplicationLifetime.ApplicationStopping` and drains every currently-`Active` shell in parallel bounded by the shutdown token; disposes every shell (including any whose drain exceeded the timeout) before returning (FR-035, FR-036, research Decision 14)
-- [ ] T060 Register `CShellsStartupHostedService` via `AddHostedService<>` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs`
+- [X] T059 Implement `CShellsStartupHostedService` in `src/CShells/Hosting/CShellsStartupHostedService.cs` — `StartAsync` iterates `registry.GetBlueprintNames()` and awaits `registry.ActivateAsync(name)` via `Task.WhenAll`, surfacing any exception; `StopAsync` hooks `IHostApplicationLifetime.ApplicationStopping` and drains every currently-`Active` shell in parallel bounded by the shutdown token; disposes every shell (including any whose drain exceeded the timeout) before returning (FR-035, FR-036, research Decision 14)
+- [X] T060 Register `CShellsStartupHostedService` via `AddHostedService<>` in `src/CShells/DependencyInjection/ServiceCollectionExtensions.cs`
 
 **Checkpoint**: The library now owns shell lifecycle end-to-end from host start to host stop.
 

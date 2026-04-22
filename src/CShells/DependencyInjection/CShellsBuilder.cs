@@ -1,6 +1,8 @@
 using System.Reflection;
 using CShells.Configuration;
 using CShells.Features;
+using CShells.Lifecycle;
+using CShells.Lifecycle.Blueprints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.DependencyInjection;
@@ -150,6 +152,13 @@ public class CShellsBuilder
     /// <param name="id">The shell identifier.</param>
     /// <param name="configure">Configuration action for the shell builder.</param>
     /// <returns>This builder for method chaining.</returns>
+    /// <remarks>
+    /// Registers both (a) an immediate code-first <see cref="ShellSettings"/> snapshot for the
+    /// legacy shell-host path, and (b) a <see cref="DelegateShellBlueprint"/> for the new
+    /// <see cref="IShellRegistry"/>. The delegate must be idempotent and side-effect-free; it
+    /// runs at registration time (legacy capture) and again on every activation / reload
+    /// through the blueprint (FR-001).
+    /// </remarks>
     public CShellsBuilder AddShell(string id, Action<ShellBuilder> configure)
     {
         Guard.Against.Null(id);
@@ -157,6 +166,9 @@ public class CShellsBuilder
         var shellBuilder = new ShellBuilder(new ShellId(id));
         configure(shellBuilder);
         _codeFirstShells.Add(shellBuilder.Build());
+
+        Services.AddSingleton<IShellBlueprint>(new DelegateShellBlueprint(id, configure));
+
         return this;
     }
 

@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Lifecycle;
 
@@ -11,7 +12,7 @@ namespace CShells.Lifecycle;
 /// Shell disposal is registry-owned. <see cref="DisposeAsync"/> is <c>internal</c> — hosts
 /// observe disposal via the <see cref="ShellLifecycleState.Drained"/> →
 /// <see cref="ShellLifecycleState.Disposed"/> transition event raised through the registered
-/// <paramref name="onStateChanged"/> callback.
+/// <c>onStateChanged</c> callback.
 /// </remarks>
 internal sealed class Shell(
     ShellDescriptor descriptor,
@@ -20,9 +21,11 @@ internal sealed class Shell(
 {
     private readonly Func<IShell, ShellLifecycleState, ShellLifecycleState, Task> _onStateChanged = Guard.Against.Null(onStateChanged);
     private int _state = (int)ShellLifecycleState.Initializing;
-#pragma warning disable CS0649 // Populated by Phase 5 (US6); left unassigned so the field site is already in place for scope tracking.
     private int _activeScopes;
-#pragma warning restore CS0649
+
+    // Signals waiters (drain phase 1) whenever the scope counter drops. Created lazily by
+    // the drain path; written to atomically.
+    private TaskCompletionSource<bool>? _scopesChangedSignal;
 
     /// <inheritdoc />
     public ShellDescriptor Descriptor { get; } = Guard.Against.Null(descriptor);
@@ -33,15 +36,72 @@ internal sealed class Shell(
     /// <inheritdoc />
     public ShellLifecycleState State => (ShellLifecycleState)Volatile.Read(ref _state);
 
+    /// <summary>Current active-scope count. Exposed for diagnostics.</summary>
     internal int ActiveScopeCount => Volatile.Read(ref _activeScopes);
 
     /// <inheritdoc />
-    public IShellScope BeginScope() => throw new NotImplementedException("Scope tracking is filled in by Phase 5 (US6).");
+    public IShellScope BeginScope()
+    {
+        // BeginScope during Initializing is permitted (initializers may open scopes).
+        // BeginScope during Draining is permitted per FR-022 (the new scope joins the counter
+        // and delays phase-1 completion until released). BeginScope after Disposed throws.
+        if (State == ShellLifecycleState.Disposed)
+            throw new InvalidOperationException($"Shell {Descriptor} is Disposed; cannot open a new scope.");
+
+        Interlocked.Increment(ref _activeScopes);
+        try
+        {
+            var inner = ServiceProvider.CreateAsyncScope();
+            return new ShellScope(this, inner);
+        }
+        catch
+        {
+            // If scope construction throws, roll back the counter so drain isn't deadlocked.
+            DecrementScopeCounter();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Decrements the active-scope counter and signals any pending drain-phase-1 waiter.
+    /// Invoked by <see cref="ShellScope.DisposeAsync"/>.
+    /// </summary>
+    internal void DecrementScopeCounter()
+    {
+        var remaining = Interlocked.Decrement(ref _activeScopes);
+        if (remaining == 0)
+            Volatile.Read(ref _scopesChangedSignal)?.TrySetResult(true);
+    }
+
+    /// <summary>
+    /// Returns a task that completes when the active-scope counter reaches zero. Used by
+    /// the drain operation's phase-1 waiter; the caller is responsible for bounding it with
+    /// a deadline.
+    /// </summary>
+    internal Task WaitForScopesReleasedAsync()
+    {
+        if (ActiveScopeCount == 0)
+            return Task.CompletedTask;
+
+        // Lazily create the signal; idempotent via CAS.
+        var signal = Volatile.Read(ref _scopesChangedSignal);
+        if (signal is null)
+        {
+            var candidate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            signal = Interlocked.CompareExchange(ref _scopesChangedSignal, candidate, null) ?? candidate;
+        }
+
+        // Re-check after publishing the signal: a concurrent DecrementScopeCounter may have
+        // brought the counter to zero in between our first read and the signal creation.
+        if (ActiveScopeCount == 0)
+            signal.TrySetResult(true);
+
+        return signal.Task;
+    }
 
     /// <summary>
     /// Attempts to transition from <paramref name="expected"/> to <paramref name="next"/>.
-    /// Returns <c>true</c> when the CAS succeeds; the state-change callback is awaited as
-    /// part of a successful transition so that subscribers observe transitions in-order.
+    /// Returns <c>true</c> when the CAS succeeds.
     /// </summary>
     internal async Task<bool> TryTransitionAsync(ShellLifecycleState expected, ShellLifecycleState next)
     {

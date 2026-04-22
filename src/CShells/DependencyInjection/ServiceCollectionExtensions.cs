@@ -142,16 +142,39 @@ public static class ServiceCollectionExtensions
         
         // ==================================================================================
         // Lifecycle (new API — runs alongside legacy until Phase 15 deletes the legacy surface).
-        // Registers the generation-based `IShellRegistry` and auto-subscribes the structured
-        // logging subscriber so hosts get lifecycle log output without configuration.
+        // Registers the generation-based `IShellRegistry`, the provider builder, and the
+        // auto-subscribed structured logging subscriber. Blueprints registered via
+        // `CShellsBuilder.AddShell(name, ...)` are resolved as `IEnumerable<IShellBlueprint>`
+        // at registry-construction time.
         // ==================================================================================
-        services.TryAddSingleton<ShellRegistry>();
+        services.TryAddSingleton<ShellProviderBuilder>(sp => new ShellProviderBuilder(
+            sp.GetRequiredService<IRootServiceCollectionAccessor>(),
+            sp,
+            sp.GetRequiredService<Hosting.IShellServiceExclusionRegistry>(),
+            sp.GetRequiredService<IShellFeatureFactory>(),
+            sp.GetRequiredService<RuntimeFeatureCatalog>(),
+            sp.GetService<ILogger<ShellProviderBuilder>>()));
+
+        services.TryAddSingleton<ShellRegistry>(sp => new ShellRegistry(
+            sp.GetServices<IShellBlueprint>(),
+            sp.GetRequiredService<ShellProviderBuilder>(),
+            sp,
+            sp.GetService<ILogger<ShellRegistry>>()));
         services.TryAddSingleton<IShellRegistry>(sp => sp.GetRequiredService<ShellRegistry>());
+
+        // Drain defaults. Hosts override via ConfigureDrainPolicy / ConfigureGracePeriod.
+        services.TryAddSingleton<IDrainPolicy>(_ => new Lifecycle.Policies.FixedTimeoutDrainPolicy(TimeSpan.FromSeconds(30)));
+        services.TryAddSingleton(DrainGracePeriod.Default);
+
         services.AddSingleton<ShellLifecycleLogger>();
-        // Eager instantiation: resolve the logger during startup so it subscribes before any
-        // activation events fire. Hosted services are the canonical seam for this; a lightweight
-        // marker service works too because the IShellRegistry constructor path resolves the logger.
+        // Eager resolution: materialising the logger as an `IShellLifecycleSubscriber`
+        // registration ensures it is constructed (and thus subscribes itself) as part of the
+        // container's singleton graph whenever the registry is resolved.
         services.AddSingleton<IShellLifecycleSubscriber>(sp => sp.GetRequiredService<ShellLifecycleLogger>());
+
+        // Hosted service: activates every blueprint on startup and drains every active shell
+        // on shutdown (FR-035, FR-036).
+        services.AddHostedService<CShellsStartupHostedService>();
 
         configure?.Invoke(builder);
 
