@@ -291,8 +291,6 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
 - What happens when two concurrent `ReloadAsync` calls target the same name? Serialized; both
   succeed in arrival order; the last one to complete becomes the active generation. Generation
   numbers are assigned monotonically in the order reloads are serialized.
-- What happens when `ReloadAsync` is called on a shell that has never been activated? It
-  performs the initial activation (generation 1) with no prior generation to drain.
 - What happens when `ReloadAllAsync` encounters a failing blueprint for one name? The other
   shells still reload; the result carries per-name outcomes, with the failing name surfacing
   the composition exception.
@@ -306,12 +304,16 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
 - What happens when `IShellScope` handles are still outstanding at drain start? The scope-wait
   phase holds the drain open until every handle is disposed or the drain deadline elapses,
   whichever comes first. Handler invocation does not begin until this phase ends.
-- What happens when `DisposeAsync` is called directly on a shell that has not been drained?
-  The shell transitions immediately to `Disposed`, skipping the drain phase. (Used for forced
-  teardown on host shutdown.)
+- What happens when `ActivateAsync` is called on a name that already has an `Active`
+  generation? Throws `InvalidOperationException`; callers use `ReloadAsync` to roll over.
 - What happens when a blueprint is registered a second time for a name that already has one?
   Throws a descriptive exception indicating the name is already registered; duplicate
   registration is a programming error.
+- What happens when host shutdown exceeds `HostOptions.ShutdownTimeout` while shells are
+  still draining? The registry emergency-disposes the still-draining shells (transitioning
+  them directly to `Disposed`) so the host can actually stop. This is the only path that
+  bypasses `Drained`. Outstanding scopes at this point are abandoned; any service resolution
+  they attempt afterwards may throw `ObjectDisposedException`.
 - What happens when the host application shuts down? The registry drains every active shell in
   parallel using the default drain policy, then disposes them.
 
@@ -336,13 +338,13 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
 
 - **FR-004**: Every shell MUST have a `ShellDescriptor` carrying its name, generation number,
   creation timestamp, and an opaque metadata dictionary.
-- **FR-005**: Generation numbers MUST be monotonically increasing integers, owned and assigned
-  by the library, starting at 1 for the first activation of a name. Generation numbers MUST
-  NOT be reused within the lifetime of the host process, even when a generation fails or is
-  disposed.
-- **FR-006**: Generation numbers MUST be assignable in the serialization order of reloads for
-  a given name; generations for different names are independent and MUST NOT share or
-  interfere with each other's counters.
+- **FR-005**: Generation numbers are library-owned and follow these semantics:
+  - Monotonically increasing `int` starting at 1 for the first activation of a name;
+  - Assigned in the serialization order of reloads for that name (FR-013);
+  - Never reused within the process lifetime, even when a generation fails to build or
+    is disposed;
+  - Independent per name — generations for different names MUST NOT share or interfere
+    with each other's counters.
 - **FR-007**: Host code MUST NOT be required to supply or inspect generation numbers to
   perform any lifecycle operation. Generation numbers are observable for diagnostics only.
 - **FR-008**: `ShellId` MUST remain a name-only value type. Generation is exposed exclusively
@@ -354,7 +356,11 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
 - **FR-009**: The registry MUST expose `ActivateAsync(name)` that composes `ShellSettings`
   from the registered blueprint, builds the shell's service provider, registers the shell as
   generation 1 in `Initializing`, runs all registered `IShellInitializer` services from the
-  shell's provider, and promotes it to `Active`.
+  shell's provider, and promotes it to `Active`. Calling `ActivateAsync` on a name whose
+  blueprint already has an `Active` generation MUST throw `InvalidOperationException`
+  indicating that the caller should use `ReloadAsync` to roll over. The built-in startup
+  hosted service (FR-035) invokes `ActivateAsync` at host start; hosts that register
+  additional blueprints after startup invoke it themselves.
 - **FR-010**: The registry MUST expose `ReloadAsync(name)` that composes a fresh
   `ShellSettings` from the registered blueprint, builds the next generation, runs its
   initializers, promotes it to `Active`, and initiates cooperative drain on the previously
@@ -378,7 +384,11 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
   contributing `IShellInitializer` services through a feature's `ConfigureServices`.
 - **FR-016**: All registered `IShellInitializer` services on a shell MUST be invoked
   sequentially in DI-registration order, inside the shell's transition from `Initializing`
-  to `Active`, and MUST complete before the shell is observable as `Active`.
+  to `Active`, and MUST complete before the shell is observable as `Active`. "Registration
+  order" is the order in which features' `ConfigureServices` calls add each initializer
+  via `AddTransient<IShellInitializer, …>`. Features MUST NOT use `IServiceCollection.Replace`
+  on `IShellInitializer` registrations — the registry treats initializer registration as
+  additive only; the initializer set is the union across features in activation order.
 
 **Lifecycle states & transitions**
 
@@ -417,7 +427,9 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
 - **FR-028**: Concurrent drain calls for the same shell MUST return the same in-flight
   operation (idempotent).
 - **FR-029**: Callers MUST be able to await drain completion and receive a structured
-  `DrainResult` including per-handler status, error, and elapsed time.
+  `DrainResult` including overall status, scope-wait elapsed time, the number of scope
+  handles still outstanding at the end of phase 1 (abandoned by deadline, if any), and
+  per-handler status, error, and elapsed time.
 - **FR-030**: Callers MUST be able to force-complete a drain at any time, cancelling
   outstanding handler tokens and transitioning the shell to `Drained` within the configured
   grace period (default 3 seconds).
@@ -436,6 +448,15 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
   by `ILogger` when CShells is added to the host's service collection. This subscriber MUST
   emit a structured log entry for every shell lifecycle transition, including shell
   descriptor metadata (name + generation). No host configuration is required to activate it.
+- **FR-034a**: The structured log schema emitted by the default subscriber MUST include, at
+  minimum, the following properties on every entry: `ShellName` (string), `Generation`
+  (int), `PreviousState` (string; null for the initial transition into `Initializing`),
+  `CurrentState` (string). Drain-completion entries MUST additionally include
+  `ScopeWaitElapsedMs` (long) and `HandlerCount` (int). Routine state transitions MUST be
+  logged at `LogLevel.Information`; drain timeouts, forced drains, and abandoned scopes
+  MUST be logged at `LogLevel.Warning`. Event IDs MUST be stable across releases; the range
+  `1000–1099` is reserved for shell lifecycle events (1000–1009 for transitions, 1010–1019
+  for drain warnings).
 
 **Startup & teardown**
 
@@ -444,10 +465,17 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
   throw MUST cause host startup to fail and propagate the exception.
 - **FR-036**: On host shutdown, the library MUST drain every active shell in parallel using
   the configured drain policy, then dispose each shell's service provider. If a drain
-  exceeds the host's shutdown timeout, providers MUST be disposed regardless so shutdown
-  completes.
-- **FR-037**: `DisposeAsync` called directly on a shell MUST transition it immediately to
-  `Disposed`, skipping the drain phase. This path is reserved for forced teardown.
+  exceeds the host's shutdown timeout (the duration bounded by
+  `IHostApplicationLifetime.ApplicationStopping` and `HostOptions.ShutdownTimeout`),
+  providers MUST be disposed regardless so shutdown completes. This "emergency disposal"
+  is the only code path permitted to transition a shell to `Disposed` without first
+  reaching `Drained`.
+- **FR-037**: Shell disposal MUST be entirely owned by `IShellRegistry`. `IShell` MUST NOT
+  implement `IAsyncDisposable` or `IDisposable` on its public surface; hosts observe
+  disposal via the `Drained → Disposed` transition event. Together with FR-036 this
+  preserves Principle VII's disposal-ordering rule: a provider is never disposed while
+  services resolved from it are in active use, except under the bounded emergency-shutdown
+  path of FR-036.
 
 **Scope of replacement**
 
@@ -479,9 +507,9 @@ indefinitely, reload, assert the drain completes after approximately 1 second wi
   features + feature/shell configuration data + code-first feature configurators). Produced
   by a blueprint; consumed by the registry to build a generation. Generation-unaware.
 - **Shell**: A named, generation-stamped service container with an identity, lifecycle state,
-  built service provider, and active-scope counter. Terminal when `Disposed`. Multiple
-  generations for the same name may coexist (exactly one `Active` + any number
-  `Deactivating`/`Draining`/`Drained`).
+  built service provider, and active-scope counter. Terminal when `Disposed`. Disposal is
+  registry-owned; hosts never dispose shells directly (FR-037). Multiple generations for the
+  same name may coexist (exactly one `Active` + any number `Deactivating`/`Draining`/`Drained`).
 - **Shell Descriptor**: Immutable identity and metadata snapshot created at shell creation
   time; includes name, generation, creation timestamp, and opaque metadata.
 - **ShellId**: Value type of `Name`. Used wherever a shell is referenced by name. Never

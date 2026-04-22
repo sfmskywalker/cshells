@@ -245,8 +245,12 @@ ReloadAsync    →  (new)  Initializing → Active
 
 DrainAsync     →  Active | Deactivating → Draining → Drained → Disposed
 
-DisposeAsync   →  Disposed (any state, skips drain)
+Emergency path →  Any non-terminal → Disposed  (registry-only, on host shutdown timeout breach)
 ```
+
+`IShell` does not expose `IAsyncDisposable`; hosts never dispose shells directly. Disposal
+is owned by `IShellRegistry` and happens automatically after drain completes, or via the
+emergency path on shutdown-timeout breach.
 
 The diagram applies per generation. Multiple generations for the same name can coexist:
 exactly one `Active`, any number `Deactivating` / `Draining` / `Drained`.

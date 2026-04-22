@@ -66,16 +66,18 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 | `Initializing` | `Active` | Internal: after initializers succeed inside `ActivateAsync` / `ReloadAsync` |
 | `Active` | `Deactivating` | Internal: a newer generation is promoted for the same name |
 | `Active` | `Draining` | `DrainAsync` called directly (no replacement) |
-| `Any non-terminal` | `Disposed` | `DisposeAsync` called directly (skips drain) |
 | `Deactivating` | `Draining` | Internal lifecycle engine starts drain |
 | `Draining` | `Drained` | Scope-wait + all handlers complete, time out, or drain is forced |
-| `Drained` | `Disposed` | Registry disposes the provider after drain completes |
+| `Drained` | `Disposed` | Registry disposes the provider after drain completes (normal path) |
+| `Any non-terminal` | `Disposed` | Registry emergency-disposes on host shutdown timeout breach (FR-036); ONLY path that bypasses `Drained` |
 
 **Rules**:
 - Transitions are monotonic; backward moves are no-ops.
 - Internal promote (used by `ActivateAsync` / `ReloadAsync`) only fires when initializers
   have completed successfully.
-- `DisposeAsync` on an undrained shell transitions directly to `Disposed`, skipping drain.
+- There is no public disposal entry point on `IShell`; disposal is registry-owned (FR-037).
+  The registry's own emergency-dispose path on shutdown-timeout breach is the only way a
+  shell can reach `Disposed` without first reaching `Drained`.
 
 ---
 
@@ -139,7 +141,9 @@ Initializing → Active → Deactivating → Draining → Drained → Disposed
 | `ServiceProvider` | `IServiceProvider` | Resolvable until `Disposed` |
 | `BeginScope()` | `IShellScope` | Creates a tracked DI scope |
 
-Extends `IAsyncDisposable`.
+**Does NOT** implement `IDisposable` / `IAsyncDisposable`. Shell disposal is entirely
+registry-owned (FR-037); the `Shell` implementation has an `internal` async-disposal method
+the registry calls after drain completes, or as part of the emergency-shutdown path (FR-036).
 
 ---
 
@@ -250,6 +254,7 @@ from the draining generation's provider.
 | `Shell` | `ShellDescriptor` | The drained shell (carries generation) |
 | `Status` | `DrainStatus` | Overall outcome |
 | `ScopeWaitElapsed` | `TimeSpan` | How long phase 1 took |
+| `AbandonedScopeCount` | `int` | Scope handles still outstanding when phase 1 ended (non-zero only when phase 1 was bounded out by the deadline) |
 | `HandlerResults` | `IReadOnlyList<DrainHandlerResult>` | One entry per registered handler |
 
 ---
@@ -360,7 +365,7 @@ phases are not separately callable.
                            [Drained]
                               │
                               ▼
-                          [Disposed] ◄── DisposeAsync (from any state)
+                          [Disposed] ◄── registry emergency-dispose (from any state, shutdown only)
 ```
 
 The diagram applies to a single generation. A reload produces a new generation alongside the

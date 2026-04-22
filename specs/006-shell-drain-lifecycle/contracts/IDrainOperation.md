@@ -89,6 +89,7 @@ public sealed record DrainResult(
     ShellDescriptor Shell,
     DrainStatus Status,
     TimeSpan ScopeWaitElapsed,
+    int AbandonedScopeCount,
     IReadOnlyList<DrainHandlerResult> HandlerResults);
 
 /// <summary>Outcome for a single drain handler.</summary>
@@ -107,7 +108,9 @@ across phases 1 and 2; the grace period (phase 3) is separate.
 1. **Scope wait**. Await the shell's active-scope counter reaching zero. Bounded by the
    drain deadline. During this phase no `IDrainHandler` runs. Outstanding scopes at the
    deadline are abandoned (not forcibly disposed) and phase 2 proceeds with the cancelled
-   token. Duration is reported on `DrainResult.ScopeWaitElapsed`.
+   token. `DrainResult.ScopeWaitElapsed` records the duration of this phase;
+   `DrainResult.AbandonedScopeCount` records how many handles were still outstanding when
+   the phase ended (zero in the normal case).
 2. **Handler invocation**. Resolve `IEnumerable<IDrainHandler>` from the shell's provider
    and invoke all handlers in parallel with a cancellation token linked to the remaining
    deadline budget. Handlers may request extensions via the `IDrainExtensionHandle` the

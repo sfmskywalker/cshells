@@ -28,7 +28,7 @@ namespace CShells.Lifecycle;
 /// <see cref="ShellLifecycleState.Disposed"/>.
 /// The service provider is available until <see cref="ShellLifecycleState.Disposed"/>.
 /// </remarks>
-public interface IShell : IAsyncDisposable
+public interface IShell
 {
     /// <summary>
     /// Gets the immutable descriptor identifying this shell generation.
@@ -71,11 +71,13 @@ public interface IShell : IAsyncDisposable
 
 - `State` is read without locking; writes use `Interlocked.CompareExchange` on the backing
   field.
-- `DisposeAsync` transitions the shell directly to `Disposed`, regardless of current state
-  (including bypassing drain if called during `Draining`).
-- Calling `DisposeAsync` on an already-`Disposed` shell is a no-op.
-- `ServiceProvider` MUST NOT be accessed after `Disposed`; doing so may throw
-  `ObjectDisposedException`.
+- `ServiceProvider` MUST NOT be accessed after the shell reaches `Disposed`; doing so may
+  throw `ObjectDisposedException`.
+- **`IShell` does not implement `IDisposable` or `IAsyncDisposable`.** Shell disposal is
+  entirely owned by `IShellRegistry` (FR-037). Hosts observe disposal via the
+  `Drained → Disposed` transition event. The `Shell` implementation has an `internal`
+  async-disposal method invoked by the registry (a) after drain completes or (b) during
+  the emergency-shutdown path (FR-036) — never directly by host code.
 - `BeginScope` MUST throw `InvalidOperationException` if called after the shell has reached
   `Disposed`. Calling `BeginScope` during `Draining` is permitted — the new scope joins the
   active-scope counter and delays phase-1 completion until released.

@@ -116,7 +116,7 @@ src/
     ├── Configuration/
     │   ├── ShellBuilder.cs                      (kept; used by DelegateShellBlueprint)
     │   ├── ShellConfig.cs                       (kept)
-    │   ├── ShellConfiguration.cs                (kept if still used; else delete)
+    │   ├── ShellConfiguration.cs                (kept — the `IConfiguration` impl registered in each shell's DI container, merging shell-specific and root config; consumed by `ShellBuilder`, `ConfigurationHelper`, and the new `ShellRegistry.ActivateAsync` provider-build step)
     │   ├── FeatureEntry.cs                      (kept)
     │   ├── FeatureEntryJsonConverter.cs         (kept)
     │   ├── FeatureEntryListJsonConverter.cs     (kept)
