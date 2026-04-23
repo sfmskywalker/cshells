@@ -274,10 +274,13 @@ internal sealed class ShellRegistry : IShellRegistry
                 $"DrainAsync only accepts shells produced by this registry (CShells.Lifecycle.Shell); got {shell.GetType().FullName}.",
                 nameof(shell));
 
-        // Idempotent: first caller creates the operation; concurrent callers get the same
-        // instance. The Lazy wrapper is essential — ConcurrentDictionary.GetOrAdd may invoke
-        // the factory more than once under contention (only one result wins), which would
-        // fire `op.RunAsync()` twice and double-invoke every handler.
+        // Idempotent while in flight: concurrent callers during the same drain get the same
+        // `DrainOperation` instance. The Lazy wrapper is essential — ConcurrentDictionary.GetOrAdd
+        // may invoke the factory more than once under contention (only one result wins), which
+        // would fire `op.RunAsync()` twice and double-invoke every handler. Once the drain's run
+        // task completes the entry is removed (see StartDrain), so calling DrainAsync for an
+        // already-drained shell will produce a fresh operation — acceptable because that is a
+        // programming error against a disposed provider.
         var lazy = _drainOps.GetOrAdd(shell, s => new Lazy<DrainOperation>(
             () => StartDrain((Shell)s),
             LazyThreadSafetyMode.ExecutionAndPublication));
@@ -293,7 +296,11 @@ internal sealed class ShellRegistry : IShellRegistry
         // Transition to Draining (Active or Deactivating → Draining). Best-effort CAS.
         _ = shell.ForceAdvanceAsync(ShellLifecycleState.Draining);
 
-        _ = op.RunAsync();
+        // Remove the dictionary entry when the run completes (success or fault) so long-running
+        // hosts don't accumulate one drained Shell + DrainOperation + TCS + CTS per reload.
+        _ = op.RunAsync().ContinueWith(
+            runTask => _drainOps.TryRemove(shell, out _),
+            TaskContinuationOptions.ExecuteSynchronously);
         return op;
     }
 

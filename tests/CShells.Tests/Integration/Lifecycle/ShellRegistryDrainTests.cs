@@ -88,6 +88,27 @@ public class ShellRegistryDrainTests
         await ops[0].WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Fact(DisplayName = "Completed drain entries are pruned from the registry's tracking dictionary")]
+    public async Task Drain_AfterCompletion_EntryIsPruned()
+    {
+        // Regression for greptile P1 on PR #86: _drainOps must not retain completed DrainOperation
+        // entries — otherwise long-running hosts leak one drained Shell + DrainOperation + TCS + CTS
+        // per reload. Behavioural probe: once the first drain finishes, a second DrainAsync call for
+        // the same shell must produce a fresh operation (proving the old entry was removed).
+        await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
+            .WithAssemblyContaining<ShellRegistryDrainTests>()
+            .AddShell("plain", _ => { }));
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("plain");
+
+        var firstOp = await registry.DrainAsync(shell);
+        await firstOp.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        var secondOp = await registry.DrainAsync(shell);
+
+        Assert.NotSame(firstOp, secondOp);
+    }
+
     [Fact(DisplayName = "Fixed-timeout policy cancels handler after deadline → TimedOut status")]
     public async Task Drain_FixedTimeout_TimesOut()
     {
