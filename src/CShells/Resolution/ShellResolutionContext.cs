@@ -1,14 +1,12 @@
-using CShells.Hosting;
-
 namespace CShells.Resolution;
 
 /// <summary>
-/// Provides a protocol-agnostic context for resolving shell identifiers.
+/// Protocol-agnostic context carrying the request data resolvers use to identify the target
+/// shell. Resolvers inject <see cref="CShells.Lifecycle.IShellRegistry"/> directly for shell
+/// lookup.
 /// </summary>
 public class ShellResolutionContext
 {
-    public IShellHost ShellHost { get; set; } = null!;
-    
     public IDictionary<string, object> Data { get; init; } = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
     public T? Get<T>(string key) => Data.TryGetValue(key, out var value) && value is T typed ? typed : default;

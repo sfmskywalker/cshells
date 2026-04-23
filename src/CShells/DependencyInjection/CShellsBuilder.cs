@@ -1,18 +1,19 @@
 using System.Reflection;
 using CShells.Configuration;
 using CShells.Features;
+using CShells.Lifecycle;
+using CShells.Lifecycle.Blueprints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.DependencyInjection;
 
 /// <summary>
-/// Builder for configuring CShells services with a fluent API.
-/// Supports both provider-based and code-first shell configuration.
+/// Builder for configuring CShells services with a fluent API. Each registered shell becomes
+/// an <see cref="IShellBlueprint"/> that the <see cref="IShellRegistry"/> resolves at activation
+/// time.
 /// </summary>
 public class CShellsBuilder
 {
-    private readonly List<ShellSettings> _codeFirstShells = new();
-    private readonly List<Action<IServiceProvider, List<IShellSettingsProvider>>> _providerRegistrations = new();
     private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
     private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
 
@@ -31,11 +32,6 @@ public class CShellsBuilder
     public IServiceCollection Services { get; }
 
     /// <summary>
-    /// Gets all code-first shell settings configured via AddShell.
-    /// </summary>
-    internal IReadOnlyList<ShellSettings> CodeFirstShells => _codeFirstShells.AsReadOnly();
-
-    /// <summary>
     /// Gets the configurators registered via <see cref="ConfigureAllShells"/>.
     /// </summary>
     internal IReadOnlyList<Action<ShellBuilder>> ShellConfigurators => _shellConfigurators.AsReadOnly();
@@ -44,29 +40,6 @@ public class CShellsBuilder
     /// Gets a value indicating whether explicit feature assembly providers were configured.
     /// </summary>
     internal bool UsesExplicitFeatureAssemblyProviders => _featureAssemblyProviderRegistrations.Count > 0;
-
-    /// <summary>
-    /// Registers a provider registration action.
-    /// </summary>
-    internal void RegisterProvider(Action<IServiceProvider, List<IShellSettingsProvider>> registration)
-    {
-        _providerRegistrations.Add(registration);
-    }
-
-    /// <summary>
-    /// Builds all registered providers and returns them.
-    /// </summary>
-    internal List<IShellSettingsProvider> BuildProviders(IServiceProvider serviceProvider)
-    {
-        var providers = new List<IShellSettingsProvider>();
-        
-        foreach (var registration in _providerRegistrations)
-        {
-            registration(serviceProvider, providers);
-        }
-        
-        return providers;
-    }
 
     /// <summary>
     /// Registers a feature assembly provider factory.
@@ -96,7 +69,6 @@ public class CShellsBuilder
         return providers.AsReadOnly();
     }
 
-
     /// <summary>
     /// Resolves the assemblies that should be scanned for shell feature discovery.
     /// </summary>
@@ -112,17 +84,10 @@ public class CShellsBuilder
     }
 
     /// <summary>
-    /// Registers a configurator that is applied to every shell — whether defined in code or loaded from configuration.
-    /// Configurators run in registration order before a shell's settings are finalized.
+    /// Registers a configurator applied to every shell — applied to every
+    /// <see cref="ShellBuilder"/> that a <see cref="DelegateShellBlueprint"/> hands out during
+    /// activation or reload.
     /// </summary>
-    /// <param name="configure">Configuration action applied to each shell's builder.</param>
-    /// <returns>This builder for method chaining.</returns>
-    /// <remarks>
-    /// Use this to define a shared set of features or configuration that should be applied to all shells.
-    /// This configuration is applied as part of shell finalization and may override values already supplied by
-    /// shell-specific configuration (from <see cref="AddShell(string,System.Action{CShells.Configuration.ShellBuilder})"/>)
-    /// or configuration providers when they target the same settings.
-    /// </remarks>
     public CShellsBuilder ConfigureAllShells(Action<ShellBuilder> configure)
     {
         Guard.Against.Null(configure);
@@ -131,43 +96,34 @@ public class CShellsBuilder
     }
 
     /// <summary>
-    /// Adds a shell using a fluent builder.
+    /// Adds a shell blueprint with the given name. The supplied delegate runs against a fresh
+    /// <see cref="ShellBuilder"/> on every activation / reload. All registered
+    /// <see cref="ConfigureAllShells"/> configurators apply first (in registration order), then
+    /// the shell-specific <paramref name="configure"/>.
     /// </summary>
-    /// <param name="configure">Configuration action for the shell builder.</param>
-    /// <returns>This builder for method chaining.</returns>
-    public CShellsBuilder AddShell(Action<ShellBuilder> configure)
+    public CShellsBuilder AddShell(string name, Action<ShellBuilder> configure)
     {
+        Guard.Against.NullOrWhiteSpace(name);
         Guard.Against.Null(configure);
-        var shellBuilder = new ShellBuilder(new ShellId(Guid.NewGuid().ToString()));
-        configure(shellBuilder);
-        _codeFirstShells.Add(shellBuilder.Build());
+
+        Action<ShellBuilder> combined = shellBuilder =>
+        {
+            foreach (var common in _shellConfigurators)
+                common(shellBuilder);
+            configure(shellBuilder);
+        };
+
+        Services.AddSingleton<IShellBlueprint>(new DelegateShellBlueprint(name, combined));
         return this;
     }
 
     /// <summary>
-    /// Adds a shell with the specified ID using a fluent builder.
+    /// Adds a blueprint directly. Used by downstream providers (e.g., FluentStorage) that build
+    /// their own <see cref="IShellBlueprint"/> instances.
     /// </summary>
-    /// <param name="id">The shell identifier.</param>
-    /// <param name="configure">Configuration action for the shell builder.</param>
-    /// <returns>This builder for method chaining.</returns>
-    public CShellsBuilder AddShell(string id, Action<ShellBuilder> configure)
+    public CShellsBuilder AddBlueprint(IShellBlueprint blueprint)
     {
-        Guard.Against.Null(id);
-        Guard.Against.Null(configure);
-        var shellBuilder = new ShellBuilder(new ShellId(id));
-        configure(shellBuilder);
-        _codeFirstShells.Add(shellBuilder.Build());
-        return this;
-    }
-
-    /// <summary>
-    /// Adds a pre-configured shell.
-    /// </summary>
-    /// <param name="settings">The shell settings.</param>
-    /// <returns>This builder for method chaining.</returns>
-    public CShellsBuilder AddShell(ShellSettings settings)
-    {
-        _codeFirstShells.Add(Guard.Against.Null(settings));
+        Services.AddSingleton(Guard.Against.Null(blueprint));
         return this;
     }
 }

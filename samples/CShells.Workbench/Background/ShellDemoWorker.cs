@@ -1,30 +1,34 @@
-using CShells.Hosting;
+using CShells.Lifecycle;
 
 namespace CShells.Workbench.Background;
 
 /// <summary>
-/// A background service that demonstrates how to use <see cref="IShellHost"/> and
-/// <see cref="IShellContextScopeFactory"/> to execute work within each shell's
-/// isolated service provider.
+/// A background service that demonstrates how to use <see cref="IShellRegistry"/> and
+/// <see cref="IShell.BeginScope"/> to execute work within each shell's isolated service
+/// provider. Each iteration iterates the currently-active shells, opens a scope per shell,
+/// and logs a heartbeat with the shell's configuration.
 /// </summary>
 public class ShellDemoWorker(
-    IShellHost shellHost,
-    IShellContextScopeFactory scopeFactory,
+    IShellRegistry registry,
     ILogger<ShellDemoWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            foreach (var shell in shellHost.AllShells)
+            foreach (var name in registry.GetBlueprintNames())
             {
+                var shell = registry.GetActive(name);
+                if (shell is null)
+                    continue;
+
                 try
                 {
-                    ExecuteForShell(shell);
+                    await ExecuteForShellAsync(shell);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error during background heartbeat for shell {ShellId}", shell.Id);
+                    logger.LogError(ex, "Error during background heartbeat for shell {Shell}", shell.Descriptor);
                 }
             }
 
@@ -32,18 +36,18 @@ public class ShellDemoWorker(
         }
     }
 
-    private void ExecuteForShell(ShellContext shell)
+    private async Task ExecuteForShellAsync(IShell shell)
     {
-        using var scope = scopeFactory.CreateScope(shell);
+        await using var scope = shell.BeginScope();
 
-        // Demonstrate accessing shell-scoped IConfiguration for per-shell settings
         var config = scope.ServiceProvider.GetService<IConfiguration>();
-        var plan   = config?["Plan"] ?? "Unknown";
+        var plan = config?["Plan"] ?? "Unknown";
+        var settings = scope.ServiceProvider.GetService<ShellSettings>();
 
         logger.LogInformation(
-            "Heartbeat for shell '{ShellName}' (Plan: {Plan}, Features: {Features})",
-            shell.Id.Name,
+            "Heartbeat for shell {Shell} (Plan: {Plan}, Features: {Features})",
+            shell.Descriptor,
             plan,
-            string.Join(", ", shell.Settings.EnabledFeatures));
+            string.Join(", ", settings?.EnabledFeatures ?? []));
     }
 }

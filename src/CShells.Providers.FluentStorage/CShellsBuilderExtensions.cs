@@ -1,11 +1,13 @@
 using System.Text.Json;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using FluentStorage.Blobs;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Providers.FluentStorage;
 
 /// <summary>
-/// Extension methods for configuring FluentStorage-based shell settings provider.
+/// Extension methods that register FluentStorage-backed shell blueprints.
 /// </summary>
 public static class CShellsBuilderExtensions
 {
@@ -13,39 +15,45 @@ public static class CShellsBuilderExtensions
     extension(CShellsBuilder builder)
     {
         /// <summary>
-        /// Configures CShells to use FluentStorage for reading shell configurations from blob storage.
+        /// Registers an <see cref="IShellBlueprintProvider"/> that enumerates JSON blobs at the
+        /// given path asynchronously during host startup. Each blob yields a
+        /// <see cref="FluentStorageShellBlueprint"/> that re-opens and re-deserializes the blob
+        /// on every <see cref="IShellBlueprint.ComposeAsync"/> call — so reloads observe blob
+        /// updates without a host restart.
         /// </summary>
-        /// <param name="blobStorage">The blob storage instance to read shell configurations from.</param>
-        /// <param name="path">The path/prefix within the blob storage where shell JSON files are located. If null, reads from root.</param>
-        /// <param name="jsonOptions">Optional JSON serialization options. If null, uses default options with case-insensitive property names.</param>
-        /// <returns>The updated CShells builder.</returns>
-        public CShellsBuilder WithFluentStorageProvider(IBlobStorage blobStorage,
+        /// <remarks>
+        /// The provider does its I/O inside the startup hosted service's <c>StartAsync</c>, not
+        /// during DI registration — no sync-over-async, no container-build blocking, no
+        /// deadlocks in synchronization-context environments.
+        /// </remarks>
+        public CShellsBuilder WithFluentStorageBlueprints(
+            IBlobStorage blobStorage,
             string? path = null,
             JsonSerializerOptions? jsonOptions = null)
         {
             Guard.Against.Null(builder);
             Guard.Against.Null(blobStorage);
 
-            var provider = new FluentStorageShellSettingsProvider(blobStorage, path, jsonOptions);
-            return builder.WithProvider(provider);
+            builder.Services.AddSingleton<IShellBlueprintProvider>(
+                new FluentStorageShellBlueprintProvider(blobStorage, path, jsonOptions));
+
+            return builder;
         }
 
         /// <summary>
-        /// Configures CShells to use FluentStorage for reading shell configurations from blob storage.
+        /// Overload that defers <see cref="IBlobStorage"/> creation to the caller's callback.
+        /// The callback is invoked synchronously at registration time; the blob I/O itself
+        /// (listing + deserializing) still runs asynchronously at host start.
         /// </summary>
-        /// <param name="configureBlobStorage">A callback to configure the blob storage instance.</param>
-        /// <param name="path">The path/prefix within the blob storage where shell JSON files are located. If null, reads from root.</param>
-        /// <param name="jsonOptions">Optional JSON serialization options. If null, uses default options with case-insensitive property names.</param>
-        /// <returns>The updated CShells builder.</returns>
-        public CShellsBuilder WithFluentStorageProvider(Func<IBlobStorage> configureBlobStorage,
+        public CShellsBuilder WithFluentStorageBlueprints(
+            Func<IBlobStorage> configureBlobStorage,
             string? path = null,
             JsonSerializerOptions? jsonOptions = null)
         {
             Guard.Against.Null(builder);
             Guard.Against.Null(configureBlobStorage);
 
-            var blobStorage = configureBlobStorage();
-            return builder.WithFluentStorageProvider(blobStorage, path, jsonOptions);
+            return builder.WithFluentStorageBlueprints(configureBlobStorage(), path, jsonOptions);
         }
     }
 }

@@ -1,15 +1,15 @@
-using CShells.Hosting;
+using CShells.Lifecycle;
 using CShells.Workbench.Features.Core;
 
 namespace CShells.Workbench.Features.Posts;
 
 /// <summary>
 /// Seeds each tenant with a personalised welcome post when the shell activates.
-/// Demonstrates <see cref="IShellActivatedHandler"/> for per-shell startup work.
+/// Demonstrates <see cref="IShellInitializer"/> for per-shell startup work.
 /// </summary>
-public class SeedPostsHandler(IPostRepository repo, ITenantInfo tenant) : IShellActivatedHandler
+public class SeedPostsHandler(IPostRepository repo, ITenantInfo tenant) : IShellInitializer
 {
-    public Task OnActivatedAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         repo.Add(
             $"Welcome to {tenant.TenantName}",
@@ -19,4 +19,3 @@ public class SeedPostsHandler(IPostRepository repo, ITenantInfo tenant) : IShell
         return Task.CompletedTask;
     }
 }
-

@@ -1,4 +1,4 @@
-using CShells.Hosting;
+using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.EndToEnd;
@@ -9,46 +9,49 @@ namespace CShells.Tests.EndToEnd;
 [Collection("Workbench")]
 public class ShellConfigurationTests(WorkbenchApplicationFactory factory)
 {
-    [Fact(DisplayName = "All three shells are loaded")]
-    public void AllShells_AreLoaded()
+    [Fact(DisplayName = "All three shells activate as generation 1")]
+    public void AllShells_AreActivated()
     {
-        // Arrange
         using var scope = factory.Services.CreateScope();
-        var shellHost = scope.ServiceProvider.GetRequiredService<IShellHost>();
+        var registry = scope.ServiceProvider.GetRequiredService<IShellRegistry>();
 
-        // Act
-        var shells = shellHost.AllShells.ToList();
+        var names = registry.GetBlueprintNames();
+        Assert.Contains("Default", names);
+        Assert.Contains("Acme", names);
+        Assert.Contains("Contoso", names);
 
-        // Assert
-        Assert.Equal(3, shells.Count);
-        Assert.Contains(shells, s => s.Id.Name == "Default");
-        Assert.Contains(shells, s => s.Id.Name == "Acme");
-        Assert.Contains(shells, s => s.Id.Name == "Contoso");
+        foreach (var name in new[] { "Default", "Acme", "Contoso" })
+        {
+            var shell = registry.GetActive(name);
+            Assert.NotNull(shell);
+            Assert.Equal(ShellLifecycleState.Active, shell!.State);
+            Assert.Equal(1, shell.Descriptor.Generation);
+        }
     }
 
     [Fact(DisplayName = "Shell configuration contains WebRouting path mappings")]
     public void ShellConfiguration_ContainsPathMappings()
     {
-        // Arrange
         using var scope = factory.Services.CreateScope();
-        var shellHost = scope.ServiceProvider.GetRequiredService<IShellHost>();
+        var registry = scope.ServiceProvider.GetRequiredService<IShellRegistry>();
 
-        // Act
-        var defaultShell = shellHost.AllShells.First(s => s.Id.Name == "Default");
-        var acmeShell = shellHost.AllShells.First(s => s.Id.Name == "Acme");
-        var contosoShell = shellHost.AllShells.First(s => s.Id.Name == "Contoso");
+        var defaultShell = registry.GetActive("Default")!;
+        var acmeShell = registry.GetActive("Acme")!;
+        var contosoShell = registry.GetActive("Contoso")!;
 
-        // Assert - Configuration is now flattened to ConfigurationData
-        Assert.True(defaultShell.Settings.ConfigurationData.ContainsKey("WebRouting:Path"));
-        Assert.True(acmeShell.Settings.ConfigurationData.ContainsKey("WebRouting:Path"));
-        Assert.True(contosoShell.Settings.ConfigurationData.ContainsKey("WebRouting:Path"));
+        var defaultSettings = defaultShell.ServiceProvider.GetRequiredService<ShellSettings>();
+        var acmeSettings = acmeShell.ServiceProvider.GetRequiredService<ShellSettings>();
+        var contosoSettings = contosoShell.ServiceProvider.GetRequiredService<ShellSettings>();
 
-        var defaultPath = defaultShell.Settings.GetConfiguration("WebRouting:Path");
-        var acmePath = acmeShell.Settings.GetConfiguration("WebRouting:Path");
-        var contosoPath = contosoShell.Settings.GetConfiguration("WebRouting:Path");
+        Assert.True(defaultSettings.ConfigurationData.ContainsKey("WebRouting:Path"));
+        Assert.True(acmeSettings.ConfigurationData.ContainsKey("WebRouting:Path"));
+        Assert.True(contosoSettings.ConfigurationData.ContainsKey("WebRouting:Path"));
 
-        // Configuration system may convert empty strings to null or empty
-        Assert.True(string.IsNullOrEmpty(defaultPath), $"Expected empty or null path for Default shell, got: '{defaultPath}'");
+        var defaultPath = defaultSettings.GetConfiguration("WebRouting:Path");
+        var acmePath = acmeSettings.GetConfiguration("WebRouting:Path");
+        var contosoPath = contosoSettings.GetConfiguration("WebRouting:Path");
+
+        Assert.True(string.IsNullOrEmpty(defaultPath));
         Assert.Equal("acme", acmePath);
         Assert.Equal("contoso", contosoPath);
     }

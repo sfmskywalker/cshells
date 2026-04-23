@@ -1,10 +1,10 @@
-using CShells.Hosting;
+using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.EndToEnd;
 
 /// <summary>
-/// Debugging tests to understand application initialization
+/// Debugging tests to understand application initialization.
 /// </summary>
 [Collection("Workbench")]
 public class DebugTests(WorkbenchApplicationFactory factory)
@@ -12,24 +12,22 @@ public class DebugTests(WorkbenchApplicationFactory factory)
     [Fact]
     public void ApplicationFactory_IsInitialized()
     {
-        // This test ensures the factory itself can initialize
         Assert.NotNull(factory);
         Assert.NotNull(factory.Services);
     }
 
     [Fact]
-    public void ShellHost_IsRegistered()
+    public void Registry_IsRegistered()
     {
         using var scope = factory.Services.CreateScope();
-        var shellHost = scope.ServiceProvider.GetService<IShellHost>();
+        var registry = scope.ServiceProvider.GetService<IShellRegistry>();
 
-        Assert.NotNull(shellHost);
+        Assert.NotNull(registry);
     }
 
     [Fact]
     public void ShellsDirectory_IsAccessible()
     {
-        // Get the content root from the factory
         var contentRoot = factory.Services.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>()?.ContentRootPath;
         Assert.NotNull(contentRoot);
 
@@ -42,5 +40,4 @@ public class DebugTests(WorkbenchApplicationFactory factory)
         Assert.Contains(files, f => f.EndsWith("Acme.json"));
         Assert.Contains(files, f => f.EndsWith("Contoso.json"));
     }
-
 }
