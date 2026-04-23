@@ -96,6 +96,36 @@ public class DrainOperationTests
         }
     }
 
+    [Fact(DisplayName = "Handler that ignores cancellation and is abandoned after grace period does not crash drain — TimedOut status returned")]
+    public async Task AbandonedHandler_AfterGracePeriod_CompletesWithTimedOut()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddCShells(cshells =>
+        {
+            cshells.WithAssemblyContaining<DrainOperationTests>();
+            cshells.AddShell("abandoned", s => s.WithFeature<AbandonedFeature>());
+            // Short deadline so the handler is signalled quickly, then a short grace period so the
+            // abandoned-handler path (results[index] == null before this fix) is exercised fast.
+            cshells.ConfigureDrainPolicy(new FixedTimeoutDrainPolicy(TimeSpan.FromMilliseconds(50)));
+            cshells.ConfigureGracePeriod(TimeSpan.FromMilliseconds(50));
+        });
+
+        await using var sp = services.BuildServiceProvider();
+        var registry = sp.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("abandoned");
+
+        var op = await registry.DrainAsync(shell);
+        var result = await op.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(DrainStatus.TimedOut, result.Status);
+        Assert.Equal(ShellLifecycleState.Disposed, shell.State);
+        var entry = Assert.Single(result.HandlerResults);
+        Assert.Equal(nameof(AbandonedHandler), entry.HandlerTypeName);
+        Assert.False(entry.Completed);
+    }
+
     public sealed class TimedDrainFeature : IShellFeature
     {
         public void ConfigureServices(IServiceCollection services) =>
@@ -105,5 +135,20 @@ public class DrainOperationTests
     private sealed class TimedDrainHandler : IDrainHandler
     {
         public Task DrainAsync(IDrainExtensionHandle _, CancellationToken ct) => Task.Delay(40, ct);
+    }
+
+    public sealed class AbandonedFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) =>
+            services.AddTransient<IDrainHandler, AbandonedHandler>();
+    }
+
+    private sealed class AbandonedHandler : IDrainHandler
+    {
+        // Deliberately ignores the cancellation token — simulates a stuck handler that does not
+        // respect cooperative cancellation. Before the null-seed fix this caused NullReferenceException
+        // in ResolveStatus when the slot was never written after the grace period elapsed.
+        public Task DrainAsync(IDrainExtensionHandle _, CancellationToken ct) =>
+            Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
     }
 }

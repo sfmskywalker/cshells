@@ -162,6 +162,10 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
             return [];
 
         var results = new DrainHandlerResult[handlers.Count];
+        // Pre-seed with "not completed" defaults so abandoned handlers (those still running after
+        // the grace period) leave a valid entry rather than a null slot that crashes ResolveStatus.
+        for (var i = 0; i < handlers.Count; i++)
+            results[i] = new DrainHandlerResult(handlers[i].GetType().Name, Completed: false, Elapsed: TimeSpan.Zero, Error: null);
 
         // Per-handler token: cancelled when the deadline elapses, or immediately on Force.
         using var deadlineCts = new CancellationTokenSource();
