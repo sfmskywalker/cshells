@@ -8,12 +8,12 @@ public class ShellScopeTests
     private static readonly ShellDescriptor Descriptor = ShellDescriptor.Create("test", 1);
 
     [Fact(DisplayName = "BeginScope increments the active-scope counter")]
-    public void BeginScope_IncrementsCounter()
+    public async Task BeginScope_IncrementsCounter()
     {
         var shell = CreateShell();
         Assert.Equal(0, shell.ActiveScopeCount);
 
-        var scope = shell.BeginScope();
+        await using var scope = shell.BeginScope();
 
         Assert.Equal(1, shell.ActiveScopeCount);
         Assert.Same(shell, scope.Shell);
@@ -89,7 +89,7 @@ public class ShellScopeTests
     {
         var shell = CreateShell();
 
-        await shell.WaitForScopesReleasedAsync();
+        await shell.WaitForScopesReleasedAsync().WaitAsync(TimeSpan.FromSeconds(2));
     }
 
     [Fact(DisplayName = "WaitForScopesReleasedAsync completes when the last scope is disposed")]

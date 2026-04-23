@@ -9,7 +9,7 @@ namespace CShells.Lifecycle.Policies;
 /// </summary>
 public sealed class UnboundedDrainPolicy : IDrainPolicy
 {
-    private static readonly EventId UnboundedWarning = new(1030, nameof(UnboundedWarning));
+    private static readonly EventId UnboundedWarning = new(1010, nameof(UnboundedWarning));
 
     private readonly ILogger<UnboundedDrainPolicy> _logger;
     private int _warned;
