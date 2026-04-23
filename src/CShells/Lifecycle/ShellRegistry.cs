@@ -16,7 +16,11 @@ internal sealed class ShellRegistry : IShellRegistry
     private readonly IServiceProvider? _rootProvider;
     private readonly ILogger<ShellRegistry> _logger;
     private readonly ConcurrentDictionary<string, NameSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<IShell, DrainOperation> _drainOps = new();
+    // Lazy wrapper: `ConcurrentDictionary.GetOrAdd(key, factory)` does NOT guarantee the
+    // factory runs at most once under contention — concurrent callers can both enter the
+    // factory even though only one result is stored. Wrapping in Lazy<T> guarantees
+    // `StartDrain` (and therefore `op.RunAsync()`) fires exactly once per shell.
+    private readonly ConcurrentDictionary<IShell, Lazy<DrainOperation>> _drainOps = new();
     private ImmutableList<IShellLifecycleSubscriber> _subscribers = [];
 
     public ShellRegistry(
@@ -270,9 +274,14 @@ internal sealed class ShellRegistry : IShellRegistry
                 $"DrainAsync only accepts shells produced by this registry (CShells.Lifecycle.Shell); got {shell.GetType().FullName}.",
                 nameof(shell));
 
-        // Idempotent: first caller creates the operation; concurrent callers get the same instance.
-        var op = _drainOps.GetOrAdd(shell, s => StartDrain((Shell)s));
-        return Task.FromResult<IDrainOperation>(op);
+        // Idempotent: first caller creates the operation; concurrent callers get the same
+        // instance. The Lazy wrapper is essential — ConcurrentDictionary.GetOrAdd may invoke
+        // the factory more than once under contention (only one result wins), which would
+        // fire `op.RunAsync()` twice and double-invoke every handler.
+        var lazy = _drainOps.GetOrAdd(shell, s => new Lazy<DrainOperation>(
+            () => StartDrain((Shell)s),
+            LazyThreadSafetyMode.ExecutionAndPublication));
+        return Task.FromResult<IDrainOperation>(lazy.Value);
     }
 
     private DrainOperation StartDrain(Shell shell)

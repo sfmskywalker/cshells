@@ -139,11 +139,13 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
         if (remaining <= TimeSpan.Zero && _deadline is not null)
             return _shell.ActiveScopeCount;
 
-        var timeoutTask = remaining == Timeout.InfiniteTimeSpan
-            ? (Task)new TaskCompletionSource<bool>().Task
-            : Task.Delay(remaining, _cancelSource.Token);
+        // Always wire the cancellation token into the timeout task — even for the unbounded
+        // path (remaining == InfiniteTimeSpan). A ForceAsync call must be able to interrupt
+        // the scope-wait and skip straight to handler invocation regardless of policy.
+        // Task.Delay(Timeout.InfiniteTimeSpan, token) means "wait forever unless token fires."
+        var timeoutTask = Task.Delay(remaining, _cancelSource.Token);
 
-        var completed = await Task.WhenAny(scopeWaitTask, timeoutTask).ConfigureAwait(false);
+        await Task.WhenAny(scopeWaitTask, timeoutTask).ConfigureAwait(false);
 
         // Whether the scope-wait completed normally or timed out / was forced, capture whatever
         // count is outstanding at this moment. Zero for the normal (clean-release) path.
@@ -206,7 +208,6 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
         // Phase 3: grace wait. After the deadline/force elapses, wait up to `_gracePeriod` for
         // handlers to observe cancellation. Handlers still running after grace are abandoned.
         var allHandlers = Task.WhenAll(tasks);
-        var graceDeadline = Task.Delay(Timeout.InfiniteTimeSpan);
 
         // Wait for either all handlers to complete, or cancellation + grace to elapse.
         if (!allHandlers.IsCompleted)

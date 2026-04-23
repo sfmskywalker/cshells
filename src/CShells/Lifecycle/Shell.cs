@@ -45,10 +45,19 @@ internal sealed class Shell(
         // BeginScope during Initializing is permitted (initializers may open scopes).
         // BeginScope during Draining is permitted per FR-022 (the new scope joins the counter
         // and delays phase-1 completion until released). BeginScope after Disposed throws.
-        if (State == ShellLifecycleState.Disposed)
-            throw new InvalidOperationException($"Shell {Descriptor} is Disposed; cannot open a new scope.");
-
+        //
+        // Close the check-then-increment race with a post-check: increment first, then verify
+        // the shell didn't transition to Disposed in between. If it did, roll back the counter
+        // so drain's scope-wait isn't misled by a phantom scope. (The final race — disposal
+        // landing between the post-check and CreateAsyncScope — still raises
+        // ObjectDisposedException from the provider, which is the correct observable error.)
         Interlocked.Increment(ref _activeScopes);
+        if (State == ShellLifecycleState.Disposed)
+        {
+            DecrementScopeCounter();
+            throw new InvalidOperationException($"Shell {Descriptor} is Disposed; cannot open a new scope.");
+        }
+
         try
         {
             var inner = ServiceProvider.CreateAsyncScope();
@@ -56,7 +65,8 @@ internal sealed class Shell(
         }
         catch
         {
-            // If scope construction throws, roll back the counter so drain isn't deadlocked.
+            // If scope construction throws (e.g., post-check race with disposal), roll back
+            // the counter so drain isn't deadlocked.
             DecrementScopeCounter();
             throw;
         }
