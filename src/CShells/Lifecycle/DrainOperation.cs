@@ -155,11 +155,18 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
     private async Task<IReadOnlyList<DrainHandlerResult>> InvokeHandlersAsync()
     {
         // Resolve handlers inside a scope so transient registrations get a fresh instance.
-        await using var scope = _shell.ServiceProvider.CreateAsyncScope();
+        // Lifetime is deferred (see continuation below) so the scope and the cancellation
+        // sources outlive any abandoned handler still running after the grace period —
+        // disposing them while a handler is mid-flight would yield use-after-dispose for
+        // services resolved into the scope.
+        var scope = _shell.ServiceProvider.CreateAsyncScope();
         var handlers = scope.ServiceProvider.GetServices<IDrainHandler>().ToList();
 
         if (handlers.Count == 0)
+        {
+            await scope.DisposeAsync().ConfigureAwait(false);
             return [];
+        }
 
         var results = new DrainHandlerResult[handlers.Count];
         // Pre-seed with "not completed" defaults so abandoned handlers (those still running after
@@ -168,7 +175,7 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
             results[i] = new DrainHandlerResult(handlers[i].GetType().Name, Completed: false, Elapsed: TimeSpan.Zero, Error: null);
 
         // Per-handler token: cancelled when the deadline elapses, or immediately on Force.
-        using var deadlineCts = new CancellationTokenSource();
+        var deadlineCts = new CancellationTokenSource();
         if (_deadline is { } deadline)
         {
             var until = deadline - DateTimeOffset.UtcNow;
@@ -178,7 +185,7 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
                 deadlineCts.CancelAfter(until);
         }
 
-        using var combined = CancellationTokenSource.CreateLinkedTokenSource(deadlineCts.Token, _cancelSource.Token);
+        var combined = CancellationTokenSource.CreateLinkedTokenSource(deadlineCts.Token, _cancelSource.Token);
         var token = combined.Token;
 
         var tasks = new Task[handlers.Count];
@@ -212,6 +219,28 @@ internal sealed class DrainOperation : IDrainOperation, IDrainExtensionHandle
         // Phase 3: grace wait. After the deadline/force elapses, wait up to `_gracePeriod` for
         // handlers to observe cancellation. Handlers still running after grace are abandoned.
         var allHandlers = Task.WhenAll(tasks);
+
+        // Defer disposal of the scope and cancellation sources until every handler task —
+        // including abandoned ones that outlive the grace period — has actually finished.
+        // Otherwise the scope (and any services resolved into it) would be torn down while a
+        // still-running handler is using them.
+        _ = allHandlers.ContinueWith(
+            async _ =>
+            {
+                try
+                {
+                    await scope.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Drain handler scope disposal failed for shell {Shell}", _shell.Descriptor);
+                }
+                combined.Dispose();
+                deadlineCts.Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
         // Wait for either all handlers to complete, or cancellation + grace to elapse.
         if (!allHandlers.IsCompleted)

@@ -27,6 +27,12 @@ internal sealed class Shell(
     // the drain path; written to atomically.
     private TaskCompletionSource<bool>? _scopesChangedSignal;
 
+    // Single-shot guard over the ServiceProvider teardown. Published by the first caller into
+    // DisposeAsync; concurrent callers observe the same completion task instead of racing into
+    // a second ServiceProvider.DisposeAsync() (drain + emergency-dispose can overlap at
+    // shutdown, see CShellsStartupHostedService).
+    private Task? _disposeTask;
+
     /// <inheritdoc />
     public ShellDescriptor Descriptor { get; } = Guard.Against.Null(descriptor);
 
@@ -150,20 +156,45 @@ internal sealed class Shell(
 
     /// <summary>
     /// Disposes the shell's service provider and transitions the shell to
-    /// <see cref="ShellLifecycleState.Disposed"/>. Registry-only entry point.
+    /// <see cref="ShellLifecycleState.Disposed"/>. Registry-only entry point. Concurrent
+    /// callers observe the same disposal task — the underlying provider teardown runs
+    /// exactly once.
     /// </summary>
-    internal async ValueTask DisposeAsync()
+    internal ValueTask DisposeAsync()
     {
-        await ForceAdvanceAsync(ShellLifecycleState.Disposed).ConfigureAwait(false);
+        var existing = Volatile.Read(ref _disposeTask);
+        if (existing is not null)
+            return new ValueTask(existing);
 
-        switch (ServiceProvider)
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var winner = Interlocked.CompareExchange(ref _disposeTask, tcs.Task, null);
+        if (winner is not null)
+            return new ValueTask(winner);
+
+        return new ValueTask(DisposeCoreAsync(tcs));
+    }
+
+    private async Task DisposeCoreAsync(TaskCompletionSource tcs)
+    {
+        try
         {
-            case IAsyncDisposable asyncDisposable:
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-                break;
-            case IDisposable disposable:
-                disposable.Dispose();
-                break;
+            await ForceAdvanceAsync(ShellLifecycleState.Disposed).ConfigureAwait(false);
+
+            switch (ServiceProvider)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+            tcs.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            tcs.TrySetException(ex);
+            throw;
         }
     }
 }
