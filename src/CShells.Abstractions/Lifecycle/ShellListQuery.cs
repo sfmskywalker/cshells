@@ -14,6 +14,13 @@ namespace CShells.Lifecycle;
 /// <param name="StateFilter">
 /// Optional lifecycle-state filter. When set, only entries whose active shell is in the given
 /// state are returned. Inactive blueprints are excluded.
+/// <para>
+/// The filter is applied AFTER fetching a page from the underlying catalogue, so filtered
+/// pages may return fewer than <see cref="Limit"/> items (or zero) while still carrying a
+/// non-null <see cref="ShellPage.NextCursor"/>. Callers MUST continue iterating until
+/// <see cref="ShellPage.NextCursor"/> is <c>null</c>, not stop when a page is empty or
+/// undersized.
+/// </para>
 /// </param>
 public sealed record ShellListQuery(
     string? Cursor = null,

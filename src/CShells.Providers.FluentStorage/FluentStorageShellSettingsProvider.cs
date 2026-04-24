@@ -124,12 +124,16 @@ public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvide
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// This implementation returns <c>true</c> unconditionally — the blob-backed source claims
+    /// any syntactically valid name. Callers MUST NOT rely on <c>Owns</c> to disambiguate between
+    /// multiple <see cref="FluentStorageShellBlueprintProvider"/> instances pointed at different
+    /// containers or paths; use <see cref="ExistsAsync"/> or the owning <see cref="ProvidedBlueprint.Manager"/>
+    /// reference attached by <see cref="GetAsync"/> for routing decisions instead.
+    /// </remarks>
     public bool Owns(string name)
     {
         Guard.Against.NullOrWhiteSpace(name);
-        // The provider claims every name that resolves to a blob under its folder. Actual
-        // presence is confirmed via ExistsAsync / GetAsync; Owns is a sync "could this name
-        // belong here?" predicate and with this provider the answer is always yes.
         return true;
     }
 
@@ -154,6 +158,21 @@ public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvide
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// Known limitation: FluentStorage's <see cref="IBlobStorage.ListAsync"/> abstraction does
+    /// not uniformly expose a server-side cursor or limit across its adapters, so this
+    /// implementation lists the entire folder from the backing store on every call and then
+    /// filters + paginates in-memory. Per-call cost is therefore O(N) in catalogue size
+    /// regardless of <see cref="BlueprintListQuery.Limit"/>.
+    /// </para>
+    /// <para>
+    /// Cursor and <c>NamePrefix</c> filters are honored for correctness (the returned
+    /// <see cref="BlueprintPage"/> respects them) but do not reduce the underlying blob-list
+    /// fetch. Deployments at >10k blueprints should prefer a provider with native cursor
+    /// support (SQL, DynamoDB, etc.) for listing-heavy admin flows.
+    /// </para>
+    /// </remarks>
     public async Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(query);

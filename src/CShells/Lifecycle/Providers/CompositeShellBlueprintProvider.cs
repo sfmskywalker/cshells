@@ -13,8 +13,10 @@ namespace CShells.Lifecycle.Providers;
 /// When enabled, every <see cref="GetAsync"/> probes all sub-providers and raises
 /// <see cref="DuplicateBlueprintException"/> if two or more claim the same name. When disabled
 /// (default for release builds), <see cref="GetAsync"/> short-circuits at the first hit.
-/// Listing always detects duplicates intra- and inter-page because pagination is an admin
-/// flow and the cost is negligible compared to the I/O.
+/// <see cref="ListAsync"/> detects duplicates that appear <em>within a single returned page</em>;
+/// cross-page detection would require carrying a rolling bloom filter in the cursor and is
+/// not implemented here. In practice most configuration-error duplicates surface on the first
+/// page that merges both providers' contributions.
 /// </para>
 /// <para>
 /// Pagination uses an opaque base64-JSON composite cursor produced by
@@ -102,6 +104,9 @@ public sealed class CompositeShellBlueprintProvider : IShellBlueprintProvider
 
         var collected = new List<BlueprintSummary>(query.Limit);
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Track owning provider type per name so duplicate-exception messages can cite the
+        // real First/SecondProviderType instead of guessing from the opaque SourceId.
+        var nameToProviderType = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         var remaining = query.Limit;
 
         // Track where we stopped so we can encode the continuation cursor correctly.
@@ -117,18 +122,18 @@ public sealed class CompositeShellBlueprintProvider : IShellBlueprintProvider
             var subQuery = new BlueprintListQuery(subCursor, remaining, query.NamePrefix);
             var page = await _providers[i].ListAsync(subQuery, cancellationToken).ConfigureAwait(false);
 
+            var currentProviderType = _providers[i].GetType();
             foreach (var item in page.Items)
             {
                 if (!seenNames.Add(item.Name))
                 {
-                    var prior = collected.FirstOrDefault(s =>
-                        string.Equals(s.Name, item.Name, StringComparison.OrdinalIgnoreCase));
-                    var priorProvider = prior is null
-                        ? _providers[i].GetType()
-                        : FindProviderByName(prior.SourceId);
-                    throw new DuplicateBlueprintException(item.Name, priorProvider, _providers[i].GetType());
+                    var priorProvider = nameToProviderType.TryGetValue(item.Name, out var t)
+                        ? t
+                        : currentProviderType;  // same-provider duplicate is unexpected but degrade gracefully
+                    throw new DuplicateBlueprintException(item.Name, priorProvider, currentProviderType);
                 }
                 collected.Add(item);
+                nameToProviderType[item.Name] = currentProviderType;
             }
 
             remaining -= page.Items.Count;
@@ -177,17 +182,6 @@ public sealed class CompositeShellBlueprintProvider : IShellBlueprintProvider
         return new BlueprintPage(collected, nextCursor);
     }
 
-    private Type FindProviderByName(string sourceId)
-    {
-        // Best-effort: prior summaries carry the owning provider's SourceId (typically the
-        // provider type name). Match by that.
-        foreach (var provider in _providers)
-        {
-            if (string.Equals(provider.GetType().Name, sourceId, StringComparison.Ordinal))
-                return provider.GetType();
-        }
-        return typeof(object);
-    }
 }
 
 /// <summary>Configuration for <see cref="CompositeShellBlueprintProvider"/>.</summary>

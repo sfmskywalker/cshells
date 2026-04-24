@@ -38,14 +38,28 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
     {
         Guard.Against.NullOrWhiteSpace(name);
 
-        // Match by explicit Name property first, then by key (case-insensitive).
+        // O(1) fast path: direct key lookup. Covers the common case where the configuration
+        // key matches the shell name.
+        var direct = _shellsSection.GetSection(name);
+        if (direct.Exists())
+        {
+            var candidate = direct["Name"] ?? direct.Key;
+            if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult<ProvidedBlueprint?>(
+                    new ProvidedBlueprint(new ConfigurationShellBlueprint(candidate, direct)));
+            }
+        }
+
+        // O(N) fallback: the configured child may expose a different name via an explicit
+        // "Name" property whose value differs from the key. Scan to honor that override.
         foreach (var child in _shellsSection.GetChildren())
         {
             var candidate = child["Name"] ?? child.Key;
             if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
             {
-                var blueprint = new ConfigurationShellBlueprint(candidate, child);
-                return Task.FromResult<ProvidedBlueprint?>(new ProvidedBlueprint(blueprint));
+                return Task.FromResult<ProvidedBlueprint?>(
+                    new ProvidedBlueprint(new ConfigurationShellBlueprint(candidate, child)));
             }
         }
 

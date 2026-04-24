@@ -57,11 +57,10 @@ internal sealed class CShellsStartupHostedService(
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        // The registry's in-memory index is the authoritative source of "active shells" at
-        // shutdown. Walk the pre-warm list AND any other active shells activated via lazy path.
-        // Since the registry exposes no bulk-active-listing today, we scan via ListAsync with
-        // a StateFilter — paginating to cover any size.
-        var actives = await CollectActiveShellsAsync(cancellationToken).ConfigureAwait(false);
+        // The registry's in-memory index is the authoritative source of active shells at
+        // shutdown. GetActiveShells reads only the in-memory slot dict — zero I/O — so
+        // shutdown is decoupled from provider/storage availability.
+        var actives = _registry.GetActiveShells().ToList();
 
         if (actives.Count == 0)
             return;
@@ -92,26 +91,6 @@ internal sealed class CShellsStartupHostedService(
         }
     }
 
-    private async Task<List<IShell>> CollectActiveShellsAsync(CancellationToken cancellationToken)
-    {
-        var collected = new List<IShell>();
-        string? cursor = null;
-        do
-        {
-            var page = await _registry.ListAsync(
-                new ShellListQuery(Cursor: cursor, Limit: 500, StateFilter: null),
-                cancellationToken).ConfigureAwait(false);
-
-            foreach (var summary in page.Items)
-            {
-                if (summary.ActiveGeneration is not null && _registry.GetActive(summary.Name) is { } active)
-                    collected.Add(active);
-            }
-            cursor = page.NextCursor;
-        } while (cursor is not null);
-
-        return collected;
-    }
 }
 
 /// <summary>

@@ -471,11 +471,22 @@ internal sealed class ShellRegistry : IShellRegistry
         {
             return await _blueprintProvider.GetAsync(name, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (wrapFault && ex is not ShellBlueprintNotFoundException && ex is not OperationCanceledException)
+        catch (Exception ex) when (wrapFault && ShouldWrapAsUnavailable(ex))
         {
             throw new ShellBlueprintUnavailableException(name, ex);
         }
     }
+
+    /// <summary>
+    /// Decides whether a provider exception should be wrapped as
+    /// <see cref="ShellBlueprintUnavailableException"/> (→ HTTP 503) or propagated as-is.
+    /// Structured configuration errors (duplicate blueprint, not-found, cancellation) are
+    /// deterministic signals that should NOT be masked as transient "unavailable".
+    /// </summary>
+    private static bool ShouldWrapAsUnavailable(Exception ex) =>
+        ex is not ShellBlueprintNotFoundException &&
+        ex is not DuplicateBlueprintException &&
+        ex is not OperationCanceledException;
 
     private void EnsureProviderBuilder()
     {
