@@ -10,12 +10,13 @@ namespace CShells.Tests.EndToEnd;
 public class ShellConfigurationTests(WorkbenchApplicationFactory factory)
 {
     [Fact(DisplayName = "All three shells activate as generation 1")]
-    public void AllShells_AreActivated()
+    public async Task AllShells_AreActivated()
     {
         using var scope = factory.Services.CreateScope();
         var registry = scope.ServiceProvider.GetRequiredService<IShellRegistry>();
 
-        var names = registry.GetBlueprintNames();
+        var page = await registry.ListAsync(new ShellListQuery(Limit: 50));
+        var names = page.Items.Select(s => s.Name).ToList();
         Assert.Contains("Default", names);
         Assert.Contains("Acme", names);
         Assert.Contains("Contoso", names);

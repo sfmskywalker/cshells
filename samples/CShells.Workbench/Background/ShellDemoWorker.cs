@@ -16,12 +16,8 @@ public class ShellDemoWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            foreach (var name in registry.GetBlueprintNames())
+            foreach (var shell in registry.GetActiveShells())
             {
-                var shell = registry.GetActive(name);
-                if (shell is null)
-                    continue;
-
                 try
                 {
                     await ExecuteForShellAsync(shell);

@@ -3,6 +3,7 @@ using CShells.Configuration;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Blueprints;
+using CShells.Lifecycle.Providers;
 using CShells.Resolution;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,10 +17,17 @@ namespace CShells.DependencyInjection;
 public static class CShellsBuilderExtensions
 {
     /// <summary>
-    /// Registers every shell defined in the given <see cref="IConfiguration"/> section as a
-    /// <see cref="ConfigurationShellBlueprint"/>. The default section name is
-    /// <see cref="CShellsOptions.SectionName"/> (<c>CShells</c>).
+    /// Registers a <see cref="ConfigurationShellBlueprintProvider"/> that lazily vends shell
+    /// blueprints from the given <see cref="IConfiguration"/> section. The default section name
+    /// is <see cref="CShellsOptions.SectionName"/> (<c>CShells</c>); the provider reads the
+    /// <c>Shells</c> sub-section.
     /// </summary>
+    /// <remarks>
+    /// Unlike the feature-`006` eager pattern, this registers a single provider — blueprints
+    /// are not materialized until <see cref="IShellRegistry.GetOrActivateAsync"/> or
+    /// <see cref="IShellBlueprintProvider.ListAsync"/> requests them. The provider is read-only
+    /// (no <see cref="IShellBlueprintManager"/>).
+    /// </remarks>
     public static CShellsBuilder WithConfigurationProvider(
         this CShellsBuilder builder,
         IConfiguration configuration,
@@ -29,16 +37,8 @@ public static class CShellsBuilderExtensions
         Guard.Against.Null(configuration);
 
         var shellsSection = configuration.GetSection(sectionName).GetSection("Shells");
-        foreach (var childSection in shellsSection.GetChildren())
-        {
-            // Each child either has a "Name" property or exposes the shell name as its key.
-            var name = childSection["Name"] ?? childSection.Key;
-            if (string.IsNullOrWhiteSpace(name))
-                continue;
-
-            builder.AddBlueprint(new ConfigurationShellBlueprint(name, childSection));
-        }
-
+        var provider = new ConfigurationShellBlueprintProvider(shellsSection);
+        builder.AddBlueprintProvider(_ => provider);
         return builder;
     }
 

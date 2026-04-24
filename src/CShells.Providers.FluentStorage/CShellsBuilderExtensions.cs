@@ -15,16 +15,15 @@ public static class CShellsBuilderExtensions
     extension(CShellsBuilder builder)
     {
         /// <summary>
-        /// Registers an <see cref="IShellBlueprintProvider"/> that enumerates JSON blobs at the
-        /// given path asynchronously during host startup. Each blob yields a
-        /// <see cref="FluentStorageShellBlueprint"/> that re-opens and re-deserializes the blob
-        /// on every <see cref="IShellBlueprint.ComposeAsync"/> call — so reloads observe blob
-        /// updates without a host restart.
+        /// Registers a FluentStorage blueprint provider that serves JSON blobs as shell
+        /// blueprints. The same instance implements <see cref="IShellBlueprintManager"/>, so
+        /// create / update / delete operations through <see cref="IShellRegistry"/> are routed
+        /// back to the blob store.
         /// </summary>
         /// <remarks>
-        /// The provider does its I/O inside the startup hosted service's <c>StartAsync</c>, not
-        /// during DI registration — no sync-over-async, no container-build blocking, no
-        /// deadlocks in synchronization-context environments.
+        /// All I/O is async end-to-end — blueprints are resolved lazily on
+        /// <see cref="IShellBlueprintProvider.GetAsync"/>, not at DI registration. No
+        /// sync-over-async, no container-build blocking.
         /// </remarks>
         public CShellsBuilder WithFluentStorageBlueprints(
             IBlobStorage blobStorage,
@@ -34,16 +33,20 @@ public static class CShellsBuilderExtensions
             Guard.Against.Null(builder);
             Guard.Against.Null(blobStorage);
 
-            builder.Services.AddSingleton<IShellBlueprintProvider>(
-                new FluentStorageShellBlueprintProvider(blobStorage, path, jsonOptions));
+            var provider = new FluentStorageShellBlueprintProvider(blobStorage, path, jsonOptions);
+
+            // Register once; consumed by the composite provider factory (reads via
+            // IShellBlueprintProvider) and by anything that directly requests the manager.
+            builder.Services.AddSingleton(provider);
+            builder.Services.AddSingleton<IShellBlueprintManager>(provider);
+            builder.AddBlueprintProvider(_ => provider);
 
             return builder;
         }
 
         /// <summary>
         /// Overload that defers <see cref="IBlobStorage"/> creation to the caller's callback.
-        /// The callback is invoked synchronously at registration time; the blob I/O itself
-        /// (listing + deserializing) still runs asynchronously at host start.
+        /// The callback runs synchronously at registration time; blob I/O itself is async.
         /// </summary>
         public CShellsBuilder WithFluentStorageBlueprints(
             Func<IBlobStorage> configureBlobStorage,

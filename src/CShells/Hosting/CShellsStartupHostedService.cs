@@ -7,101 +7,61 @@ namespace CShells.Hosting;
 
 /// <summary>
 /// Host startup coordinator:
-/// (1) resolves every registered <see cref="IShellBlueprintProvider"/> and registers the
-/// blueprints they return;
-/// (2) activates every registered blueprint in parallel (FR-035);
-/// (3) on stop, drains every active shell using the configured drain policy and disposes them,
-/// emergency-disposing any that don't complete within the host's shutdown timeout (FR-036).
+/// (1) activates any pre-warm names configured via <c>CShellsBuilder.PreWarmShells(...)</c>;
+/// (2) on stop, drains every active shell using the configured drain policy and disposes them,
+/// emergency-disposing any that don't complete within the host's shutdown timeout.
 /// </summary>
+/// <remarks>
+/// After feature <c>007</c>, startup does NOT enumerate the catalogue. Host startup time is
+/// O(pre-warm set) — typically zero. Inactive blueprints are activated lazily on first touch
+/// (via <see cref="IShellRegistry.GetOrActivateAsync"/>, typically from routing middleware).
+/// </remarks>
 internal sealed class CShellsStartupHostedService(
     IShellRegistry registry,
-    IEnumerable<IShellBlueprintProvider> blueprintProviders,
+    PreWarmShellList preWarmList,
     ILogger<CShellsStartupHostedService>? logger = null) : IHostedService
 {
     private readonly IShellRegistry _registry = Guard.Against.Null(registry);
-    private readonly IEnumerable<IShellBlueprintProvider> _blueprintProviders = Guard.Against.Null(blueprintProviders);
+    private readonly PreWarmShellList _preWarmList = Guard.Against.Null(preWarmList);
     private readonly ILogger<CShellsStartupHostedService> _logger = logger ?? NullLogger<CShellsStartupHostedService>.Instance;
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await RegisterAsyncBlueprintsAsync(cancellationToken).ConfigureAwait(false);
-
-        var names = _registry.GetBlueprintNames();
-        if (names.Count == 0)
+        if (_preWarmList.Count == 0)
         {
-            _logger.LogInformation("CShells startup: no blueprints registered; registry idle.");
+            _logger.LogInformation("CShells startup: no pre-warm list configured; registry remains idle until first activation.");
             return;
         }
 
-        _logger.LogInformation("CShells startup: activating {Count} blueprint(s).", names.Count);
+        _logger.LogInformation("CShells startup: pre-warming {Count} shell(s).", _preWarmList.Count);
 
-        // Activate in parallel. Skip any blueprint that is already active (e.g., a host that
-        // called ActivateAsync explicitly after RegisterBlueprint).
-        var tasks = names.Select(async name =>
+        // Pre-warm in parallel. A single failure is logged and does not abort startup — the host
+        // may still serve requests for other shells. Callers who need strict pre-warming should
+        // pre-warm from their own IHostedService with their own error policy.
+        var tasks = _preWarmList.Select(async name =>
         {
-            if (_registry.GetActive(name) is not null)
-                return;
-
             try
             {
-                await _registry.ActivateAsync(name, cancellationToken).ConfigureAwait(false);
+                await _registry.GetOrActivateAsync(name, cancellationToken).ConfigureAwait(false);
             }
-            catch (InvalidOperationException)
+            catch (Exception ex)
             {
-                // Benign race with an explicit ActivateAsync call from host code: another
-                // caller activated the shell between our pre-check and this call. Verify via
-                // the registry's state (not the exception message — message text is not a
-                // stable API) and rethrow if the state isn't what the race would produce.
-                if (_registry.GetActive(name) is null)
-                    throw;
+                _logger.LogError(ex, "Pre-warm activation failed for shell '{Name}'; host will continue.", name);
             }
         });
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    private async Task RegisterAsyncBlueprintsAsync(CancellationToken cancellationToken)
-    {
-        foreach (var provider in _blueprintProviders)
-        {
-            IReadOnlyList<IShellBlueprint> blueprints;
-            try
-            {
-                blueprints = await provider.GetBlueprintsAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Shell blueprint provider {ProviderType} threw during startup; no blueprints contributed from it.",
-                    provider.GetType().FullName);
-                throw;
-            }
-
-            foreach (var blueprint in blueprints)
-            {
-                // Ignore duplicates: a blueprint already registered by fluent AddShell or a
-                // prior provider wins — providers never overwrite existing registrations.
-                if (_registry.GetBlueprint(blueprint.Name) is not null)
-                {
-                    _logger.LogDebug(
-                        "Blueprint provider {ProviderType} returned blueprint '{Name}' but one is already registered; skipping.",
-                        provider.GetType().FullName, blueprint.Name);
-                    continue;
-                }
-
-                _registry.RegisterBlueprint(blueprint);
-            }
-        }
-    }
-
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var actives = _registry.GetBlueprintNames()
-            .Select(n => _registry.GetActive(n))
-            .OfType<IShell>()
-            .ToList();
+        // The registry's in-memory index is the authoritative source of "active shells" at
+        // shutdown. Walk the pre-warm list AND any other active shells activated via lazy path.
+        // Since the registry exposes no bulk-active-listing today, we scan via ListAsync with
+        // a StateFilter — paginating to cover any size.
+        var actives = await CollectActiveShellsAsync(cancellationToken).ConfigureAwait(false);
 
         if (actives.Count == 0)
             return;
@@ -131,4 +91,35 @@ internal sealed class CShellsStartupHostedService(
             }
         }
     }
+
+    private async Task<List<IShell>> CollectActiveShellsAsync(CancellationToken cancellationToken)
+    {
+        var collected = new List<IShell>();
+        string? cursor = null;
+        do
+        {
+            var page = await _registry.ListAsync(
+                new ShellListQuery(Cursor: cursor, Limit: 500, StateFilter: null),
+                cancellationToken).ConfigureAwait(false);
+
+            foreach (var summary in page.Items)
+            {
+                if (summary.ActiveGeneration is not null && _registry.GetActive(summary.Name) is { } active)
+                    collected.Add(active);
+            }
+            cursor = page.NextCursor;
+        } while (cursor is not null);
+
+        return collected;
+    }
+}
+
+/// <summary>
+/// Singleton container for the list of shell names to pre-warm at startup. Populated by
+/// <c>CShellsBuilder.PreWarmShells(...)</c>; consumed by <see cref="CShellsStartupHostedService"/>.
+/// </summary>
+internal sealed class PreWarmShellList : List<string>
+{
+    public PreWarmShellList() { }
+    public PreWarmShellList(IEnumerable<string> names) : base(names) { }
 }

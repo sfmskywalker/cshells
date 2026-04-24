@@ -12,6 +12,11 @@ builder.AddShells(cshells =>
     cshells.WithConfigurationProvider(builder.Configuration);
     cshells.WithHostAssemblies(); // Re-include the built-in host-derived source explicitly for this sample.
     cshells.WithAssemblyContaining<CoreFeature>(); // Add the separate features assembly as an explicit source.
+
+    // In 007, activation is lazy — shells come up on first touch rather than at startup. This
+    // sample pre-warms the known tenants so the demo worker has shells to iterate from t=0 and
+    // so end-to-end tests can assert post-startup state without triggering an HTTP request.
+    cshells.PreWarmShells("Default", "Acme", "Contoso");
 });
 
 // Background service that logs a heartbeat for each active shell every 30 s.
@@ -23,26 +28,42 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseRouting();
 
-// Host-level diagnostics via the new lifecycle registry.
-app.MapGet("/_shells/status", (IShellRegistry registry) =>
-    Results.Ok(registry.GetBlueprintNames()
-        .Select(name => new
+// Host-level diagnostics via the new lifecycle registry. Pages the catalogue (which may be
+// larger than the hot set), left-joining each entry with the registry's active-shell state.
+app.MapGet("/_shells/status", async (IShellRegistry registry) =>
+{
+    var entries = new List<object>();
+    string? cursor = null;
+    do
+    {
+        var page = await registry.ListAsync(new ShellListQuery(Cursor: cursor, Limit: 100));
+        foreach (var summary in page.Items)
         {
-            name,
-            active = registry.GetActive(name) is { } active ? new
+            entries.Add(new
             {
-                generation = active.Descriptor.Generation,
-                state = active.State.ToString(),
-                createdAt = active.Descriptor.CreatedAt,
-            } : null,
-            generations = registry.GetAll(name)
-                .Select(s => new
+                name = summary.Name,
+                source = summary.SourceId,
+                mutable = summary.Mutable,
+                active = summary.ActiveGeneration is int gen ? new
                 {
-                    generation = s.Descriptor.Generation,
-                    state = s.State.ToString(),
-                })
-                .ToList(),
-        })));
+                    generation = gen,
+                    state = summary.State?.ToString(),
+                    activeScopes = summary.ActiveScopeCount,
+                } : null,
+                generations = registry.GetAll(summary.Name)
+                    .Select(s => new
+                    {
+                        generation = s.Descriptor.Generation,
+                        state = s.State.ToString(),
+                    })
+                    .ToList(),
+            });
+        }
+        cursor = page.NextCursor;
+    } while (cursor is not null);
+
+    return Results.Ok(entries);
+});
 
 app.MapShells();
 app.Run();

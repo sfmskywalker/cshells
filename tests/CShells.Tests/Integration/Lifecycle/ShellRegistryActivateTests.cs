@@ -2,6 +2,7 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Blueprints;
+using CShells.Lifecycle.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,14 +28,14 @@ public class ShellRegistryActivateTests
         Assert.Equal([shell], registry.GetAll("payments"));
     }
 
-    [Fact(DisplayName = "ActivateAsync on a name with no blueprint throws InvalidOperationException")]
+    [Fact(DisplayName = "ActivateAsync on a name with no blueprint throws ShellBlueprintNotFoundException")]
     public async Task ActivateAsync_WithoutBlueprint_Throws()
     {
         await using var host = BuildHost(cshells => cshells.WithAssemblies());
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ActivateAsync("unknown"));
-        Assert.Contains("unknown", ex.Message, StringComparison.OrdinalIgnoreCase);
+        var ex = await Assert.ThrowsAsync<ShellBlueprintNotFoundException>(() => registry.ActivateAsync("unknown"));
+        Assert.Equal("unknown", ex.Name);
     }
 
     [Fact(DisplayName = "ActivateAsync twice on the same name throws (caller should use ReloadAsync)")]
@@ -52,25 +53,26 @@ public class ShellRegistryActivateTests
         Assert.Contains("ReloadAsync", ex.Message);
     }
 
-    [Fact(DisplayName = "Duplicate blueprint registration throws")]
+    [Fact(DisplayName = "Duplicate blueprint registration in the in-memory provider throws")]
     public async Task DuplicateBlueprint_Throws()
     {
         await using var host = BuildHost(cshells => cshells.WithAssemblies());
-        var registry = host.GetRequiredService<IShellRegistry>();
+        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
 
-        registry.RegisterBlueprint(new DelegateShellBlueprint("payments", _ => { }));
+        provider.Add(new DelegateShellBlueprint("payments", _ => { }));
 
         Assert.Throws<InvalidOperationException>(() =>
-            registry.RegisterBlueprint(new DelegateShellBlueprint("Payments", _ => { })));
+            provider.Add(new DelegateShellBlueprint("Payments", _ => { })));
     }
 
     [Fact(DisplayName = "Blueprint composition exception propagates and leaves no partial entry")]
     public async Task CompositionException_Propagates_NoPartialEntry()
     {
         await using var host = BuildHost(cshells => cshells.WithAssemblies());
+        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        registry.RegisterBlueprint(new ThrowingBlueprint("payments"));
+        provider.Add(new ThrowingBlueprint("payments"));
 
         await Assert.ThrowsAsync<ApplicationException>(() => registry.ActivateAsync("payments"));
 
@@ -82,9 +84,10 @@ public class ShellRegistryActivateTests
     public async Task Blueprint_NameMismatch_Throws()
     {
         await using var host = BuildHost(cshells => cshells.WithAssemblies());
+        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        registry.RegisterBlueprint(new NameMismatchBlueprint("payments"));
+        provider.Add(new NameMismatchBlueprint("payments"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ActivateAsync("payments"));
         Assert.Contains("blueprint name mismatch", ex.Message, StringComparison.OrdinalIgnoreCase);
