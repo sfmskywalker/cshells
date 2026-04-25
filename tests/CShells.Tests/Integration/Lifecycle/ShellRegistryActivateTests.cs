@@ -54,11 +54,10 @@ public class ShellRegistryActivateTests
     }
 
     [Fact(DisplayName = "Duplicate blueprint registration in the in-memory provider throws")]
-    public async Task DuplicateBlueprint_Throws()
+    public void DuplicateBlueprint_Throws()
     {
-        await using var host = BuildHost(cshells => cshells.WithAssemblies());
-        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
-
+        // The in-memory provider is self-contained; no host needed to assert its duplicate guard.
+        var provider = new InMemoryShellBlueprintProvider();
         provider.Add(new DelegateShellBlueprint("payments", _ => { }));
 
         Assert.Throws<InvalidOperationException>(() =>
@@ -68,11 +67,10 @@ public class ShellRegistryActivateTests
     [Fact(DisplayName = "Blueprint composition exception propagates and leaves no partial entry")]
     public async Task CompositionException_Propagates_NoPartialEntry()
     {
-        await using var host = BuildHost(cshells => cshells.WithAssemblies());
-        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblies()
+            .AddBlueprint(new ThrowingBlueprint("payments")));
         var registry = host.GetRequiredService<IShellRegistry>();
-
-        provider.Add(new ThrowingBlueprint("payments"));
 
         await Assert.ThrowsAsync<ApplicationException>(() => registry.ActivateAsync("payments"));
 
@@ -83,11 +81,10 @@ public class ShellRegistryActivateTests
     [Fact(DisplayName = "Blueprint name mismatch in composed settings throws")]
     public async Task Blueprint_NameMismatch_Throws()
     {
-        await using var host = BuildHost(cshells => cshells.WithAssemblies());
-        var provider = host.GetRequiredService<InMemoryShellBlueprintProvider>();
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblies()
+            .AddBlueprint(new NameMismatchBlueprint("payments")));
         var registry = host.GetRequiredService<IShellRegistry>();
-
-        provider.Add(new NameMismatchBlueprint("payments"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ActivateAsync("payments"));
         Assert.Contains("blueprint name mismatch", ex.Message, StringComparison.OrdinalIgnoreCase);

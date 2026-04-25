@@ -6,9 +6,9 @@ namespace CShells.Lifecycle;
 /// </summary>
 /// <remarks>
 /// <para>
-/// After feature <c>007</c>, the registry is a cache of live generations — it does NOT hold
-/// the blueprint catalogue. Blueprints live in providers (in-memory, configuration, blob
-/// storage, SQL…), composed under the built-in <c>CompositeShellBlueprintProvider</c>.
+/// The registry is a cache of live generations — it does NOT hold the blueprint catalogue.
+/// Blueprints live in a single registered <see cref="IShellBlueprintProvider"/> (in-memory,
+/// configuration-backed, storage-backed, or any first- or third-party implementation).
 /// Activation is lazy: <see cref="GetOrActivateAsync"/> consults the provider on first touch
 /// and caches the resulting <see cref="IShell"/>.
 /// </para>

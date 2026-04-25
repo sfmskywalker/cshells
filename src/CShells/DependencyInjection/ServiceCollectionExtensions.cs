@@ -1,7 +1,7 @@
 using CShells.Features;
 using CShells.Hosting;
 using CShells.Lifecycle;
-using CShells.Lifecycle.Providers;
+using CShells.Lifecycle.Providers;  // for InMemoryShellBlueprintProvider
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -52,31 +52,48 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<RuntimeFeatureCatalog>(),
             sp.GetService<ILogger<ShellProviderBuilder>>()));
 
-        // Blueprint providers: code-seeded blueprints from AddShell(...) feed into the built-in
-        // InMemoryShellBlueprintProvider. Additional providers are registered via
-        // CShellsBuilder.AddBlueprintProvider (used by configuration + FluentStorage providers).
-        // The composite multiplexes all of them in DI-registration order for lookup precedence.
-        services.TryAddSingleton<InMemoryShellBlueprintProvider>(_ =>
-            new InMemoryShellBlueprintProvider(builder.InlineBlueprints));
-
-        services.TryAddSingleton<CompositeShellBlueprintProvider>(sp =>
+        // Blueprint provider: exactly one is registered. Default is the built-in in-memory
+        // provider populated from AddShell(...) calls. Hosts that register an external provider
+        // via AddBlueprintProvider(...) replace the default. Mixing the two raises a teaching
+        // exception at the moment IShellBlueprintProvider is first resolved (which is during
+        // CShellsStartupHostedService.StartAsync, well before any HTTP traffic flows).
+        services.TryAddSingleton<IShellBlueprintProvider>(sp =>
         {
-            var providers = new List<IShellBlueprintProvider>
+            var hasInline = builder.InlineBlueprints.Count > 0;
+            var externalCount = builder.ProviderFactories.Count;
+
+            if (externalCount > 1)
             {
-                sp.GetRequiredService<InMemoryShellBlueprintProvider>()
-            };
-            foreach (var factory in builder.ProviderFactories)
-                providers.Add(factory(sp));
-            return new CompositeShellBlueprintProvider(providers);
+                throw new InvalidOperationException(
+                    "CShells permits exactly one external IShellBlueprintProvider per host, but " +
+                    $"{externalCount} were registered via AddBlueprintProvider (or its sugar " +
+                    "extensions WithConfigurationProvider, WithFluentStorageBlueprints, ...). " +
+                    "Pick one source. If you genuinely need to combine multiple sources, " +
+                    "implement a custom IShellBlueprintProvider that fans out to your sub-sources " +
+                    "internally and register only that single provider.");
+            }
+
+            if (hasInline && externalCount == 1)
+            {
+                throw new InvalidOperationException(
+                    "CShells permits exactly one blueprint provider per host, but this host " +
+                    "registered both: AddShell(...) registers blueprints with the in-memory " +
+                    "provider, and AddBlueprintProvider(...) (or its sugar — " +
+                    "WithConfigurationProvider, WithFluentStorageBlueprints, etc.) registers an " +
+                    "external provider. Resolve the conflict in one of three ways: " +
+                    "(1) move the AddShell blueprints into the external source; " +
+                    "(2) drop the external provider and keep AddShell; " +
+                    "(3) implement a custom IShellBlueprintProvider that combines both sources " +
+                    "and register only that single provider.");
+            }
+
+            return externalCount == 1
+                ? builder.ProviderFactories[0](sp)
+                : new InMemoryShellBlueprintProvider(builder.InlineBlueprints);
         });
 
-        // External callers resolving IShellBlueprintProvider get the composite view (the
-        // aggregate of every source). Registry depends on the concrete composite directly for
-        // type safety and to avoid ambiguity with sub-providers registered as IShellBlueprintProvider.
-        services.TryAddSingleton<IShellBlueprintProvider>(sp => sp.GetRequiredService<CompositeShellBlueprintProvider>());
-
         services.TryAddSingleton<ShellRegistry>(sp => new ShellRegistry(
-            sp.GetRequiredService<CompositeShellBlueprintProvider>(),
+            sp.GetRequiredService<IShellBlueprintProvider>(),
             sp.GetRequiredService<ShellProviderBuilder>(),
             sp,
             sp.GetService<ILogger<ShellRegistry>>(),

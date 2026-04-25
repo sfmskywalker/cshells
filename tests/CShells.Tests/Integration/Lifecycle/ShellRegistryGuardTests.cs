@@ -1,0 +1,127 @@
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
+using CShells.Lifecycle.Blueprints;
+using CShells.Tests.TestHelpers;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CShells.Tests.Integration.Lifecycle;
+
+/// <summary>
+/// Feature 008 US3 + SC-008: composition-time guards (FR-005, FR-006) and the third-party
+/// extensibility scenario.
+/// </summary>
+public class ShellRegistryGuardTests
+{
+    [Fact(DisplayName = "Mixing AddShell with AddBlueprintProvider throws at composition with a teaching message (FR-005)")]
+    public void Mixing_AddShell_With_AddBlueprintProvider_ThrowsAtComposition_WithTeachingMessage()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(c => c
+            .WithAssemblies()
+            .AddShell("platform", _ => { })
+            .AddBlueprintProvider(_ => new StubShellBlueprintProvider().Add("acme")));
+
+        using var host = services.BuildServiceProvider();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => host.GetRequiredService<IShellRegistry>());
+
+        Assert.Contains("AddShell", ex.Message);
+        Assert.Contains("AddBlueprintProvider", ex.Message);
+        Assert.Contains("exactly one", ex.Message, StringComparison.OrdinalIgnoreCase);
+        // Three resolutions enumerated:
+        Assert.Contains("(1)", ex.Message);
+        Assert.Contains("(2)", ex.Message);
+        Assert.Contains("(3)", ex.Message);
+    }
+
+    [Fact(DisplayName = "Reverse order — AddBlueprintProvider before AddShell — also throws (registration order doesn't matter)")]
+    public void Reverse_Order_AlsoThrows()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(c => c
+            .WithAssemblies()
+            .AddBlueprintProvider(_ => new StubShellBlueprintProvider().Add("acme"))
+            .AddShell("platform", _ => { }));
+
+        using var host = services.BuildServiceProvider();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => host.GetRequiredService<IShellRegistry>());
+        Assert.Contains("AddShell", ex.Message);
+        Assert.Contains("AddBlueprintProvider", ex.Message);
+    }
+
+    [Fact(DisplayName = "Two AddBlueprintProvider calls throw at composition (FR-006)")]
+    public void MultipleExternalProviders_ThrowAtComposition()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(c => c
+            .WithAssemblies()
+            .AddBlueprintProvider(_ => new StubShellBlueprintProvider().Add("a"))
+            .AddBlueprintProvider(_ => new StubShellBlueprintProvider().Add("b")));
+
+        using var host = services.BuildServiceProvider();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => host.GetRequiredService<IShellRegistry>());
+        Assert.Contains("exactly one external", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "Empty host (no AddShell, no AddBlueprintProvider) resolves with empty in-memory provider; lookups return NotFound")]
+    public async Task EmptyHost_NoProviderAndNoAddShell_ResolvesEmptyInMemory_NotFoundOnLookup()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(c => c.WithAssemblies());
+
+        await using var host = services.BuildServiceProvider();
+
+        var registry = host.GetRequiredService<IShellRegistry>();
+        await Assert.ThrowsAsync<ShellBlueprintNotFoundException>(
+            () => registry.GetOrActivateAsync("anything"));
+    }
+
+    [Fact(DisplayName = "Third-party custom IShellBlueprintProvider activates shells identically to shipped providers (SC-008)")]
+    public async Task ThirdPartyCustomProvider_RegisteredViaAddBlueprintProvider_ActivatesShellsLikeShippedProviders()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(c => c
+            .WithAssemblies()
+            .AddBlueprintProvider(_ => new ThirdPartyShellBlueprintProvider("custom-tenant")));
+
+        await using var host = services.BuildServiceProvider();
+
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var shell = await registry.GetOrActivateAsync("custom-tenant");
+
+        Assert.Equal("custom-tenant", shell.Descriptor.Name);
+        Assert.Equal(1, shell.Descriptor.Generation);
+        Assert.Equal(ShellLifecycleState.Active, shell.State);
+    }
+
+    /// <summary>
+    /// A test-only third-party provider that is NOT shipped by the framework — proves that
+    /// the IShellBlueprintProvider extension seam is open and any implementation works
+    /// through the same AddBlueprintProvider registration path.
+    /// </summary>
+    private sealed class ThirdPartyShellBlueprintProvider(string ownedName) : IShellBlueprintProvider
+    {
+        public Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken ct = default)
+        {
+            if (string.Equals(name, ownedName, StringComparison.OrdinalIgnoreCase))
+            {
+                var bp = new DelegateShellBlueprint(ownedName, _ => { });
+                return Task.FromResult<ProvidedBlueprint?>(new ProvidedBlueprint(bp));
+            }
+            return Task.FromResult<ProvidedBlueprint?>(null);
+        }
+
+        public Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken ct = default) =>
+            Task.FromResult(new BlueprintPage(
+                [new BlueprintSummary(ownedName, "ThirdParty", Mutable: false, new Dictionary<string, string>())],
+                NextCursor: null));
+    }
+}
