@@ -2,6 +2,7 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Blueprints;
+using CShells.Lifecycle.Providers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.Lifecycle;
@@ -48,14 +49,15 @@ public class ShellRegistryReloadTests
         Assert.Equal(ShellLifecycleState.Active, result.NewShell.State);
     }
 
-    [Fact(DisplayName = "ReloadAsync with no blueprint throws")]
+    [Fact(DisplayName = "ReloadAsync with no blueprint throws ShellBlueprintNotFoundException")]
     public async Task Reload_NoBlueprint_Throws()
     {
         await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
             .WithAssemblyContaining<ShellRegistryReloadTests>());
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ReloadAsync("unknown"));
+        var ex = await Assert.ThrowsAsync<ShellBlueprintNotFoundException>(() => registry.ReloadAsync("unknown"));
+        Assert.Equal("unknown", ex.Name);
     }
 
     [Fact(DisplayName = "Reload composition failure returns ReloadResult.Error and leaves active unchanged (FR-014)")]
@@ -71,7 +73,7 @@ public class ShellRegistryReloadTests
         // Swap in a throwing blueprint by registering via the registry API path is not
         // possible for an already-registered name. Instead, simulate by piping ThrowingBlueprint
         // on a different name and asserting the error flow.
-        registry.RegisterBlueprint(new FailingOnReloadBlueprint("unstable"));
+        host.GetRequiredService<InMemoryShellBlueprintProvider>().Add(new FailingOnReloadBlueprint("unstable"));
         var result = await registry.ReloadAsync("unstable");
 
         Assert.NotNull(result.Error);

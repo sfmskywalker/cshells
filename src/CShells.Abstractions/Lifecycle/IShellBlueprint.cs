@@ -4,9 +4,11 @@ namespace CShells.Lifecycle;
 /// A re-invocable recipe for composing a single named shell's <see cref="ShellSettings"/>.
 /// </summary>
 /// <remarks>
-/// Blueprints hold no runtime state. Exactly one is registered per shell name via
-/// <see cref="IShellRegistry.RegisterBlueprint"/> (or the fluent <c>AddShell</c> shorthand);
-/// the registry invokes <see cref="ComposeAsync"/> on every activation and reload.
+/// Blueprints hold no runtime state. Each blueprint is vended by an
+/// <see cref="IShellBlueprintProvider"/> — typically the built-in in-memory provider populated
+/// via <c>CShellsBuilder.AddShell</c>, the <see cref="IConfiguration"/>-backed provider, or a
+/// storage-backed provider. The registry invokes <see cref="ComposeAsync"/> on every
+/// activation and reload.
 /// </remarks>
 public interface IShellBlueprint
 {

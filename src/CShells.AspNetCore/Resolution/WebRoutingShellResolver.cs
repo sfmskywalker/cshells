@@ -27,15 +27,7 @@ public class WebRoutingShellResolver(
             ?? TryResolveByRootPath();
     }
 
-    private IEnumerable<IShell> ActiveShells()
-    {
-        foreach (var name in _registry.GetBlueprintNames())
-        {
-            var shell = _registry.GetActive(name);
-            if (shell is not null)
-                yield return shell;
-        }
-    }
+    private IEnumerable<IShell> ActiveShells() => _registry.GetActiveShells();
 
     private ShellId? TryResolveByPath(ShellResolutionContext context)
     {

@@ -16,6 +16,9 @@ public class CShellsBuilder
 {
     private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
     private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
+    private readonly List<IShellBlueprint> _inlineBlueprints = [];
+    private readonly List<Func<IServiceProvider, IShellBlueprintProvider>> _providerFactories = [];
+    private readonly List<string> _preWarmNames = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CShellsBuilder"/> class.
@@ -25,6 +28,15 @@ public class CShellsBuilder
     {
         Services = Guard.Against.Null(services);
     }
+
+    /// <summary>Blueprints contributed via <see cref="AddShell"/> and <see cref="AddBlueprint"/>, in registration order.</summary>
+    internal IReadOnlyList<IShellBlueprint> InlineBlueprints => _inlineBlueprints;
+
+    /// <summary>Factories that resolve additional <see cref="IShellBlueprintProvider"/> instances at DI-resolution time.</summary>
+    internal IReadOnlyList<Func<IServiceProvider, IShellBlueprintProvider>> ProviderFactories => _providerFactories;
+
+    /// <summary>Shell names to activate at host startup. Populated by <see cref="PreWarmShells"/>.</summary>
+    internal IReadOnlyList<string> PreWarmNames => _preWarmNames;
 
     /// <summary>
     /// Gets the service collection.
@@ -101,6 +113,11 @@ public class CShellsBuilder
     /// <see cref="ConfigureAllShells"/> configurators apply first (in registration order), then
     /// the shell-specific <paramref name="configure"/>.
     /// </summary>
+    /// <remarks>
+    /// Blueprints added here are vended by the built-in <c>InMemoryShellBlueprintProvider</c>
+    /// at DI-resolution time. Activation is lazy — the first request for the shell triggers
+    /// construction.
+    /// </remarks>
     public CShellsBuilder AddShell(string name, Action<ShellBuilder> configure)
     {
         Guard.Against.NullOrWhiteSpace(name);
@@ -113,17 +130,44 @@ public class CShellsBuilder
             configure(shellBuilder);
         };
 
-        Services.AddSingleton<IShellBlueprint>(new DelegateShellBlueprint(name, combined));
+        _inlineBlueprints.Add(new DelegateShellBlueprint(name, combined));
         return this;
     }
 
     /// <summary>
-    /// Adds a blueprint directly. Used by downstream providers (e.g., FluentStorage) that build
-    /// their own <see cref="IShellBlueprint"/> instances.
+    /// Adds a blueprint directly to the in-memory provider.
     /// </summary>
     public CShellsBuilder AddBlueprint(IShellBlueprint blueprint)
     {
-        Services.AddSingleton(Guard.Against.Null(blueprint));
+        _inlineBlueprints.Add(Guard.Against.Null(blueprint));
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an additional <see cref="IShellBlueprintProvider"/> resolved from DI at
+    /// composite-construction time. Providers are probed in registration order for lookup
+    /// precedence.
+    /// </summary>
+    public CShellsBuilder AddBlueprintProvider(Func<IServiceProvider, IShellBlueprintProvider> factory)
+    {
+        _providerFactories.Add(Guard.Against.Null(factory));
+        return this;
+    }
+
+    /// <summary>
+    /// Records a list of shell names to activate during host startup. Pre-warming is optional;
+    /// without it, shells activate lazily on first request.
+    /// </summary>
+    /// <remarks>
+    /// A pre-warm activation failure is logged and does not abort host startup. Callers who
+    /// need strict pre-warming should activate from their own hosted service with an explicit
+    /// error policy.
+    /// </remarks>
+    public CShellsBuilder PreWarmShells(params string[] names)
+    {
+        Guard.Against.Null(names);
+        foreach (var name in names)
+            _preWarmNames.Add(Guard.Against.NullOrWhiteSpace(name));
         return this;
     }
 }

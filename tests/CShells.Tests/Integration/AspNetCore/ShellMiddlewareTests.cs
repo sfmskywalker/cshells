@@ -199,16 +199,22 @@ public class ShellMiddlewareTests
     {
         private readonly FakeShell? _shell = shell;
 
-        public void RegisterBlueprint(IShellBlueprint blueprint) => throw new NotSupportedException();
-        public IShellBlueprint? GetBlueprint(string name) => null;
-        public IReadOnlyCollection<string> GetBlueprintNames() => _shell is null ? [] : [_shell.Descriptor.Name];
+        public Task<IShell> GetOrActivateAsync(string name, CancellationToken ct = default)
+            => GetActive(name) is { } active
+                ? Task.FromResult(active)
+                : Task.FromException<IShell>(new ShellBlueprintNotFoundException(name));
         public Task<IShell> ActivateAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ReloadResult> ReloadAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<ReloadResult>> ReloadAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ReloadResult>> ReloadActiveAsync(ReloadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UnregisterBlueprintAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ProvidedBlueprint?> GetBlueprintAsync(string name, CancellationToken ct = default) => Task.FromResult<ProvidedBlueprint?>(null);
+        public Task<IShellBlueprintManager?> GetManagerAsync(string name, CancellationToken ct = default) => Task.FromResult<IShellBlueprintManager?>(null);
+        public Task<ShellPage> ListAsync(ShellListQuery query, CancellationToken ct = default) => Task.FromResult(new ShellPage([], null));
         public IShell? GetActive(string name)
             => _shell is not null && string.Equals(_shell.Descriptor.Name, name, StringComparison.OrdinalIgnoreCase) ? _shell : null;
         public IReadOnlyCollection<IShell> GetAll(string name) => _shell is null ? [] : [_shell];
+        public IReadOnlyCollection<IShell> GetActiveShells() => _shell is null ? [] : [_shell];
         public void Subscribe(IShellLifecycleSubscriber subscriber) { }
         public void Unsubscribe(IShellLifecycleSubscriber subscriber) { }
     }

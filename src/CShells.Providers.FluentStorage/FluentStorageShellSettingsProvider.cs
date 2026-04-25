@@ -85,15 +85,29 @@ public sealed class FluentStorageShellBlueprint : IShellBlueprint
 }
 
 /// <summary>
-/// Enumerates JSON blobs at the configured path and contributes one
-/// <see cref="FluentStorageShellBlueprint"/> per blob. Runs asynchronously during host start
-/// via the <see cref="IShellBlueprintProvider"/> seam — no sync-over-async at DI time.
+/// FluentStorage-backed blueprint catalogue. Implements both <see cref="IShellBlueprintProvider"/>
+/// (read) and <see cref="IShellBlueprintManager"/> (write) since the underlying blob container
+/// accepts mutation.
 /// </summary>
-public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvider
+/// <remarks>
+/// <para>
+/// Blueprint names map 1:1 to blob filenames — <c>{name}.json</c> under the configured folder.
+/// This convention keeps <see cref="GetAsync"/> O(1) (no full-catalogue scan required) and
+/// makes <see cref="CreateAsync"/> / <see cref="DeleteAsync"/> a single blob operation.
+/// </para>
+/// <para>
+/// All I/O is async end-to-end — no <c>GetAwaiter().GetResult()</c> anywhere in this provider
+/// or its DI registration.
+/// </para>
+/// </remarks>
+public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvider, IShellBlueprintManager
 {
     private readonly IBlobStorage _blobStorage;
     private readonly string _path;
     private readonly JsonSerializerOptions _jsonOptions;
+
+    /// <summary>Stable identifier emitted as <see cref="BlueprintSummary.SourceId"/>.</summary>
+    public const string SourceIdValue = nameof(FluentStorageShellBlueprintProvider);
 
     public FluentStorageShellBlueprintProvider(
         IBlobStorage blobStorage,
@@ -110,8 +124,60 @@ public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvide
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<IShellBlueprint>> GetBlueprintsAsync(CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// This implementation returns <c>true</c> unconditionally — the blob-backed source claims
+    /// any syntactically valid name. Callers MUST NOT rely on <c>Owns</c> to disambiguate between
+    /// multiple <see cref="FluentStorageShellBlueprintProvider"/> instances pointed at different
+    /// containers or paths; use <see cref="ExistsAsync"/> or the owning <see cref="ProvidedBlueprint.Manager"/>
+    /// reference attached by <see cref="GetAsync"/> for routing decisions instead.
+    /// </remarks>
+    public bool Owns(string name)
     {
+        Guard.Against.NullOrWhiteSpace(name);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.NullOrWhiteSpace(name);
+
+        var fullPath = ResolveBlobPath(name);
+        if (!await _blobStorage.ExistsAsync(fullPath, cancellationToken).ConfigureAwait(false))
+            return null;
+
+        var blueprint = new FluentStorageShellBlueprint(name, _blobStorage, fullPath, _jsonOptions);
+        return new ProvidedBlueprint(blueprint, Manager: this);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ExistsAsync(string name, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.NullOrWhiteSpace(name);
+        return await _blobStorage.ExistsAsync(ResolveBlobPath(name), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// Known limitation: FluentStorage's <see cref="IBlobStorage.ListAsync"/> abstraction does
+    /// not uniformly expose a server-side cursor or limit across its adapters, so this
+    /// implementation lists the entire folder from the backing store on every call and then
+    /// filters + paginates in-memory. Per-call cost is therefore O(N) in catalogue size
+    /// regardless of <see cref="BlueprintListQuery.Limit"/>.
+    /// </para>
+    /// <para>
+    /// Cursor and <c>NamePrefix</c> filters are honored for correctness (the returned
+    /// <see cref="BlueprintPage"/> respects them) but do not reduce the underlying blob-list
+    /// fetch. Deployments at >10k blueprints should prefer a provider with native cursor
+    /// support (SQL, DynamoDB, etc.) for listing-heavy admin flows.
+    /// </para>
+    /// </remarks>
+    public async Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.Null(query);
+        query.EnsureValid();
+
         var blobs = await _blobStorage.ListAsync(
             new()
             {
@@ -121,30 +187,110 @@ public sealed class FluentStorageShellBlueprintProvider : IShellBlueprintProvide
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (blobs is null || !blobs.Any())
-            return [];
+        // Deterministic ordering for stable pagination: sort by blob name, case-insensitive.
+        // Apply cursor + prefix filters before taking the page.
+        var ordered = (blobs ?? [])
+            .Where(b => b.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            .Select(b => BlobNameToShellName(b.Name))
+            .Where(name => query.NamePrefix is null ||
+                           name.StartsWith(query.NamePrefix, StringComparison.OrdinalIgnoreCase))
+            .Where(name => query.Cursor is null ||
+                           string.Compare(name, query.Cursor, StringComparison.OrdinalIgnoreCase) > 0)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .Take(query.Limit + 1)
+            .ToList();
 
-        var blueprints = new List<IShellBlueprint>();
+        var hasMore = ordered.Count > query.Limit;
+        var items = ordered.Take(query.Limit)
+            .Select(name => new BlueprintSummary(
+                name,
+                SourceIdValue,
+                Mutable: true,
+                Metadata: ImmutableDictionary<string, string>.Empty))
+            .ToList();
 
-        foreach (var blob in blobs.Where(b => b.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+        var nextCursor = hasMore && items.Count > 0 ? items[^1].Name : null;
+        return new BlueprintPage(items, nextCursor);
+    }
+
+    /// <inheritdoc />
+    public async Task CreateAsync(ShellSettings settings, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.Null(settings);
+        var name = Guard.Against.NullOrWhiteSpace(settings.Id.Name);
+
+        var fullPath = ResolveBlobPath(name);
+        if (await _blobStorage.ExistsAsync(fullPath, cancellationToken).ConfigureAwait(false))
         {
-            // Peek the blob once to establish the shell's canonical name. The deserialized
-            // content is NOT cached — ComposeAsync re-opens the blob on every activation /
-            // reload so updates are observed without a restart.
-            await using var stream = await _blobStorage.OpenReadAsync(blob.FullPath, cancellationToken).ConfigureAwait(false);
-            var shellConfig = await JsonSerializer.DeserializeAsync<ShellConfig>(stream, _jsonOptions, cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidOperationException($"Failed to deserialize shell configuration from blob '{blob.FullPath}'.");
-
-            if (string.IsNullOrWhiteSpace(shellConfig.Name))
-                throw new InvalidOperationException($"Shell config in blob '{blob.FullPath}' is missing its Name property.");
-
-            blueprints.Add(new FluentStorageShellBlueprint(
-                shellConfig.Name,
-                _blobStorage,
-                blob.FullPath,
-                _jsonOptions));
+            throw new InvalidOperationException(
+                $"A blueprint for '{name}' already exists at '{fullPath}'. Use UpdateAsync to replace it.");
         }
 
-        return blueprints;
+        await WriteBlobAsync(fullPath, settings, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateAsync(ShellSettings settings, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.Null(settings);
+        var name = Guard.Against.NullOrWhiteSpace(settings.Id.Name);
+
+        var fullPath = ResolveBlobPath(name);
+        if (!await _blobStorage.ExistsAsync(fullPath, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                $"No blueprint exists for '{name}' at '{fullPath}'. Use CreateAsync to add one.");
+        }
+
+        await WriteBlobAsync(fullPath, settings, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(string name, CancellationToken cancellationToken = default)
+    {
+        Guard.Against.NullOrWhiteSpace(name);
+
+        var fullPath = ResolveBlobPath(name);
+        if (!await _blobStorage.ExistsAsync(fullPath, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                $"No blueprint exists for '{name}' at '{fullPath}'.");
+        }
+
+        await _blobStorage.DeleteAsync(fullPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    private string ResolveBlobPath(string name) =>
+        string.IsNullOrEmpty(_path) ? $"{name}.json" : $"{_path.TrimEnd('/')}/{name}.json";
+
+    private static string BlobNameToShellName(string blobName) =>
+        blobName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+            ? blobName[..^".json".Length]
+            : blobName;
+
+    private async Task WriteBlobAsync(string fullPath, ShellSettings settings, CancellationToken cancellationToken)
+    {
+        var config = ToShellConfig(settings);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(config, _jsonOptions);
+        using var stream = new MemoryStream(payload);
+        await _blobStorage.WriteAsync(fullPath, stream, append: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static ShellConfig ToShellConfig(ShellSettings settings)
+    {
+        var features = settings.EnabledFeatures
+            .Select(name => new FeatureEntry { Name = name })
+            .ToList();
+
+        var config = new Dictionary<string, object?>();
+        foreach (var kv in settings.ConfigurationData)
+            config[kv.Key] = kv.Value;
+
+        return new ShellConfig
+        {
+            Name = settings.Id.Name,
+            Features = features,
+            Configuration = config,
+        };
     }
 }

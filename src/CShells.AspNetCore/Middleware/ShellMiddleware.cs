@@ -39,13 +39,6 @@ public class ShellMiddleware(
     /// <summary>Invokes the middleware for the current request.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
-        if (_registry.GetBlueprintNames().Count == 0)
-        {
-            _logger.LogDebug("No shells registered, continuing without shell scope");
-            await _next(context);
-            return;
-        }
-
         var resolutionContext = context.ToShellResolutionContext();
 
         // Prefer the shell that owns the matched endpoint (set by UseRouting before this middleware).
@@ -64,11 +57,24 @@ public class ShellMiddleware(
 
         _logger.LogInformation("Resolved shell '{ShellId}' for request path '{Path}'", shellId.Value, context.Request.Path);
 
-        var shell = _registry.GetActive(shellId.Value.Name);
-        if (shell is null)
+        IShell shell;
+        try
         {
-            _logger.LogWarning("Resolver returned shell '{ShellId}' but it has no Active generation", shellId.Value);
-            await _next(context);
+            // Lazy activation: GetOrActivateAsync returns the active generation if already live,
+            // otherwise looks up the blueprint via the provider, builds the shell, and publishes it.
+            // Stampede-safe — the per-name semaphore serializes concurrent cold-shell requests.
+            shell = await _registry.GetOrActivateAsync(shellId.Value.Name, context.RequestAborted);
+        }
+        catch (ShellBlueprintNotFoundException)
+        {
+            _logger.LogInformation("No blueprint registered for shell '{ShellId}'; returning 404.", shellId.Value);
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        catch (ShellBlueprintUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "Blueprint provider unavailable for shell '{ShellId}'; returning 503.", shellId.Value);
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return;
         }
 

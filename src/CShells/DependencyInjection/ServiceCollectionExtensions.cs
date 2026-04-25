@@ -1,6 +1,7 @@
 using CShells.Features;
 using CShells.Hosting;
 using CShells.Lifecycle;
+using CShells.Lifecycle.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -51,8 +52,31 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<RuntimeFeatureCatalog>(),
             sp.GetService<ILogger<ShellProviderBuilder>>()));
 
+        // Blueprint providers: code-seeded blueprints from AddShell(...) feed into the built-in
+        // InMemoryShellBlueprintProvider. Additional providers are registered via
+        // CShellsBuilder.AddBlueprintProvider (used by configuration + FluentStorage providers).
+        // The composite multiplexes all of them in DI-registration order for lookup precedence.
+        services.TryAddSingleton<InMemoryShellBlueprintProvider>(_ =>
+            new InMemoryShellBlueprintProvider(builder.InlineBlueprints));
+
+        services.TryAddSingleton<CompositeShellBlueprintProvider>(sp =>
+        {
+            var providers = new List<IShellBlueprintProvider>
+            {
+                sp.GetRequiredService<InMemoryShellBlueprintProvider>()
+            };
+            foreach (var factory in builder.ProviderFactories)
+                providers.Add(factory(sp));
+            return new CompositeShellBlueprintProvider(providers);
+        });
+
+        // External callers resolving IShellBlueprintProvider get the composite view (the
+        // aggregate of every source). Registry depends on the concrete composite directly for
+        // type safety and to avoid ambiguity with sub-providers registered as IShellBlueprintProvider.
+        services.TryAddSingleton<IShellBlueprintProvider>(sp => sp.GetRequiredService<CompositeShellBlueprintProvider>());
+
         services.TryAddSingleton<ShellRegistry>(sp => new ShellRegistry(
-            sp.GetServices<IShellBlueprint>(),
+            sp.GetRequiredService<CompositeShellBlueprintProvider>(),
             sp.GetRequiredService<ShellProviderBuilder>(),
             sp,
             sp.GetService<ILogger<ShellRegistry>>(),
@@ -65,6 +89,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ShellLifecycleLogger>();
         services.AddSingleton<IShellLifecycleSubscriber>(sp => sp.GetRequiredService<ShellLifecycleLogger>());
 
+        // Pre-warm list singleton, populated from the builder. Consumed by the startup hosted service.
+        services.TryAddSingleton<PreWarmShellList>(_ => new PreWarmShellList(builder.PreWarmNames));
         services.AddHostedService<CShellsStartupHostedService>();
 
         configure?.Invoke(builder);

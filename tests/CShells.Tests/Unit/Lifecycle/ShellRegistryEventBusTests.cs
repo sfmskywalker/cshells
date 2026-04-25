@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using CShells.Lifecycle;
+using CShells.Lifecycle.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Subscribers receive every transition")]
     public async Task Subscribers_ReceiveEveryTransition()
     {
-        var registry = new ShellRegistry();
+        var registry = new ShellRegistry(EmptyComposite());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         var shell = CreateShellAttachedTo(registry);
@@ -34,7 +35,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Unsubscribe stops event delivery")]
     public async Task Unsubscribe_StopsDelivery()
     {
-        var registry = new ShellRegistry();
+        var registry = new ShellRegistry(EmptyComposite());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         var shell = CreateShellAttachedTo(registry);
@@ -51,7 +52,7 @@ public class ShellRegistryEventBusTests
     {
         var logs = new CollectingLoggerProvider();
         var logger = new LoggerFactory([logs]).CreateLogger<ShellRegistry>();
-        var registry = new ShellRegistry(logger);
+        var registry = new ShellRegistry(EmptyComposite(), logger);
 
         registry.Subscribe(new ThrowingSubscriber("first"));
         var good = new RecordingSubscriber();
@@ -69,7 +70,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Duplicate subscribe is idempotent")]
     public async Task Subscribe_Duplicate_IsIdempotent()
     {
-        var registry = new ShellRegistry();
+        var registry = new ShellRegistry(EmptyComposite());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         registry.Subscribe(subscriber);
@@ -80,27 +81,8 @@ public class ShellRegistryEventBusTests
         Assert.Single(subscriber.Events);
     }
 
-    [Fact(DisplayName = "Blueprint registration: duplicate name throws")]
-    public void RegisterBlueprint_DuplicateName_Throws()
-    {
-        var registry = new ShellRegistry();
-        registry.RegisterBlueprint(new FakeBlueprint("payments"));
-
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            registry.RegisterBlueprint(new FakeBlueprint("Payments"))); // case-insensitive
-
-        Assert.Contains("payments", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact(DisplayName = "GetBlueprintNames returns every registered name")]
-    public void GetBlueprintNames_ReturnsAll()
-    {
-        var registry = new ShellRegistry();
-        registry.RegisterBlueprint(new FakeBlueprint("a"));
-        registry.RegisterBlueprint(new FakeBlueprint("b"));
-
-        Assert.Equal(["a", "b"], registry.GetBlueprintNames().OrderBy(n => n));
-    }
+    private static CompositeShellBlueprintProvider EmptyComposite() =>
+        new([]);
 
     private static Shell CreateShellAttachedTo(ShellRegistry registry)
     {
@@ -125,14 +107,6 @@ public class ShellRegistryEventBusTests
     {
         public Task OnStateChangedAsync(IShell shell, ShellLifecycleState previous, ShellLifecycleState current, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException($"subscriber '{label}' threw");
-    }
-
-    private sealed class FakeBlueprint(string name) : IShellBlueprint
-    {
-        public string Name { get; } = name;
-        public IReadOnlyDictionary<string, string> Metadata { get; } = new Dictionary<string, string>();
-        public Task<ShellSettings> ComposeAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new ShellSettings(new ShellId(Name)));
     }
 
     private sealed class CollectingLoggerProvider : ILoggerProvider
