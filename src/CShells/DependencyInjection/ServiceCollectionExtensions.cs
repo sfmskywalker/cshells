@@ -25,6 +25,15 @@ public static class ServiceCollectionExtensions
     {
         Guard.Against.Null(services);
 
+        // Snapshot whether the host has any pre-existing IShellBlueprintProvider registration.
+        // We use TryAddSingleton below, which silently skips when a prior registration exists —
+        // and silent skipping would mean any AddShell / AddBlueprintProvider builder calls
+        // afterwards have no effect on the actual provider selected at runtime. Detect the
+        // bypass at the END of this method (after `configure` runs) and throw with a teaching
+        // message so the user is never left guessing why their blueprints "disappeared."
+        var hadBlueprintProviderRegistrationBefore =
+            services.Any(d => d.ServiceType == typeof(IShellBlueprintProvider));
+
         // Register the root service collection accessor so the provider builder can copy root
         // service registrations into each shell's service collection.
         services.TryAddSingleton<IRootServiceCollectionAccessor>(
@@ -111,6 +120,27 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<CShellsStartupHostedService>();
 
         configure?.Invoke(builder);
+
+        // Bypass guard: if the host pre-registered IShellBlueprintProvider AND also added
+        // builder-side blueprints (via AddShell or AddBlueprintProvider), the TryAddSingleton
+        // above silently skipped — so the builder state would have no effect at runtime. This
+        // is the same class of failure FR-005 / FR-006 catch at the factory; the difference is
+        // that this case never reaches the factory at all because it was bypassed entirely.
+        // (Hosts that override IShellBlueprintProvider AFTER AddCShells are making a deliberate
+        // replacement and are NOT caught here — that's an advanced extension point we permit.)
+        if (hadBlueprintProviderRegistrationBefore &&
+            (builder.InlineBlueprints.Count > 0 || builder.ProviderFactories.Count > 0))
+        {
+            throw new InvalidOperationException(
+                "CShells detected a pre-existing IShellBlueprintProvider DI registration alongside " +
+                "AddShell or AddBlueprintProvider builder calls on the same host. The builder's " +
+                "blueprints would silently have no effect because the pre-existing registration " +
+                "takes precedence. Resolve this by either: " +
+                "(1) removing the manual IShellBlueprintProvider registration and using " +
+                "AddBlueprintProvider(...) instead so CShells's fail-fast guard can govern it; or " +
+                "(2) removing the AddShell / AddBlueprintProvider builder calls if you intend to " +
+                "manage IShellBlueprintProvider yourself outside the CShells builder.");
+        }
 
         return builder;
     }

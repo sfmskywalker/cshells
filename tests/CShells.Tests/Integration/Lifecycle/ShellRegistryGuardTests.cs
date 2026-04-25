@@ -83,6 +83,54 @@ public class ShellRegistryGuardTests
             () => registry.GetOrActivateAsync("anything"));
     }
 
+    [Fact(DisplayName = "Pre-existing IShellBlueprintProvider DI registration + AddShell throws at AddCShells return")]
+    public void PreExistingProviderRegistration_PlusAddShell_ThrowsAtAddCShells()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        // Host pre-registered a provider directly — bypassing the AddBlueprintProvider seam.
+        services.AddSingleton<IShellBlueprintProvider>(_ => new StubShellBlueprintProvider());
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            services.AddCShells(c => c
+                .WithAssemblies()
+                .AddShell("would-be-lost", _ => { })));
+
+        Assert.Contains("pre-existing IShellBlueprintProvider", ex.Message);
+        Assert.Contains("silently have no effect", ex.Message);
+        Assert.Contains("AddBlueprintProvider", ex.Message);
+    }
+
+    [Fact(DisplayName = "Pre-existing IShellBlueprintProvider DI registration + AddBlueprintProvider also throws")]
+    public void PreExistingProviderRegistration_PlusAddBlueprintProvider_ThrowsAtAddCShells()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IShellBlueprintProvider>(_ => new StubShellBlueprintProvider());
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddCShells(c => c
+                .WithAssemblies()
+                .AddBlueprintProvider(_ => new StubShellBlueprintProvider().Add("a"))));
+    }
+
+    [Fact(DisplayName = "Pre-existing IShellBlueprintProvider DI registration alone (no builder state) is allowed (deliberate override)")]
+    public void PreExistingProviderRegistration_Alone_IsAllowed()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IShellBlueprintProvider>(_ => new StubShellBlueprintProvider().Add("custom"));
+
+        // Should NOT throw — host took deliberate ownership of the binding without conflicting
+        // builder state. The host's provider is what the registry will use.
+        services.AddCShells(c => c.WithAssemblies());
+
+        // The host's provider remains the resolved binding (TryAddSingleton skipped CShells's factory).
+        using var sp = services.BuildServiceProvider();
+        var registry = sp.GetRequiredService<IShellRegistry>();
+        Assert.NotNull(registry);
+    }
+
     [Fact(DisplayName = "Third-party custom IShellBlueprintProvider activates shells identically to shipped providers (SC-008)")]
     public async Task ThirdPartyCustomProvider_RegisteredViaAddBlueprintProvider_ActivatesShellsLikeShippedProviders()
     {
