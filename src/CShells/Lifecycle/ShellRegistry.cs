@@ -459,10 +459,11 @@ internal sealed class ShellRegistry : IShellRegistry
     // =========================================================================
 
     /// <summary>
-    /// Resolves a blueprint from the composite provider, optionally wrapping provider faults in
-    /// <see cref="ShellBlueprintUnavailableException"/>. Activation entry points wrap; the
-    /// public <see cref="GetBlueprintAsync"/> and <see cref="UnregisterBlueprintAsync"/> paths
-    /// do NOT wrap (they want the raw fault for diagnostics).
+    /// Resolves a blueprint from the host's single <see cref="IShellBlueprintProvider"/>,
+    /// optionally wrapping provider faults in <see cref="ShellBlueprintUnavailableException"/>.
+    /// Activation entry points wrap; the public <see cref="GetBlueprintAsync"/> and
+    /// <see cref="UnregisterBlueprintAsync"/> paths do NOT wrap (they want the raw fault for
+    /// diagnostics).
     /// </summary>
     private async Task<ProvidedBlueprint?> LookupBlueprintAsync(string name, bool wrapFault, CancellationToken cancellationToken)
     {

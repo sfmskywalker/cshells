@@ -12,8 +12,8 @@ public sealed class ShellBlueprintNotFoundException : InvalidOperationException
     /// <summary>Initializes a new instance for the given name.</summary>
     public ShellBlueprintNotFoundException(string name)
         : base($"No blueprint is registered for shell '{Guard.Against.NullOrWhiteSpace(name)}'. " +
-               "Check the composite provider's registered sources, or create one via an " +
-               "IShellBlueprintManager if the host has a mutable source.")
+               "Check the registered IShellBlueprintProvider, or create the blueprint via the " +
+               "provider's IShellBlueprintManager if the source is mutable.")
     {
         Name = name;
     }

@@ -144,9 +144,11 @@ public class CShellsBuilder
     }
 
     /// <summary>
-    /// Registers an additional <see cref="IShellBlueprintProvider"/> resolved from DI at
-    /// composite-construction time. Providers are probed in registration order for lookup
-    /// precedence.
+    /// Registers the host's external <see cref="IShellBlueprintProvider"/>, resolved from DI
+    /// when the registry first needs it. Exactly one external provider is permitted per host;
+    /// calling this method more than once — or calling it alongside <see cref="AddShell"/> —
+    /// raises <see cref="InvalidOperationException"/> at startup with a teaching message that
+    /// names the conflict and enumerates the valid resolutions.
     /// </summary>
     public CShellsBuilder AddBlueprintProvider(Func<IServiceProvider, IShellBlueprintProvider> factory)
     {

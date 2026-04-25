@@ -35,8 +35,9 @@ public static class CShellsBuilderExtensions
 
             var provider = new FluentStorageShellBlueprintProvider(blobStorage, path, jsonOptions);
 
-            // Register once; consumed by the composite provider factory (reads via
-            // IShellBlueprintProvider) and by anything that directly requests the manager.
+            // Register once: the registry consumes the provider via the single
+            // IShellBlueprintProvider DI binding selected by the framework's factory; the manager
+            // is also exposed independently for callers that hold a manager reference directly.
             builder.Services.AddSingleton(provider);
             builder.Services.AddSingleton<IShellBlueprintManager>(provider);
             builder.AddBlueprintProvider(_ => provider);

@@ -101,8 +101,9 @@ public interface IShellRegistry
     // =========================================================================
 
     /// <summary>
-    /// Returns the blueprint registered for <paramref name="name"/> via the composite provider,
-    /// without activating a shell. Returns <c>null</c> when no provider claims the name.
+    /// Returns the blueprint registered for <paramref name="name"/> via the host's single
+    /// <see cref="IShellBlueprintProvider"/>, without activating a shell. Returns <c>null</c>
+    /// when the provider does not claim the name.
     /// </summary>
     /// <remarks>
     /// Provider exceptions propagate raw — this method does NOT wrap in
