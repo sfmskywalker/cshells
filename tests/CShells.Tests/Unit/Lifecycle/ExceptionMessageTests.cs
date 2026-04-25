@@ -24,17 +24,6 @@ public class ExceptionMessageTests
         Assert.Contains("Configuration", ex.Message);
     }
 
-    [Fact(DisplayName = "DuplicateBlueprintException lists both provider types")]
-    public void Duplicate_NamesBothProviders()
-    {
-        var ex = new DuplicateBlueprintException("acme", typeof(string), typeof(int));
-        Assert.Equal("acme", ex.Name);
-        Assert.Equal(typeof(string), ex.FirstProviderType);
-        Assert.Equal(typeof(int), ex.SecondProviderType);
-        Assert.Contains("String", ex.Message);
-        Assert.Contains("Int32", ex.Message);
-    }
-
     [Fact(DisplayName = "ShellBlueprintUnavailableException wraps inner cause")]
     public void Unavailable_WrapsInner()
     {

@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using CShells.Lifecycle;
-using CShells.Lifecycle.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,13 +10,13 @@ namespace CShells.Lifecycle;
 /// <summary>
 /// Default <see cref="IShellRegistry"/> implementation. Holds the in-memory index of
 /// <b>active</b> shell generations; delegates blueprint lookup and catalogue listing to the
-/// injected <see cref="CompositeShellBlueprintProvider"/>.
+/// single injected <see cref="IShellBlueprintProvider"/>.
 /// </summary>
 internal sealed class ShellRegistry : IShellRegistry
 {
     private readonly ShellProviderBuilder? _providerBuilder;
     private readonly IServiceProvider? _rootProvider;
-    private readonly CompositeShellBlueprintProvider _blueprintProvider;
+    private readonly IShellBlueprintProvider _blueprintProvider;
     private readonly ILogger<ShellRegistry> _logger;
     private readonly ConcurrentDictionary<string, NameSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
     // Lazy wrapper: `ConcurrentDictionary.GetOrAdd(key, factory)` does NOT guarantee the factory
@@ -28,7 +27,7 @@ internal sealed class ShellRegistry : IShellRegistry
     private ImmutableList<IShellLifecycleSubscriber> _subscribers = [];
 
     public ShellRegistry(
-        CompositeShellBlueprintProvider blueprintProvider,
+        IShellBlueprintProvider blueprintProvider,
         ShellProviderBuilder? providerBuilder = null,
         IServiceProvider? rootProvider = null,
         ILogger<ShellRegistry>? logger = null,
@@ -52,7 +51,7 @@ internal sealed class ShellRegistry : IShellRegistry
     }
 
     // Convenience ctor used by tests that don't need the provider-build pipeline.
-    internal ShellRegistry(CompositeShellBlueprintProvider blueprintProvider, ILogger<ShellRegistry>? logger)
+    internal ShellRegistry(IShellBlueprintProvider blueprintProvider, ILogger<ShellRegistry>? logger)
         : this(blueprintProvider, providerBuilder: null, rootProvider: null, logger, subscribers: null)
     {
     }
@@ -460,10 +459,11 @@ internal sealed class ShellRegistry : IShellRegistry
     // =========================================================================
 
     /// <summary>
-    /// Resolves a blueprint from the composite provider, optionally wrapping provider faults in
-    /// <see cref="ShellBlueprintUnavailableException"/>. Activation entry points wrap; the
-    /// public <see cref="GetBlueprintAsync"/> and <see cref="UnregisterBlueprintAsync"/> paths
-    /// do NOT wrap (they want the raw fault for diagnostics).
+    /// Resolves a blueprint from the host's single <see cref="IShellBlueprintProvider"/>,
+    /// optionally wrapping provider faults in <see cref="ShellBlueprintUnavailableException"/>.
+    /// Activation entry points wrap; the public <see cref="GetBlueprintAsync"/> and
+    /// <see cref="UnregisterBlueprintAsync"/> paths do NOT wrap (they want the raw fault for
+    /// diagnostics).
     /// </summary>
     private async Task<ProvidedBlueprint?> LookupBlueprintAsync(string name, bool wrapFault, CancellationToken cancellationToken)
     {
@@ -480,12 +480,11 @@ internal sealed class ShellRegistry : IShellRegistry
     /// <summary>
     /// Decides whether a provider exception should be wrapped as
     /// <see cref="ShellBlueprintUnavailableException"/> (→ HTTP 503) or propagated as-is.
-    /// Structured configuration errors (duplicate blueprint, not-found, cancellation) are
-    /// deterministic signals that should NOT be masked as transient "unavailable".
+    /// Structured signals (not-found, cancellation) are deterministic and should NOT be
+    /// masked as transient "unavailable".
     /// </summary>
     private static bool ShouldWrapAsUnavailable(Exception ex) =>
         ex is not ShellBlueprintNotFoundException &&
-        ex is not DuplicateBlueprintException &&
         ex is not OperationCanceledException;
 
     private void EnsureProviderBuilder()

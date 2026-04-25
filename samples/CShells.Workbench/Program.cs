@@ -36,7 +36,7 @@ app.MapGet("/_shells/status", async (IShellRegistry registry) =>
     string? cursor = null;
     do
     {
-        var page = await registry.ListAsync(new ShellListQuery(Cursor: cursor, Limit: 100));
+        var page = await registry.ListAsync(new(Cursor: cursor, Limit: 100));
         foreach (var summary in page.Items)
         {
             entries.Add(new
@@ -44,7 +44,7 @@ app.MapGet("/_shells/status", async (IShellRegistry registry) =>
                 name = summary.Name,
                 source = summary.SourceId,
                 mutable = summary.Mutable,
-                active = summary.ActiveGeneration is int gen ? new
+                active = summary.ActiveGeneration is { } gen ? new
                 {
                     generation = gen,
                     state = summary.State?.ToString(),

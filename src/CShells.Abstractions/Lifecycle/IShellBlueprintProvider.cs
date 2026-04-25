@@ -7,9 +7,12 @@ namespace CShells.Lifecycle;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Multiple providers can be registered in DI; the built-in <c>CompositeShellBlueprintProvider</c>
-/// multiplexes them, preserving DI-registration order for lookup precedence and detecting
-/// duplicate names lazily at first collision.
+/// Exactly one implementation is registered per host. Code-defined shells use the built-in
+/// <c>InMemoryShellBlueprintProvider</c> (populated via <c>CShellsBuilder.AddShell</c>);
+/// external sources register their own implementation via
+/// <c>CShellsBuilder.AddBlueprintProvider</c>. Mixing the two is rejected at composition time.
+/// First- and third-party implementations are equally welcome — this is the framework's open
+/// extension seam for blueprint sourcing.
 /// </para>
 /// <para>
 /// A provider wrapping a mutable source (e.g., a blob container or a SQL table) pairs the

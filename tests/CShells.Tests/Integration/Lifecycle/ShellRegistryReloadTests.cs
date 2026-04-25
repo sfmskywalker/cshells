@@ -65,15 +65,14 @@ public class ShellRegistryReloadTests
     {
         await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
             .WithAssemblyContaining<ShellRegistryReloadTests>()
-            .AddShell("flaky", _ => { }));
+            .AddShell("flaky", _ => { })
+            .AddBlueprint(new FailingOnReloadBlueprint("unstable")));
         var registry = host.GetRequiredService<IShellRegistry>();
 
         var gen1 = await registry.ActivateAsync("flaky");
 
-        // Swap in a throwing blueprint by registering via the registry API path is not
-        // possible for an already-registered name. Instead, simulate by piping ThrowingBlueprint
-        // on a different name and asserting the error flow.
-        host.GetRequiredService<InMemoryShellBlueprintProvider>().Add(new FailingOnReloadBlueprint("unstable"));
+        // The throwing blueprint was registered upfront — calling Reload triggers its
+        // ComposeAsync, which throws and is captured into ReloadResult.Error.
         var result = await registry.ReloadAsync("unstable");
 
         Assert.NotNull(result.Error);

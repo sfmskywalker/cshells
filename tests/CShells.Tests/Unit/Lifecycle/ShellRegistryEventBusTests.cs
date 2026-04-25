@@ -16,7 +16,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Subscribers receive every transition")]
     public async Task Subscribers_ReceiveEveryTransition()
     {
-        var registry = new ShellRegistry(EmptyComposite());
+        var registry = new ShellRegistry(EmptyProvider());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         var shell = CreateShellAttachedTo(registry);
@@ -35,7 +35,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Unsubscribe stops event delivery")]
     public async Task Unsubscribe_StopsDelivery()
     {
-        var registry = new ShellRegistry(EmptyComposite());
+        var registry = new ShellRegistry(EmptyProvider());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         var shell = CreateShellAttachedTo(registry);
@@ -52,7 +52,7 @@ public class ShellRegistryEventBusTests
     {
         var logs = new CollectingLoggerProvider();
         var logger = new LoggerFactory([logs]).CreateLogger<ShellRegistry>();
-        var registry = new ShellRegistry(EmptyComposite(), logger);
+        var registry = new ShellRegistry(EmptyProvider(), logger);
 
         registry.Subscribe(new ThrowingSubscriber("first"));
         var good = new RecordingSubscriber();
@@ -70,7 +70,7 @@ public class ShellRegistryEventBusTests
     [Fact(DisplayName = "Duplicate subscribe is idempotent")]
     public async Task Subscribe_Duplicate_IsIdempotent()
     {
-        var registry = new ShellRegistry(EmptyComposite());
+        var registry = new ShellRegistry(EmptyProvider());
         var subscriber = new RecordingSubscriber();
         registry.Subscribe(subscriber);
         registry.Subscribe(subscriber);
@@ -81,8 +81,8 @@ public class ShellRegistryEventBusTests
         Assert.Single(subscriber.Events);
     }
 
-    private static CompositeShellBlueprintProvider EmptyComposite() =>
-        new([]);
+    private static IShellBlueprintProvider EmptyProvider() =>
+        new InMemoryShellBlueprintProvider();
 
     private static Shell CreateShellAttachedTo(ShellRegistry registry)
     {

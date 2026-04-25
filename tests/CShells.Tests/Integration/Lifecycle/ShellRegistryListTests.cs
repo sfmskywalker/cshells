@@ -8,18 +8,18 @@ namespace CShells.Tests.Integration.Lifecycle;
 
 public class ShellRegistryListTests
 {
-    [Fact(DisplayName = "ListAsync pages a catalogue of 1000 across two providers with Limit=100 → 10 pages, each name once")]
+    [Fact(DisplayName = "ListAsync pages a catalogue of 1000 with Limit=100 → 10 pages, each name once")]
     public async Task ListAsync_Pages1000_In10PagesOf100()
     {
-        var a = new StubShellBlueprintProvider();
+        // 008: single-provider model. The 1000-entry catalogue is served by one provider
+        // (previously split across two stubs in the 007 multi-provider test).
+        var provider = new StubShellBlueprintProvider();
         for (var i = 0; i < 500; i++)
-            a.Add($"a-{i:D4}");
-
-        var b = new StubShellBlueprintProvider();
+            provider.Add($"a-{i:D4}");
         for (var i = 0; i < 500; i++)
-            b.Add($"b-{i:D4}");
+            provider.Add($"b-{i:D4}");
 
-        await using var host = BuildHostWith(a, b);
+        await using var host = BuildHostWith(provider);
         var registry = host.GetRequiredService<IShellRegistry>();
 
         var allNames = new List<string>();
