@@ -33,6 +33,12 @@ internal sealed class Shell(
     // shutdown, see CShellsStartupHostedService).
     private Task? _disposeTask;
 
+    // CAS-published in-flight drain. Non-null while State is Deactivating/Draining/Drained;
+    // cleared back to null in DisposeCoreAsync to break the reference cycle for GC. The
+    // registry calls PublishDrain(...) once per generation; subsequent concurrent callers
+    // observe the published instance and return early.
+    private DrainOperation? _drain;
+
     /// <inheritdoc />
     public ShellDescriptor Descriptor { get; } = Guard.Against.Null(descriptor);
 
@@ -41,6 +47,21 @@ internal sealed class Shell(
 
     /// <inheritdoc />
     public ShellLifecycleState State => (ShellLifecycleState)Volatile.Read(ref _state);
+
+    /// <inheritdoc />
+    public IDrainOperation? Drain => Volatile.Read(ref _drain);
+
+    /// <summary>
+    /// CAS-publishes <paramref name="candidate"/> as the in-flight drain operation for this shell.
+    /// Returns the winner — equal to <paramref name="candidate"/> on the first call, or the
+    /// previously-published instance for any subsequent concurrent caller. Idempotent.
+    /// </summary>
+    internal DrainOperation PublishDrain(DrainOperation candidate)
+    {
+        Guard.Against.Null(candidate);
+        var winner = Interlocked.CompareExchange(ref _drain, candidate, null);
+        return winner ?? candidate;
+    }
 
     /// <summary>Current active-scope count. Exposed for diagnostics.</summary>
     internal int ActiveScopeCount => Volatile.Read(ref _activeScopes);
@@ -178,6 +199,13 @@ internal sealed class Shell(
     {
         try
         {
+            // Clear the drain reference BEFORE advancing to Disposed so subscribers notified of
+            // the Drained → Disposed transition observe the documented IShell.Drain invariant
+            // ("null when the state is Disposed") at the moment of the transition. Also breaks
+            // the Shell ↔ DrainOperation reference cycle so both become GC-eligible together
+            // once the registry releases its slot reference.
+            Volatile.Write(ref _drain, null);
+
             await ForceAdvanceAsync(ShellLifecycleState.Disposed).ConfigureAwait(false);
 
             switch (ServiceProvider)

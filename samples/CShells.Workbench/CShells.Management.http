@@ -1,0 +1,135 @@
+# =====================================================================
+# CShells Management API — request collection for the Workbench sample.
+#
+# The Workbench wires `app.MapShellManagementApi("/_admin/shells")` in
+# Program.cs (sample-only — unprotected). Three shells are pre-warmed at
+# startup: Default, Acme, Contoso.
+#
+# These requests target the dev profile defined in http-client.env.json.
+# Pick "dev" in your IDE's HTTP-client environment selector.
+# =====================================================================
+
+
+### --- Catalogue ---------------------------------------------------------
+# Paginated list of every shell + active-generation state.
+
+GET {{SampleApp_HostAddress}}/_admin/shells/
+Accept: application/json
+
+###
+
+# Page size override (forwards into ShellListQuery.Limit).
+
+GET {{SampleApp_HostAddress}}/_admin/shells/?pageSize=2
+Accept: application/json
+
+###
+
+
+### --- Inspect one shell -------------------------------------------------
+# Focused view: registered blueprint + every still-held generation +
+# per-generation drain snapshot. Poll this during a reload to watch the
+# previous generation move through Deactivating → Draining → Drained.
+
+GET {{SampleApp_HostAddress}}/_admin/shells/Default
+Accept: application/json
+
+###
+
+GET {{SampleApp_HostAddress}}/_admin/shells/Acme
+Accept: application/json
+
+###
+
+GET {{SampleApp_HostAddress}}/_admin/shells/Contoso
+Accept: application/json
+
+###
+
+# Just the registered blueprint, without activating. Includes
+# ConfigurationData verbatim — see XML doc-comments on
+# MapShellManagementApi for the security implications.
+
+GET {{SampleApp_HostAddress}}/_admin/shells/Default/blueprint
+Accept: application/json
+
+###
+
+
+### --- Reload a single shell ---------------------------------------------
+# Returns a ReloadResult: new generation + lifecycle state + a snapshot
+# of the in-flight drain on the previous generation.
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload/Default
+
+###
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload/Acme
+
+###
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload/Contoso
+
+###
+
+
+### --- Reload all active shells ------------------------------------------
+# Returns an array of ReloadResult — one entry per active shell. Partial
+# failures do NOT abort the batch; entries carry a per-shell `error` field.
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload-all
+
+###
+
+# Serial reload — useful for reproducing contention bugs.
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload-all?maxDegreeOfParallelism=1
+
+###
+
+# Maximum parallelism (capped at 64 by ReloadOptions; values outside
+# [1, 64] return 400 Bad Request with a problem-details body).
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload-all?maxDegreeOfParallelism=64
+
+###
+
+
+### --- Force every in-flight drain on a shell ----------------------------
+# Returns an array of DrainResult, one per forced generation. 404 if
+# nothing is currently draining for the named shell.
+#
+# Tip: trigger a reload (above) just before this call to observe a
+# non-empty array; otherwise expect 404 because no drain is in flight.
+
+POST {{SampleApp_HostAddress}}/_admin/shells/Default/force-drain
+
+###
+
+POST {{SampleApp_HostAddress}}/_admin/shells/Acme/force-drain
+
+###
+
+
+### --- Error-mapping smoke checks ----------------------------------------
+# These exercise FR-013 status mappings.
+
+# Unknown shell name → 404 Not Found (problem-details).
+POST {{SampleApp_HostAddress}}/_admin/shells/reload/does-not-exist
+
+###
+
+# Unknown shell name on the focused view → 404.
+GET {{SampleApp_HostAddress}}/_admin/shells/does-not-exist
+Accept: application/json
+
+###
+
+# Out-of-range parallelism → 400 Bad Request (problem-details).
+POST {{SampleApp_HostAddress}}/_admin/shells/reload-all?maxDegreeOfParallelism=0
+
+###
+
+POST {{SampleApp_HostAddress}}/_admin/shells/reload-all?maxDegreeOfParallelism=65
+
+###

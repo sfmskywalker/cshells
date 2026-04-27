@@ -47,4 +47,35 @@ public interface IShell
     /// permitted — the new scope joins the active-scope counter.
     /// </exception>
     IShellScope BeginScope();
+
+    /// <summary>
+    /// Gets the in-flight drain operation associated with this generation, or <c>null</c>
+    /// when no drain is in flight.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Steady state — once a generation has settled in a given lifecycle state — the value is
+    /// non-null when <see cref="State"/> is <see cref="ShellLifecycleState.Deactivating"/>,
+    /// <see cref="ShellLifecycleState.Draining"/>, or <see cref="ShellLifecycleState.Drained"/>;
+    /// null when the state is <see cref="ShellLifecycleState.Initializing"/>,
+    /// <see cref="ShellLifecycleState.Active"/>, or <see cref="ShellLifecycleState.Disposed"/>.
+    /// </para>
+    /// <para>
+    /// The binding is a snapshot, not an atomic invariant. State and drain are advanced by
+    /// independent volatile writes, so a concurrent observer can briefly see (a)
+    /// <see cref="ShellLifecycleState.Deactivating"/> with a null <see cref="Drain"/> (the
+    /// drain has not yet been published), or (b) <see cref="ShellLifecycleState.Drained"/>
+    /// with a null <see cref="Drain"/> (the drain reference has been cleared ahead of the
+    /// transition into <see cref="ShellLifecycleState.Disposed"/>). Consumers that read
+    /// <see cref="Drain"/> after a separate <see cref="State"/> check MUST handle a null
+    /// result gracefully.
+    /// </para>
+    /// <para>
+    /// The reference returned is the same instance any concurrent caller of
+    /// <see cref="IShellRegistry.DrainAsync"/> would receive for this shell — exposing it
+    /// directly makes per-generation drain observability possible without round-tripping
+    /// through the registry.
+    /// </para>
+    /// </remarks>
+    IDrainOperation? Drain { get; }
 }

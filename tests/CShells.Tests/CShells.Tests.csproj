@@ -3,10 +3,15 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\CShells\CShells.csproj"/>
         <ProjectReference Include="..\..\src\CShells.AspNetCore\CShells.AspNetCore.csproj"/>
+        <ProjectReference Include="..\..\src\CShells.Management.Api\CShells.Management.Api.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
     </ItemGroup>
 
 </Project>

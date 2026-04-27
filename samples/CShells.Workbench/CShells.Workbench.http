@@ -3,11 +3,8 @@ Accept: application/json
 
 ###
 
-GET {{SampleApp_HostAddress}}/_shells/status
-Accept: application/json
-
-###
-
+# For shell-registry diagnostics + reload + drain endpoints,
+# see CShells.Management.http (mapped under /_admin/shells).
 
 GET {{SampleApp_HostAddress}}/acme/
 Accept: application/json

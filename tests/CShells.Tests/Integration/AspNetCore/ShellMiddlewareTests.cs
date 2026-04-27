@@ -226,6 +226,7 @@ public class ShellMiddlewareTests
         public ShellDescriptor Descriptor { get; } = descriptor;
         public ShellLifecycleState State => ShellLifecycleState.Active;
         public IServiceProvider ServiceProvider { get; } = provider;
+        public IDrainOperation? Drain => null;
         public int ActiveScopeCount => Volatile.Read(ref _activeScopes);
 
         public IShellScope BeginScope()

@@ -50,17 +50,24 @@ The Analytics feature demonstrates `IConfigurableFeature<AnalyticsOptions>` with
 
 `ShellDemoWorker` demonstrates running background tasks within each shell's service scope using `IShellRegistry` and `IShell.BeginScope()`.
 
-### 6. Desired vs. Applied Runtime Status
+### 6. Manual Testing via the Management API
 
-The sample now exposes a host-level diagnostic endpoint at `GET /_shells/status`. It shows, for each configured shell:
+The sample wires `CShells.Management.Api` under `/_admin/shells` so you can poke the
+shell-reload and drain-lifecycle mechanics over HTTP without writing any code:
 
-- the latest desired generation
-- the currently applied generation (if any)
-- whether the shell is in sync
-- whether it is currently routable
-- any blocking reason / missing features
+| Verb | Path | Purpose |
+|------|------|---------|
+| `GET` | `/_admin/shells/` | Paginated catalogue of every shell (with active-gen state). |
+| `GET` | `/_admin/shells/{name}` | Focused view: blueprint + every live generation + per-gen drain snapshot. |
+| `GET` | `/_admin/shells/{name}/blueprint` | Registered blueprint (incl. `ConfigurationData`) without activating. |
+| `POST` | `/_admin/shells/reload/{name}` | Reload a single shell; response carries new generation + drain snapshot. |
+| `POST` | `/_admin/shells/reload-all` | Reload every active shell. Optional `?maxDegreeOfParallelism=N`. |
+| `POST` | `/_admin/shells/{name}/force-drain` | Force every in-flight drain on the shell to terminate. |
 
-This helps demonstrate the deferred-activation behavior: configured shells can exist without exposing shell-owned routes until an applied runtime is committed.
+> ⚠️ **The Workbench wires these endpoints unprotected — sample only.** In production,
+> chain `.RequireAuthorization(...)` on the returned `RouteGroupBuilder`. The endpoints
+> expose direct control over the registry and return registered `ConfigurationData`
+> verbatim (which may contain secrets).
 
 ## Running
 
@@ -71,10 +78,9 @@ dotnet run
 
 ## Example Requests
 
-```bash
-# Desired vs. applied runtime status for all configured shells
-curl http://localhost:5031/_shells/status
+### Tenant routes
 
+```bash
 # Default shell (Free plan) — info
 curl http://localhost:5031/
 
@@ -102,11 +108,31 @@ curl http://localhost:5031/acme/posts/1/comments
 curl http://localhost:5031/contoso/analytics
 ```
 
+### Management API (sample-only, unprotected)
+
+```bash
+# List every shell + active-gen state
+curl http://localhost:5031/_admin/shells/
+
+# Focused view of one shell — generations array shows in-flight drains
+curl http://localhost:5031/_admin/shells/Default
+
+# Reload a single shell
+curl -X POST http://localhost:5031/_admin/shells/reload/Default
+
+# Reload every active shell (default parallelism = 8; optional override below)
+curl -X POST http://localhost:5031/_admin/shells/reload-all
+curl -X POST 'http://localhost:5031/_admin/shells/reload-all?maxDegreeOfParallelism=1'
+
+# Force every in-flight drain on a shell to terminate
+curl -X POST http://localhost:5031/_admin/shells/Default/force-drain
+```
+
 ## Applied-Only Routing Notes
 
 - Shell-owned routes such as `/`, `/acme/*`, and `/contoso/*` are exposed only for **applied** shells.
 - If the explicit `Default` shell is configured but cannot currently be applied, CShells does **not** silently route `/` to another tenant.
-- The `/_shells/status` endpoint is host-owned, so you can still inspect desired-vs-applied state while a shell is deferred.
+- The `/_admin/shells/` endpoint (host-owned, host-protected in production) lets you inspect catalogue + lifecycle state while a shell is deferred.
 
 ## Project Structure
 
