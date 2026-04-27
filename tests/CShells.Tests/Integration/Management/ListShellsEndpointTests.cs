@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CShells.Lifecycle;
 using CShells.Management.Api.Models;
 
 namespace CShells.Tests.Integration.Management;
@@ -71,5 +72,50 @@ public class ListShellsEndpointTests
         Assert.NotNull(page);
         Assert.Empty(page.Items);
         Assert.Null(page.NextCursor);
+    }
+
+    [Fact(DisplayName = "List degrades gracefully when one blueprint source fails (Greptile PR-91 P1)")]
+    public async Task List_OneBlueprintFails_StillReturns200_WithNullBlueprintForFailingRow()
+    {
+        var stub = new SelectivelyFailingProvider(failOnName: "broken")
+            .Add("good-1")
+            .Add("broken")
+            .Add("good-2");
+
+        await using var fixture = new ManagementApiFixture(c => c.AddBlueprintProvider(_ => stub));
+
+        var page = await fixture.GetJsonAsync<ShellPageResponse>("/admin/");
+        Assert.NotNull(page);
+        Assert.Equal(3, page.Items.Count);
+
+        var byName = page.Items.ToDictionary(i => i.Name);
+        Assert.NotNull(byName["good-1"].Blueprint);
+        Assert.NotNull(byName["good-2"].Blueprint);
+        Assert.Null(byName["broken"].Blueprint); // graceful null, not an aborted page
+    }
+
+    /// <summary>
+    /// Returns a blueprint for every name except <c>failOnName</c>, which surfaces as a
+    /// <see cref="ShellBlueprintUnavailableException"/> via the registry's wrap-on-throw.
+    /// </summary>
+    private sealed class SelectivelyFailingProvider(string failOnName) : IShellBlueprintProvider
+    {
+        private readonly TestHelpers.StubShellBlueprintProvider _inner = new();
+
+        public SelectivelyFailingProvider Add(string name)
+        {
+            _inner.Add(name);
+            return this;
+        }
+
+        public Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken cancellationToken = default)
+        {
+            if (string.Equals(name, failOnName, StringComparison.OrdinalIgnoreCase))
+                throw new ApplicationException($"blueprint source unreachable for '{name}'");
+            return _inner.GetAsync(name, cancellationToken);
+        }
+
+        public Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken cancellationToken = default)
+            => _inner.ListAsync(query, cancellationToken);
     }
 }

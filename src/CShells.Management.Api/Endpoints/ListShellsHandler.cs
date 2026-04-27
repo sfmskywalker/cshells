@@ -30,11 +30,27 @@ internal static class ListShellsHandler
 
             // Per-summary blueprint enrichment runs concurrently — for configuration-backed
             // providers each ComposeAsync re-reads IConfiguration, so a 100-row page would
-            // otherwise serialize 100 lookups.
+            // otherwise serialize 100 lookups. Per-row failures degrade gracefully to a null
+            // Blueprint rather than failing the whole page; consistent with ReloadAllHandler's
+            // "partial-failure tolerant" semantics — one flaky source must not knock the
+            // monitoring endpoint offline.
             var items = await Task.WhenAll(page.Items.Select(async summary =>
             {
-                var blueprint = await DtoMappers.MapBlueprintAsync(
-                    await registry.GetBlueprintAsync(summary.Name, ct), ct);
+                BlueprintResponse? blueprint = null;
+                try
+                {
+                    blueprint = await DtoMappers.MapBlueprintAsync(
+                        await registry.GetBlueprintAsync(summary.Name, ct), ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // GetBlueprintAsync propagates provider exceptions raw (per its
+                    // doc-comment), and ComposeAsync can also throw if a configuration source
+                    // is mid-edit. Surface as null; the row still appears in the page with
+                    // its name + active state. Cancellation (host shutdown) is allowed to
+                    // propagate to the outer catch so the whole response becomes 503.
+                }
+
                 var active = summary.ActiveGeneration is not null
                     ? registry.GetActive(summary.Name)
                     : null;
