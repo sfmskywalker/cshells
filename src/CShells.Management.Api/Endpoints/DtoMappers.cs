@@ -10,9 +10,6 @@ namespace CShells.Management.Api.Endpoints;
 /// </summary>
 internal static class DtoMappers
 {
-    public static DrainSnapshot? MapDrain(IDrainOperation? drain) =>
-        drain is null ? null : new DrainSnapshot(drain.Status.ToString(), drain.Deadline);
-
     public static ShellGenerationResponse MapGeneration(IShell shell) =>
         new(
             Generation: shell.Descriptor.Generation,
@@ -28,7 +25,7 @@ internal static class DtoMappers
         // ComposeAsync is documented as re-invocable and side-effect-free, so it's safe to
         // call here to materialize features + ConfigurationData for the response.
         var settings = await provided.Blueprint.ComposeAsync(ct).ConfigureAwait(false);
-        return new BlueprintResponse(
+        return new(
             Name: provided.Blueprint.Name,
             Features: settings.EnabledFeatures.ToArray(),
             ConfigurationData: settings.ConfigurationData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
@@ -53,10 +50,12 @@ internal static class DtoMappers
             AbandonedScopeCount: result.AbandonedScopeCount,
             HandlerResults: result.HandlerResults.Select(MapHandlerResult).ToArray());
 
-    public static DrainHandlerResultResponse MapHandlerResult(DrainHandlerResult hr) =>
+    private static DrainHandlerResultResponse MapHandlerResult(DrainHandlerResult hr) =>
         new(
             HandlerType: hr.HandlerTypeName,
             Outcome: hr.Completed ? "Completed" : (hr.Error is not null ? "Faulted" : "Cancelled"),
             Elapsed: hr.Elapsed,
             ErrorMessage: hr.Error?.Message);
+    
+    private static DrainSnapshot? MapDrain(IDrainOperation? drain) => drain is null ? null : new DrainSnapshot(drain.Status.ToString(), drain.Deadline);
 }

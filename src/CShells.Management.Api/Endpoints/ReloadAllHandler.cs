@@ -22,12 +22,12 @@ internal static class ReloadAllHandler
             ReloadOptions options;
             if (maxDegreeOfParallelism is { } parallelism)
             {
-                options = new ReloadOptions(parallelism);
+                options = new(parallelism);
                 options.EnsureValid();
             }
             else
             {
-                options = new ReloadOptions();
+                options = new();
             }
 
             var results = await registry.ReloadActiveAsync(options, ct);
