@@ -81,6 +81,24 @@ public class GetShellEndpointTests
         Assert.Empty(detail.Generations);
     }
 
+    [Fact(DisplayName = "GetShell surfaces live generations when blueprint provider is unavailable (Greptile PR-91 P1)")]
+    public async Task GetShell_BlueprintProviderTransientlyUnavailable_StillSurfacesLiveGenerations()
+    {
+        var stub = new TestHelpers.StubShellBlueprintProvider().Add("acme");
+        await using var fixture = new ManagementApiFixture(c => c.AddBlueprintProvider(_ => stub));
+        await fixture.Registry.GetOrActivateAsync("acme");
+
+        // Break the blueprint store after activation — focused view must still surface the
+        // live active generation, with a null Blueprint, rather than 503-ing the whole call.
+        stub.ThrowOnGet = new ApplicationException("blueprint store transiently unavailable");
+
+        var detail = await fixture.GetJsonAsync<ShellDetailResponse>("/admin/acme");
+        Assert.NotNull(detail);
+        Assert.Null(detail.Blueprint);
+        Assert.Single(detail.Generations);
+        Assert.Equal(ShellLifecycleState.Active.ToString(), detail.Generations[0].State);
+    }
+
     [Fact(DisplayName = "GetShell of an unknown name returns 404")]
     public async Task GetShell_UnknownName_Returns404()
     {

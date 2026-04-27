@@ -23,15 +23,23 @@ internal static class ForceDrainHandler
         try
         {
             var allGenerations = registry.GetAll(name);
-            var blueprint = await registry.GetBlueprintAsync(name, ct);
 
-            if (allGenerations.Count == 0 && blueprint is null)
+            // Only consult the blueprint provider when no generations exist — that's the
+            // only path that needs the blueprint to distinguish "registered but inactive"
+            // from "completely unknown". When generations exist, the shell's identity is
+            // already established by the in-memory registry, and force-drain (an emergency
+            // operation) MUST NOT be blocked by a transiently unavailable blueprint store.
+            if (allGenerations.Count == 0)
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status404NotFound,
-                    title: "Not Found",
-                    detail: $"Shell '{name}' is not known to the registry.",
-                    instance: ctx.Request.Path);
+                var blueprint = await registry.GetBlueprintAsync(name, ct);
+                if (blueprint is null)
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status404NotFound,
+                        title: "Not Found",
+                        detail: $"Shell '{name}' is not known to the registry.",
+                        instance: ctx.Request.Path);
+                }
             }
 
             // Filter to in-flight drains (Deactivating/Draining). Drained generations are

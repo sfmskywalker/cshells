@@ -20,7 +20,19 @@ internal static class GetShellHandler
     {
         try
         {
-            var blueprint = await registry.GetBlueprintAsync(name, ct);
+            // Blueprint fetch is best-effort — a transiently-unavailable blueprint store must
+            // not silence live-generation data on a monitoring endpoint. Matches the
+            // partial-failure-tolerance pattern in ListShellsHandler. Cancellation
+            // (host shutdown) is allowed to propagate to the outer catch.
+            ProvidedBlueprint? blueprint = null;
+            try
+            {
+                blueprint = await registry.GetBlueprintAsync(name, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Surface as null blueprint; the response still carries live generations.
+            }
 
             // Per FR-011, surface every generation NOT yet disposed. The registry retains
             // disposed shells in its in-memory slot, but they are no longer "live" from the

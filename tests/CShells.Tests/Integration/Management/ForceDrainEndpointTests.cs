@@ -82,6 +82,32 @@ public class ForceDrainEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact(DisplayName = "Force-drain proceeds when generations exist even if blueprint provider is unavailable (Greptile PR-91 P1)")]
+    public async Task ForceDrain_BlueprintProviderTransientlyUnavailable_StillForcesInflightDrains()
+    {
+        var stub = new ProviderWithGetSwitch();
+        stub.AddBlueprint("acme", configure: s => s.WithFeature<MgmtStuckDrainFeature>());
+
+        await using var fixture = new ManagementApiFixture(c => c
+            .WithAssemblyContaining<ForceDrainEndpointTests>()
+            .AddBlueprintProvider(_ => stub));
+
+        await fixture.Registry.GetOrActivateAsync("acme");
+        await fixture.PostAsync("/admin/reload/acme");
+
+        // Now break the blueprint provider — force-drain MUST still succeed because the
+        // shell's identity is already established by the in-memory registry; force-drain is
+        // an emergency operation and shouldn't be gated on the blueprint store's health.
+        stub.ThrowOnGet = new ApplicationException("blueprint store transiently unavailable");
+
+        var response = await fixture.PostAsync("/admin/acme/force-drain");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<DrainResultResponse[]>(WebJson);
+        Assert.NotNull(body);
+        Assert.Single(body);
+    }
+
     [Fact(DisplayName = "Force-drain when only Drained generations remain returns 404")]
     public async Task ForceDrain_OnlyDrainedGenerations_Returns404()
     {
@@ -103,6 +129,31 @@ public class ForceDrainEndpointTests
     }
 
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Wraps a <see cref="TestHelpers.StubShellBlueprintProvider"/> so per-test code can
+    /// switch <see cref="GetAsync"/> failure on/off after construction (the stub's
+    /// <c>ThrowOnGet</c> is shared with <c>ListAsync</c>; this provider isolates them).
+    /// </summary>
+    private sealed class ProviderWithGetSwitch : IShellBlueprintProvider
+    {
+        private readonly TestHelpers.StubShellBlueprintProvider _inner = new();
+
+        public Exception? ThrowOnGet { get; set; }
+
+        public void AddBlueprint(string name, Action<CShells.Configuration.ShellBuilder>? configure = null) =>
+            _inner.Add(name, configure);
+
+        public Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnGet is not null)
+                throw ThrowOnGet;
+            return _inner.GetAsync(name, cancellationToken);
+        }
+
+        public Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken cancellationToken = default)
+            => _inner.ListAsync(query, cancellationToken);
+    }
 
     public sealed class MgmtStuckDrainFeature : IShellFeature
     {
