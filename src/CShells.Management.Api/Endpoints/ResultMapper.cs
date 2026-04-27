@@ -36,10 +36,13 @@ internal static class ResultMapper
             detail: oor.Message,
             instance: context.Request.Path),
 
+        // Catch-all default: avoid leaking exception messages (which can carry connection
+        // strings, secrets, or stack traces) in the response body. The caller sees a generic
+        // problem-details payload; details remain in server-side logs.
         _ => Results.Problem(
             statusCode: StatusCodes.Status500InternalServerError,
             title: "Internal Server Error",
-            detail: ex.Message,
+            detail: "An unexpected error occurred.",
             instance: context.Request.Path),
     };
 }

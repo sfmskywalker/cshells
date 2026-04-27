@@ -54,11 +54,21 @@ public interface IShell
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The value is non-null exactly when <see cref="State"/> is one of
-    /// <see cref="ShellLifecycleState.Deactivating"/>, <see cref="ShellLifecycleState.Draining"/>,
-    /// or <see cref="ShellLifecycleState.Drained"/>; null when the state is
-    /// <see cref="ShellLifecycleState.Initializing"/>, <see cref="ShellLifecycleState.Active"/>,
-    /// or <see cref="ShellLifecycleState.Disposed"/>.
+    /// Steady state — once a generation has settled in a given lifecycle state — the value is
+    /// non-null when <see cref="State"/> is <see cref="ShellLifecycleState.Deactivating"/>,
+    /// <see cref="ShellLifecycleState.Draining"/>, or <see cref="ShellLifecycleState.Drained"/>;
+    /// null when the state is <see cref="ShellLifecycleState.Initializing"/>,
+    /// <see cref="ShellLifecycleState.Active"/>, or <see cref="ShellLifecycleState.Disposed"/>.
+    /// </para>
+    /// <para>
+    /// The binding is a snapshot, not an atomic invariant. State and drain are advanced by
+    /// independent volatile writes, so a concurrent observer can briefly see (a)
+    /// <see cref="ShellLifecycleState.Deactivating"/> with a null <see cref="Drain"/> (the
+    /// drain has not yet been published), or (b) <see cref="ShellLifecycleState.Drained"/>
+    /// with a null <see cref="Drain"/> (the drain reference has been cleared ahead of the
+    /// transition into <see cref="ShellLifecycleState.Disposed"/>). Consumers that read
+    /// <see cref="Drain"/> after a separate <see cref="State"/> check MUST handle a null
+    /// result gracefully.
     /// </para>
     /// <para>
     /// The reference returned is the same instance any concurrent caller of

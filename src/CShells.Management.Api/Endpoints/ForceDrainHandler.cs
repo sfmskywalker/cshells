@@ -49,17 +49,24 @@ internal static class ForceDrainHandler
                     instance: ctx.Request.Path);
             }
 
-            // Force every in-flight drain in parallel; await each to a terminal state.
+            // Force every in-flight drain in parallel; await each to a terminal state. The
+            // Drain reference can race with natural completion or with the registry's
+            // Disposed-transition clear-then-advance, so a generation snapshotted as
+            // Deactivating/Draining may have a null Drain by the time we read it. Skip those
+            // entries — the drain effectively completed itself before we got there.
             var results = await Task.WhenAll(inFlight.Select(async shell =>
             {
-                var op = shell.Drain ?? throw new InvalidOperationException(
-                    $"Shell '{name}' generation {shell.Descriptor.Generation} is in state {shell.State} but Drain is null. " +
-                    "This violates the IShell.Drain invariant.");
+                var op = shell.Drain;
+                if (op is null)
+                    return null;
                 await op.ForceAsync(ct);
-                return await op.WaitAsync(ct);
+                return (DrainResult?)await op.WaitAsync(ct);
             }));
 
-            return Results.Ok(results.Select(DtoMappers.MapDrainResult).ToArray());
+            return Results.Ok(results
+                .OfType<DrainResult>()
+                .Select(DtoMappers.MapDrainResult)
+                .ToArray());
         }
         catch (Exception ex)
         {

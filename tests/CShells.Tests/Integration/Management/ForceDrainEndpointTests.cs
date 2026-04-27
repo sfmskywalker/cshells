@@ -89,14 +89,17 @@ public class ForceDrainEndpointTests
             .AddShell("acme", _ => { })); // No drain handler — drain completes immediately.
         await fixture.Registry.GetOrActivateAsync("acme");
 
-        // Reload completes drain immediately; old gen advances all the way to Disposed/Drained.
-        await fixture.PostAsync("/admin/reload/acme");
-
-        // Wait briefly for drain to finish.
-        await Task.Delay(100);
+        // Reload completes drain immediately; old gen advances all the way to Disposed.
+        // Wait via the actual drain operation rather than a timing paper-over so the test
+        // is deterministic.
+        var oldGen = fixture.Registry.GetActive("acme")!;
+        var reloadResult = await fixture.Registry.ReloadAsync("acme");
+        if (reloadResult.Drain is { } drainOp)
+            await drainOp.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
 
         var response = await fixture.PostAsync("/admin/acme/force-drain");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        _ = oldGen; // pin to keep variable from being optimized; unused otherwise
     }
 
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);

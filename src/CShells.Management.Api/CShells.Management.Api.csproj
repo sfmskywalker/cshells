@@ -17,7 +17,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+        <!--
+            The project-local README.md is auto-packed by src/Directory.Build.props at the package root,
+            satisfying <PackageReadmeFile>README.md</PackageReadmeFile>. Do not also pack the repo-root
+            README — NuGet emits NU5118 (duplicate file) when both are included.
+        -->
         <None Include="$(MSBuildThisFileDirectory)..\..\branding\logo.png" Pack="true" PackagePath="\" Link="logo.png" />
     </ItemGroup>
 
