@@ -19,11 +19,6 @@ internal sealed class ShellRegistry : IShellRegistry
     private readonly IShellBlueprintProvider _blueprintProvider;
     private readonly ILogger<ShellRegistry> _logger;
     private readonly ConcurrentDictionary<string, NameSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
-    // Lazy wrapper: `ConcurrentDictionary.GetOrAdd(key, factory)` does NOT guarantee the factory
-    // runs at most once under contention — concurrent callers can both enter the factory even
-    // though only one result is stored. Wrapping in Lazy<T> guarantees `StartDrain` (and
-    // therefore `op.RunAsync()`) fires exactly once per shell.
-    private readonly ConcurrentDictionary<IShell, Lazy<DrainOperation>> _drainOps = new();
     private ImmutableList<IShellLifecycleSubscriber> _subscribers = [];
 
     public ShellRegistry(
@@ -358,34 +353,34 @@ internal sealed class ShellRegistry : IShellRegistry
                 $"DrainAsync only accepts shells produced by this registry (CShells.Lifecycle.Shell); got {shell.GetType().FullName}.",
                 nameof(shell));
 
-        // Idempotent while in flight: concurrent callers during the same drain get the same
-        // `DrainOperation` instance. The Lazy wrapper is essential — ConcurrentDictionary.GetOrAdd
-        // may invoke the factory more than once under contention (only one result wins), which
-        // would fire `op.RunAsync()` twice and double-invoke every handler. Once the drain's run
-        // task completes the entry is removed (see StartDrain), so calling DrainAsync for an
-        // already-drained shell will produce a fresh operation — acceptable because that is a
-        // programming error against a disposed provider.
-        var lazy = _drainOps.GetOrAdd(shell, s => new Lazy<DrainOperation>(
-            () => StartDrain((Shell)s),
-            LazyThreadSafetyMode.ExecutionAndPublication));
-        return Task.FromResult<IDrainOperation>(lazy.Value);
-    }
+        // Idempotent: the first caller CAS-publishes the new DrainOperation onto the Shell;
+        // concurrent callers observe the published instance and return early. This preserves
+        // the IDrainOperation contract ("concurrent callers for the same shell receive the
+        // same instance") with one less moving part than the previous Lazy<T>+ConcurrentDictionary
+        // pattern — the drain reference now lives on the Shell where it always belonged.
+        if (typedShell.Drain is { } existing)
+            return Task.FromResult(existing);
 
-    private DrainOperation StartDrain(Shell shell)
-    {
         var policy = ResolveDrainPolicy();
         var gracePeriod = ResolveGracePeriod();
-        var op = new DrainOperation(shell, policy, gracePeriod, ResolveDrainLogger());
+        var candidate = new DrainOperation(typedShell, policy, gracePeriod, ResolveDrainLogger());
 
+        var winner = typedShell.PublishDrain(candidate);
+        if (ReferenceEquals(winner, candidate))
+            StartDrainRun(typedShell, candidate);
+
+        return Task.FromResult<IDrainOperation>(winner);
+    }
+
+    private static void StartDrainRun(Shell shell, DrainOperation op)
+    {
         // Transition to Draining (Active or Deactivating → Draining). Best-effort CAS.
         _ = shell.ForceAdvanceAsync(ShellLifecycleState.Draining);
 
-        // Remove the dictionary entry when the run completes (success or fault) so long-running
-        // hosts don't accumulate one drained Shell + DrainOperation + TCS + CTS per reload.
-        _ = op.RunAsync().ContinueWith(
-            runTask => _drainOps.TryRemove(shell, out _),
-            TaskContinuationOptions.ExecuteSynchronously);
-        return op;
+        // Run the drain in the background. The Shell holds the reference to op via Drain;
+        // both become GC-eligible together once the registry releases the slot's reference
+        // to the Shell.
+        _ = op.RunAsync();
     }
 
     private IDrainPolicy ResolveDrainPolicy()

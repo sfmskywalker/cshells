@@ -47,4 +47,25 @@ public interface IShell
     /// permitted — the new scope joins the active-scope counter.
     /// </exception>
     IShellScope BeginScope();
+
+    /// <summary>
+    /// Gets the in-flight drain operation associated with this generation, or <c>null</c>
+    /// when no drain is in flight.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The value is non-null exactly when <see cref="State"/> is one of
+    /// <see cref="ShellLifecycleState.Deactivating"/>, <see cref="ShellLifecycleState.Draining"/>,
+    /// or <see cref="ShellLifecycleState.Drained"/>; null when the state is
+    /// <see cref="ShellLifecycleState.Initializing"/>, <see cref="ShellLifecycleState.Active"/>,
+    /// or <see cref="ShellLifecycleState.Disposed"/>.
+    /// </para>
+    /// <para>
+    /// The reference returned is the same instance any concurrent caller of
+    /// <see cref="IShellRegistry.DrainAsync"/> would receive for this shell — exposing it
+    /// directly makes per-generation drain observability possible without round-tripping
+    /// through the registry.
+    /// </para>
+    /// </remarks>
+    IDrainOperation? Drain { get; }
 }

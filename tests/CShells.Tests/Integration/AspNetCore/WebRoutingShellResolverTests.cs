@@ -234,5 +234,6 @@ public class WebRoutingShellResolverTests
         public ShellLifecycleState State => ShellLifecycleState.Active;
         public IServiceProvider ServiceProvider { get; } = provider;
         public IShellScope BeginScope() => throw new NotSupportedException();
+        public IDrainOperation? Drain => null;
     }
 }

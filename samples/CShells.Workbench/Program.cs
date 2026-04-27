@@ -1,6 +1,6 @@
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using CShells.Lifecycle;
+using CShells.Management.Api;
 using CShells.Workbench.Background;
 using CShells.Workbench.Features.Core;
 
@@ -28,44 +28,14 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseRouting();
 
-// Host-level diagnostics via the new lifecycle registry. Pages the catalogue (which may be
-// larger than the hot set), left-joining each entry with the registry's active-shell state.
-app.MapGet("/_shells/status", async (IShellRegistry registry) =>
-{
-    var entries = new List<object>();
-    string? cursor = null;
-    do
-    {
-        var page = await registry.ListAsync(new(Cursor: cursor, Limit: 100));
-        foreach (var summary in page.Items)
-        {
-            entries.Add(new
-            {
-                name = summary.Name,
-                source = summary.SourceId,
-                mutable = summary.Mutable,
-                active = summary.ActiveGeneration is { } gen ? new
-                {
-                    generation = gen,
-                    state = summary.State?.ToString(),
-                    activeScopes = summary.ActiveScopeCount,
-                } : null,
-                generations = registry.GetAll(summary.Name)
-                    .Select(s => new
-                    {
-                        generation = s.Descriptor.Generation,
-                        state = s.State.ToString(),
-                    })
-                    .ToList(),
-            });
-        }
-        cursor = page.NextCursor;
-    } while (cursor is not null);
-
-    return Results.Ok(entries);
-});
-
 app.MapShells();
+
+// Sample-only: management endpoints are unprotected. In production, chain
+// .RequireAuthorization(...) on the returned RouteGroupBuilder. The endpoints expose direct
+// control over the shell registry (reload, force-drain) and return registered
+// ConfigurationData verbatim, so an unprotected install is a foot-gun outside dev environments.
+app.MapShellManagementApi("/_admin/shells");
+
 app.Run();
 
 // Make Program class accessible for WebApplicationFactory in end-to-end tests

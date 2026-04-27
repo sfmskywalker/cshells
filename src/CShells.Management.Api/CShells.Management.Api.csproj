@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Authors>Sipke Schoorstra</Authors>
+        <Description>Optional REST management API for CShells. Exposes shell-reload and drain-lifecycle endpoints over HTTP for manual testing and demos. Authorization is the host's responsibility.</Description>
+        <PackageTags>shell;tenant;management;api;reload;drain;aspnetcore;minimal-api</PackageTags>
+        <PackageProjectUrl>https://github.com/sfmskywalker/cshells</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/sfmskywalker/cshells</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>logo.png</PackageIcon>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+        <None Include="$(MSBuildThisFileDirectory)..\..\branding\logo.png" Pack="true" PackagePath="\" Link="logo.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\CShells.Abstractions\CShells.Abstractions.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+</Project>
