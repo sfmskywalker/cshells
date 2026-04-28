@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using CShells.AspNetCore.Routing;
@@ -156,17 +155,15 @@ public class WebRoutingShellResolver(
 
         // Clamp to a non-negative cap; treat 0 as "log the no-match line but omit candidates".
         var cap = Math.Max(0, _options.NoMatchLogCandidateCap);
-        var snapshot = cap == 0
-            ? ImmutableArray<ShellRouteEntry>.Empty
-            : _routeIndex.GetCandidateSnapshot(cap + 1);
-        var truncated = snapshot.Length > cap;
-        var visible = truncated ? cap : snapshot.Length;
+        var snapshot = _routeIndex.GetCandidateSnapshot(cap);
+        var entries = snapshot.Entries;
+        var overflow = snapshot.Total - entries.Length;
 
         var candidatesBuilder = new StringBuilder();
-        for (var i = 0; i < visible; i++)
+        for (var i = 0; i < entries.Length; i++)
         {
             if (i > 0) candidatesBuilder.Append(", ");
-            var entry = snapshot[i];
+            var entry = entries[i];
             candidatesBuilder.Append(entry.ShellName).Append('(');
             var modes = new List<string>();
             if (entry.Path is not null) modes.Add($"Path=\"{entry.Path}\"");
@@ -176,18 +173,24 @@ public class WebRoutingShellResolver(
             candidatesBuilder.Append(string.Join("; ", modes));
             candidatesBuilder.Append(')');
         }
-        if (truncated)
-            candidatesBuilder.Append($" (+{snapshot.Length - cap} more)");
+        if (overflow > 0)
+            candidatesBuilder.Append($" (+{overflow} more)");
 
+        // HeaderValue / ClaimValue may carry user data (e.g. when ClaimKey is "sub" or
+        // "email"). Emit only the length so the no-match line stays diagnosable without
+        // leaking PII to log sinks; the configured key/header *name* is config and stays.
         _logger.LogInformation(
             "No shell matched the request. Considered: PathFirstSegment={PathFirstSegment}, IsRootPath={IsRootPath}, Host={Host}, HeaderName={HeaderName}, HeaderValue={HeaderValue}, ClaimKey={ClaimKey}, ClaimValue={ClaimValue}. Candidate blueprints: [{Candidates}]",
             criteria.PathFirstSegment ?? "(none)",
             criteria.IsRootPath,
             criteria.Host ?? "(none)",
             criteria.HeaderName ?? "(none)",
-            criteria.HeaderValue ?? "(none)",
+            Redact(criteria.HeaderValue),
             criteria.ClaimKey ?? "(none)",
-            criteria.ClaimValue ?? "(none)",
+            Redact(criteria.ClaimValue),
             candidatesBuilder.ToString());
     }
+
+    private static string Redact(string? value) =>
+        string.IsNullOrEmpty(value) ? "(none)" : $"<len={value.Length}>";
 }

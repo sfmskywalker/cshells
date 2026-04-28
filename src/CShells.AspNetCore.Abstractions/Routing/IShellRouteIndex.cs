@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace CShells.AspNetCore.Routing;
 
 /// <summary>
@@ -60,9 +58,10 @@ public interface IShellRouteIndex
     /// they return whatever the current snapshot contains (possibly empty).
     /// </remarks>
     /// <param name="maxEntries">
-    /// Hard cap on the number of entries returned. Implementations MUST honour the cap;
-    /// entries beyond the cap are simply omitted (the caller's log formatter is responsible
-    /// for the "(+N more)" suffix).
+    /// Hard cap on the number of entries returned in <see cref="ShellRouteCandidateSnapshot.Entries"/>.
+    /// Implementations MUST honour the cap; the full count is reported separately via
+    /// <see cref="ShellRouteCandidateSnapshot.Total"/> so the caller can render an accurate
+    /// "(+N more)" suffix.
     /// </param>
-    ImmutableArray<ShellRouteEntry> GetCandidateSnapshot(int maxEntries);
+    ShellRouteCandidateSnapshot GetCandidateSnapshot(int maxEntries);
 }

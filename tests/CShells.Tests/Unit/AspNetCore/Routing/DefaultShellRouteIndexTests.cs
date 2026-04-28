@@ -215,7 +215,8 @@ public class DefaultShellRouteIndexTests
 
         var snapshot = index.GetCandidateSnapshot(10);
 
-        Assert.Empty(snapshot);
+        Assert.Empty(snapshot.Entries);
+        Assert.Equal(0, snapshot.Total);
         Assert.Equal(0, provider.ListCount);
     }
 

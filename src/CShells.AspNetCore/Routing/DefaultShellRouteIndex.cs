@@ -15,13 +15,15 @@ namespace CShells.AspNetCore.Routing;
 /// </summary>
 internal sealed class DefaultShellRouteIndex(
     IShellBlueprintProvider provider,
-    ILogger<DefaultShellRouteIndex>? logger = null) : IShellRouteIndex
+    ILogger<DefaultShellRouteIndex>? logger = null) : IShellRouteIndex, IDisposable
 {
     private readonly IShellBlueprintProvider _provider = Guard.Against.Null(provider);
     private readonly ILogger<DefaultShellRouteIndex> _logger = logger ?? NullLogger<DefaultShellRouteIndex>.Instance;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private ShellRouteIndexSnapshot? _snapshot;
+
+    public void Dispose() => _refreshGate.Dispose();
 
     /// <inheritdoc />
     public async ValueTask<ShellRouteMatch?> TryMatchAsync(
@@ -68,22 +70,23 @@ internal sealed class DefaultShellRouteIndex(
     }
 
     /// <inheritdoc />
-    public ImmutableArray<ShellRouteEntry> GetCandidateSnapshot(int maxEntries)
+    public ShellRouteCandidateSnapshot GetCandidateSnapshot(int maxEntries)
     {
-        if (maxEntries <= 0)
-            return [];
-
         var snapshot = Volatile.Read(ref _snapshot);
         if (snapshot is null || snapshot.All.IsDefaultOrEmpty)
-            return [];
+            return new ShellRouteCandidateSnapshot([], 0);
 
-        if (snapshot.All.Length <= maxEntries)
-            return snapshot.All;
+        var total = snapshot.All.Length;
+        if (maxEntries <= 0)
+            return new ShellRouteCandidateSnapshot([], total);
+
+        if (total <= maxEntries)
+            return new ShellRouteCandidateSnapshot(snapshot.All, total);
 
         var builder = ImmutableArray.CreateBuilder<ShellRouteEntry>(maxEntries);
         for (var i = 0; i < maxEntries; i++)
             builder.Add(snapshot.All[i]);
-        return builder.ToImmutable();
+        return new ShellRouteCandidateSnapshot(builder.ToImmutable(), total);
     }
 
     /// <summary>
