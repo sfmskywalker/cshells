@@ -145,6 +145,37 @@ public class DefaultShellRouteIndexTests
         Assert.IsType<InvalidOperationException>(ex.InnerException);
     }
 
+    [Fact(DisplayName = "Rebuild failure after Invalidate falls back to previous snapshot (last-good)")]
+    public async Task RebuildFailure_AfterInvalidate_ServesLastGood()
+    {
+        // Provider succeeds on the first build, then starts failing. After Invalidate the
+        // index must NOT surface ShellRouteIndexUnavailableException — it must transparently
+        // serve the previously-built snapshot. This is the reliability guarantee that
+        // motivated dropping the eager "clear _snapshot on Invalidate" pattern.
+        var provider = new StubShellBlueprintProvider()
+            .Add("Default", b => b.WithConfiguration("WebRouting:Path", ""));
+
+        var index = new DefaultShellRouteIndex(provider);
+
+        var rootCriteria = new ShellRouteCriteria(
+            PathFirstSegment: null, IsRootPath: true, Host: null,
+            HeaderName: null, HeaderValue: null, ClaimKey: null, ClaimValue: null);
+
+        // Initial build succeeds.
+        var first = await index.TryMatchAsync(rootCriteria);
+        Assert.NotNull(first);
+        Assert.Equal("Default", first!.ShellId.Name);
+
+        // Provider goes down; lifecycle invalidates the index.
+        provider.ThrowOnList = new InvalidOperationException("DB unreachable");
+        index.Invalidate();
+
+        // Routing keeps working against the previously-good snapshot.
+        var second = await index.TryMatchAsync(rootCriteria);
+        Assert.NotNull(second);
+        Assert.Equal("Default", second!.ShellId.Name);
+    }
+
     [Fact(DisplayName = "Initial population failure does NOT degrade path-by-name lookups")]
     public async Task InitialPopulationFailure_PathByNameStillWorks()
     {

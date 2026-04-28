@@ -14,7 +14,7 @@ This change also fixes the post-reload 404 (`SC-002`): `ReloadAsync` drains the 
 This is a **focused additive change** with one targeted breaking API delta:
 
 - **NEW**: `IShellRouteIndex` (and its supporting types) in `CShells.AspNetCore.Abstractions`. Implementation `DefaultShellRouteIndex` in `CShells.AspNetCore`.
-- **MODIFIED (breaking)**: `IShellResolverStrategy.Resolve` becomes async (`ValueTask<ShellId?> ResolveAsync(...)`) because the route index is asynchronous. `WebRoutingShellResolver` and `DefaultShellResolverStrategy` migrate to the new signature. `ShellMiddleware` awaits the resolver. Custom strategies in third-party code need a one-line migration.
+- **MODIFIED (breaking)**: `IShellResolverStrategy.Resolve` becomes async (`Task<ShellId?> ResolveAsync(...)`) because the route index is asynchronous. `WebRoutingShellResolver` and `DefaultShellResolverStrategy` migrate to the new signature. `ShellMiddleware` awaits the resolver. Custom strategies in third-party code need a one-line migration.
 - **UNCHANGED**: `IShellRegistry`, `IShellBlueprintProvider`, `IShellBlueprintManager`, `IShellLifecycleSubscriber`, `ShellEndpointRegistrationHandler`, `WebRoutingShellResolverOptions`, the shell configuration shape (`Configuration:WebRouting:{Path,Host,HeaderName,ClaimKey}`), and `CShellsBuilder.PreWarmShells`.
 
 The Workbench sample's `Program.cs` drops any `PreWarmShells` call. The downstream consumer `Elsa.ModularServer.Web` (out-of-tree) similarly drops its `.PreWarmShells("Default")` call when adopting this version.

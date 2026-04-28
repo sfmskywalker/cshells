@@ -41,8 +41,6 @@ HTTP/1.1 200 OK
 Logs show:
 
 ```
-info: CShells.AspNetCore.Routing.DefaultShellRouteIndex
-      Resolved 'Default' for request path '/elsa/api/identity/login' (mode: RootPath)
 info: CShells.Lifecycle.ShellLifecycleLogger
       Shell Default#1 transitioned Initializing → Active
 info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler
@@ -51,6 +49,10 @@ info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler
 ```
 
 The first request pays the activation cost; subsequent requests reuse the active generation as before.
+
+To see per-request match decisions, set `WebRoutingShellResolverOptions.LogMatches = true`
+and lower the `CShells.AspNetCore.Resolution.WebRoutingShellResolver` category to `Debug`;
+no-match requests already log at `Information` (with `HeaderValue` / `ClaimValue` redacted).
 
 ## 3. Reload behaviour: the post-reload 404 is gone
 

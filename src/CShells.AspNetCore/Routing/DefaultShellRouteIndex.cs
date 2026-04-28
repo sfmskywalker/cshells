@@ -15,15 +15,25 @@ namespace CShells.AspNetCore.Routing;
 /// </summary>
 internal sealed class DefaultShellRouteIndex(
     IShellBlueprintProvider provider,
-    ILogger<DefaultShellRouteIndex>? logger = null) : IShellRouteIndex, IDisposable
+    ILogger<DefaultShellRouteIndex>? logger = null) : IShellRouteIndex
 {
     private readonly IShellBlueprintProvider _provider = Guard.Against.Null(provider);
     private readonly ILogger<DefaultShellRouteIndex> _logger = logger ?? NullLogger<DefaultShellRouteIndex>.Instance;
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
-    private ShellRouteIndexSnapshot? _snapshot;
+    // Concurrency model:
+    //   _version is monotonically increased by Invalidate(). The currently published
+    //   _snapshot carries the version it was built against; readers compare to detect
+    //   staleness. _buildLock + _inflightBuild ensure at most one rebuild is in flight
+    //   and concurrent stale readers share its result. Invalidate() does NOT clear
+    //   _snapshot — it only bumps the version — so a rebuild that fails can fall back
+    //   to the previously-good snapshot rather than surfacing
+    //   ShellRouteIndexUnavailableException to traffic that was being served fine.
+    private long _version;
+    private VersionedSnapshot? _snapshot;
+    private readonly object _buildLock = new();
+    private Task<ShellRouteIndexSnapshot>? _inflightBuild;
 
-    public void Dispose() => _refreshGate.Dispose();
+    private sealed record VersionedSnapshot(ShellRouteIndexSnapshot Snapshot, long Version);
 
     /// <inheritdoc />
     public async ValueTask<ShellRouteMatch?> TryMatchAsync(
@@ -33,37 +43,46 @@ internal sealed class DefaultShellRouteIndex(
         Guard.Against.Null(criteria);
 
         // Path-by-name fast path. Hot path for the common multi-tenant deployment.
-        if (criteria.PathFirstSegment is { Length: > 0 } segment)
+        var pathByNameAttempted = criteria.PathFirstSegment is { Length: > 0 };
+        if (pathByNameAttempted)
         {
-            var match = await TryMatchByPathSegmentAsync(segment, cancellationToken).ConfigureAwait(false);
+            var match = await TryMatchByPathSegmentAsync(criteria.PathFirstSegment!, cancellationToken).ConfigureAwait(false);
             if (match is not null)
                 return match;
         }
 
-        // Non-name modes. All consult the snapshot.
-        if (NeedsSnapshot(criteria))
+        // The snapshot is consulted for non-name modes AND for the root-path fallback that
+        // catches a path-by-name miss. Without the latter, e.g. "/elsa/api/..." against a
+        // deployment whose only blueprint declares WebRouting:Path = "" would 404 — exactly
+        // the cold-start regression the route index is meant to eliminate.
+        if (!NeedsSnapshot(criteria) && !pathByNameAttempted)
+            return null;
+
+        var snapshot = await EnsureSnapshotAsync(cancellationToken).ConfigureAwait(false);
+
+        // Legacy priority: path > host > header > claim > root.
+        if (criteria.Host is { Length: > 0 } host && snapshot.ByHost.TryGetValue(host, out var hostEntry))
+            return new ShellRouteMatch(new ShellId(hostEntry.ShellName), ShellRoutingMode.Host);
+
+        if (criteria.HeaderValue is { Length: > 0 } headerValue
+            && snapshot.ByHeaderValue.TryGetValue(headerValue, out var headerEntry)
+            && string.Equals(headerEntry.HeaderName, criteria.HeaderName, StringComparison.OrdinalIgnoreCase))
         {
-            var snapshot = await EnsureSnapshotAsync(cancellationToken).ConfigureAwait(false);
+            return new ShellRouteMatch(new ShellId(headerEntry.ShellName), ShellRoutingMode.Header);
+        }
 
-            if (criteria.IsRootPath && snapshot.RootPathEntry is not null && !snapshot.RootPathAmbiguous)
-                return new ShellRouteMatch(new ShellId(snapshot.RootPathEntry.ShellName), ShellRoutingMode.RootPath);
+        if (criteria.ClaimValue is { Length: > 0 } claimValue
+            && snapshot.ByClaimValue.TryGetValue(claimValue, out var claimEntry)
+            && string.Equals(claimEntry.ClaimKey, criteria.ClaimKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ShellRouteMatch(new ShellId(claimEntry.ShellName), ShellRoutingMode.Claim);
+        }
 
-            if (criteria.Host is { Length: > 0 } host && snapshot.ByHost.TryGetValue(host, out var hostEntry))
-                return new ShellRouteMatch(new ShellId(hostEntry.ShellName), ShellRoutingMode.Host);
-
-            if (criteria.HeaderValue is { Length: > 0 } headerValue
-                && snapshot.ByHeaderValue.TryGetValue(headerValue, out var headerEntry)
-                && string.Equals(headerEntry.HeaderName, criteria.HeaderName, StringComparison.OrdinalIgnoreCase))
-            {
-                return new ShellRouteMatch(new ShellId(headerEntry.ShellName), ShellRoutingMode.Header);
-            }
-
-            if (criteria.ClaimValue is { Length: > 0 } claimValue
-                && snapshot.ByClaimValue.TryGetValue(claimValue, out var claimEntry)
-                && string.Equals(claimEntry.ClaimKey, criteria.ClaimKey, StringComparison.OrdinalIgnoreCase))
-            {
-                return new ShellRouteMatch(new ShellId(claimEntry.ShellName), ShellRoutingMode.Claim);
-            }
+        // Root-path: explicit "/" OR fallback after a path-by-name miss.
+        if ((criteria.IsRootPath || pathByNameAttempted)
+            && snapshot.RootPathEntry is not null && !snapshot.RootPathAmbiguous)
+        {
+            return new ShellRouteMatch(new ShellId(snapshot.RootPathEntry.ShellName), ShellRoutingMode.RootPath);
         }
 
         return null;
@@ -72,28 +91,38 @@ internal sealed class DefaultShellRouteIndex(
     /// <inheritdoc />
     public ShellRouteCandidateSnapshot GetCandidateSnapshot(int maxEntries)
     {
-        var snapshot = Volatile.Read(ref _snapshot);
-        if (snapshot is null || snapshot.All.IsDefaultOrEmpty)
+        var versioned = Volatile.Read(ref _snapshot);
+        if (versioned is null || versioned.Snapshot.All.IsDefaultOrEmpty)
             return new ShellRouteCandidateSnapshot([], 0);
 
-        var total = snapshot.All.Length;
+        var entries = versioned.Snapshot.All;
+        var total = entries.Length;
         if (maxEntries <= 0)
             return new ShellRouteCandidateSnapshot([], total);
 
         if (total <= maxEntries)
-            return new ShellRouteCandidateSnapshot(snapshot.All, total);
+            return new ShellRouteCandidateSnapshot(entries, total);
 
         var builder = ImmutableArray.CreateBuilder<ShellRouteEntry>(maxEntries);
         for (var i = 0; i < maxEntries; i++)
-            builder.Add(snapshot.All[i]);
+            builder.Add(entries[i]);
         return new ShellRouteCandidateSnapshot(builder.ToImmutable(), total);
     }
 
     /// <summary>
-    /// Invalidates the snapshot so the next non-name-mode lookup rebuilds it. Called by
+    /// Marks the snapshot stale so the next non-name-mode lookup rebuilds it. Called by
     /// <see cref="ShellRouteIndexInvalidator"/> on relevant lifecycle transitions.
     /// </summary>
-    internal void Invalidate() => Volatile.Write(ref _snapshot, null);
+    /// <remarks>
+    /// Bumps the version counter without clearing the published snapshot. Readers detect
+    /// staleness by comparing the published snapshot's version to the current version, so
+    /// a rebuild that fails (transient provider outage) can transparently fall back to the
+    /// previously-good snapshot. Invalidations that occur during an in-flight rebuild are
+    /// not lost: the in-flight rebuild's result is published with its <em>start-of-build</em>
+    /// version, which is now older than the current version, so the next reader treats it
+    /// as stale and triggers another rebuild.
+    /// </remarks>
+    internal void Invalidate() => Interlocked.Increment(ref _version);
 
     /// <summary>
     /// True iff the current snapshot already contains a route entry for <paramref name="shellName"/>.
@@ -111,11 +140,11 @@ internal sealed class DefaultShellRouteIndex(
     internal bool ContainsShellName(string shellName)
     {
         Guard.Against.NullOrWhiteSpace(shellName);
-        var snapshot = Volatile.Read(ref _snapshot);
-        if (snapshot is null)
+        var versioned = Volatile.Read(ref _snapshot);
+        if (versioned is null)
             return false;
 
-        foreach (var entry in snapshot.All)
+        foreach (var entry in versioned.Snapshot.All)
             if (string.Equals(entry.ShellName, shellName, StringComparison.OrdinalIgnoreCase))
                 return true;
 
@@ -165,39 +194,56 @@ internal sealed class DefaultShellRouteIndex(
     private async ValueTask<ShellRouteIndexSnapshot> EnsureSnapshotAsync(CancellationToken cancellationToken)
     {
         var current = Volatile.Read(ref _snapshot);
-        if (current is not null)
-            return current;
+        var currentVersion = Interlocked.Read(ref _version);
 
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Fresh: the published snapshot was built against the current version. Hot path.
+        if (current is not null && current.Version == currentVersion)
+            return current.Snapshot;
+
+        // Stale or missing — start (or join) a single shared rebuild. Concurrent stale
+        // readers all observe the same in-flight Task and await its result.
+        Task<ShellRouteIndexSnapshot> rebuild;
+        lock (_buildLock)
+        {
+            if (_inflightBuild is null || _inflightBuild.IsCompleted)
+                _inflightBuild = BuildAndPublishAsync(currentVersion);
+            rebuild = _inflightBuild;
+        }
+
+        return await rebuild.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ShellRouteIndexSnapshot> BuildAndPublishAsync(long versionAtStart)
+    {
+        // The build is shared across all stale readers, so it intentionally does NOT honour
+        // any single caller's CancellationToken — the caller's WaitAsync(ct) cancels the
+        // wait, not the underlying enumeration. Provider-side timeouts bound the work.
         try
         {
-            current = Volatile.Read(ref _snapshot);
-            if (current is not null)
-                return current;
-
-            try
-            {
-                var built = await BuildSnapshotAsync(cancellationToken).ConfigureAwait(false);
-                Volatile.Write(ref _snapshot, built);
-                return built;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // Initial population failure: leave _snapshot null so the next call retries
-                // BuildSnapshotAsync from scratch. The provider may be transiently unavailable.
-                _logger.LogWarning(ex,
-                    "Initial route-index population failed; non-name-mode routing will surface ShellRouteIndexUnavailableException until the next attempt succeeds.");
-                throw new ShellRouteIndexUnavailableException(
-                    $"Route index initial population failed via provider '{_provider.GetType().Name}'.", ex);
-            }
+            var built = await BuildSnapshotAsync(CancellationToken.None).ConfigureAwait(false);
+            Volatile.Write(ref _snapshot, new VersionedSnapshot(built, versionAtStart));
+            return built;
         }
-        finally
+        catch (Exception ex)
         {
-            _refreshGate.Release();
+            // Last-good fallback: a previously-built snapshot is preferable to surfacing
+            // ShellRouteIndexUnavailableException for traffic that was being served fine.
+            // Stale-but-usable routing is the right behaviour during a transient provider
+            // outage; the next invalidation/refresh attempt will retry from scratch.
+            var existing = Volatile.Read(ref _snapshot);
+            if (existing is not null)
+            {
+                _logger.LogWarning(ex,
+                    "Route-index rebuild failed; continuing to serve previous snapshot (stale).");
+                return existing.Snapshot;
+            }
+
+            // Initial population failure with no fallback. Surface to the resolver, which
+            // logs and falls through to the next strategy.
+            _logger.LogWarning(ex,
+                "Initial route-index population failed; non-name-mode routing will surface ShellRouteIndexUnavailableException until the next attempt succeeds.");
+            throw new ShellRouteIndexUnavailableException(
+                $"Route index initial population failed via provider '{_provider.GetType().Name}'.", ex);
         }
     }
 

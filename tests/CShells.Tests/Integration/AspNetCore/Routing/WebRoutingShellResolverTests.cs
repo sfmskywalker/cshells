@@ -47,6 +47,27 @@ public class WebRoutingShellResolverTests
         Assert.Equal("Default", shellId!.Value.Name);
     }
 
+    [Fact(DisplayName = "Path-by-name miss falls back to root-eligible blueprint")]
+    public async Task PathByNameMiss_FallsBackToRootPath()
+    {
+        // Regression: "/elsa/api/identity/login" against a deployment whose only blueprint
+        // declares WebRouting:Path = "" must resolve to that root-path blueprint, mirroring
+        // the legacy resolver's path > host > header > claim > root priority. Otherwise the
+        // cold-start 404 the route index is meant to fix reappears for non-root paths.
+        var provider = new StubShellBlueprintProvider()
+            .Add("Default", b => b.WithConfiguration("WebRouting:Path", ""));
+
+        var resolver = BuildResolver(provider);
+
+        var ctx = new ShellResolutionContext();
+        ctx.Set(ShellResolutionContextKeys.Path, "/elsa/api/identity/login");
+
+        var shellId = await resolver.ResolveAsync(ctx);
+
+        Assert.NotNull(shellId);
+        Assert.Equal("Default", shellId!.Value.Name);
+    }
+
     [Fact(DisplayName = "Path-by-name match runs without enumerating the catalogue (preserves 100k scaling)")]
     public async Task PathByName_DoesNotCallListAsync()
     {
