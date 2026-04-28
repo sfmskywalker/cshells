@@ -3,6 +3,8 @@ using CShells.AspNetCore.Routing;
 using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,6 +27,7 @@ public class ShellMiddleware(
     RequestDelegate next,
     IShellResolver resolver,
     IShellRegistry registry,
+    DynamicShellEndpointDataSource endpointDataSource,
     IMemoryCache cache,
     IOptions<ShellMiddlewareOptions> options,
     ILogger<ShellMiddleware>? logger = null)
@@ -32,6 +35,7 @@ public class ShellMiddleware(
     private readonly RequestDelegate _next = Guard.Against.Null(next);
     private readonly IShellResolver _resolver = Guard.Against.Null(resolver);
     private readonly IShellRegistry _registry = Guard.Against.Null(registry);
+    private readonly DynamicShellEndpointDataSource _endpointDataSource = Guard.Against.Null(endpointDataSource);
     private readonly IMemoryCache _cache = Guard.Against.Null(cache);
     private readonly ShellMiddlewareOptions _options = Guard.Against.Null(options).Value;
     private readonly ILogger<ShellMiddleware> _logger = logger ?? NullLogger<ShellMiddleware>.Instance;
@@ -58,6 +62,9 @@ public class ShellMiddleware(
 
         _logger.LogInformation("Resolved shell '{ShellId}' for request path '{Path}'", shellId.Value, context.Request.Path);
 
+        // Check whether the shell is already active so we can detect cold activation below.
+        var wasCold = _registry.GetActive(shellId.Value.Name) is null;
+
         IShell shell;
         try
         {
@@ -78,6 +85,13 @@ public class ShellMiddleware(
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return;
         }
+
+        // Cold activation: UseRouting() ran before this middleware and found no endpoints
+        // (they hadn't been registered yet). Now that activation has completed and the
+        // ShellEndpointRegistrationHandler has published the shell's endpoints, re-match
+        // the request so the endpoint middleware downstream can execute the handler.
+        if (wasCold && context.GetEndpoint() is null)
+            TryMatchEndpointAfterColdActivation(context, shellId.Value);
 
         // BeginScope increments the shell's active-scope counter (so in-flight drains' phase-1
         // waits for this request to complete). The scope is released via OnCompleted (not
@@ -128,5 +142,48 @@ public class ShellMiddleware(
     {
         var request = context.Request;
         return $"{request.Host}:{request.Path}:{request.Method}";
+    }
+
+    /// <summary>
+    /// After a cold shell activation, UseRouting() has already run and found no endpoint.
+    /// The shell's endpoints are now registered in the <see cref="DynamicShellEndpointDataSource"/>.
+    /// Walk the data source and set the first matching endpoint on the context so the downstream
+    /// endpoint middleware can execute it.
+    /// </summary>
+    private void TryMatchEndpointAfterColdActivation(HttpContext context, ShellId shellId)
+    {
+        foreach (var endpoint in _endpointDataSource.Endpoints)
+        {
+            if (endpoint is not RouteEndpoint routeEndpoint)
+                continue;
+
+            var metadata = routeEndpoint.Metadata.GetMetadata<ShellEndpointMetadata>();
+            if (metadata is null || !metadata.ShellId.Equals(shellId))
+                continue;
+
+            // Check HTTP method constraint first (cheap).
+            var methodMetadata = routeEndpoint.Metadata.GetMetadata<HttpMethodMetadata>();
+            if (methodMetadata is not null &&
+                !methodMetadata.HttpMethods.Contains(context.Request.Method, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            var template = TemplateParser.Parse(routeEndpoint.RoutePattern.RawText ?? "");
+            var defaults = new RouteValueDictionary();
+            foreach (var kvp in routeEndpoint.RoutePattern.Defaults)
+                defaults[kvp.Key] = kvp.Value;
+
+            var matcher = new TemplateMatcher(template, defaults);
+            var routeValues = new RouteValueDictionary();
+
+            if (!matcher.TryMatch(context.Request.Path, routeValues))
+                continue;
+
+            context.SetEndpoint(routeEndpoint);
+            context.Request.RouteValues = routeValues;
+            _logger.LogDebug(
+                "Cold-start re-matched endpoint '{Pattern}' for shell '{Shell}'",
+                routeEndpoint.RoutePattern.RawText, shellId);
+            return;
+        }
     }
 }

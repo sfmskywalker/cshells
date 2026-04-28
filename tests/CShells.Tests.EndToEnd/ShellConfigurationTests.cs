@@ -23,22 +23,21 @@ public class ShellConfigurationTests(WorkbenchApplicationFactory factory)
 
         foreach (var name in new[] { "Default", "Acme", "Contoso" })
         {
-            var shell = registry.GetActive(name);
-            Assert.NotNull(shell);
-            Assert.Equal(ShellLifecycleState.Active, shell!.State);
+            var shell = await registry.GetOrActivateAsync(name);
+            Assert.Equal(ShellLifecycleState.Active, shell.State);
             Assert.Equal(1, shell.Descriptor.Generation);
         }
     }
 
     [Fact(DisplayName = "Shell configuration contains WebRouting path mappings")]
-    public void ShellConfiguration_ContainsPathMappings()
+    public async Task ShellConfiguration_ContainsPathMappings()
     {
         using var scope = factory.Services.CreateScope();
         var registry = scope.ServiceProvider.GetRequiredService<IShellRegistry>();
 
-        var defaultShell = registry.GetActive("Default")!;
-        var acmeShell = registry.GetActive("Acme")!;
-        var contosoShell = registry.GetActive("Contoso")!;
+        var defaultShell = await registry.GetOrActivateAsync("Default");
+        var acmeShell = await registry.GetOrActivateAsync("Acme");
+        var contosoShell = await registry.GetOrActivateAsync("Contoso");
 
         var defaultSettings = defaultShell.ServiceProvider.GetRequiredService<ShellSettings>();
         var acmeSettings = acmeShell.ServiceProvider.GetRequiredService<ShellSettings>();

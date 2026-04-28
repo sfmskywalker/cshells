@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Middleware;
+using CShells.AspNetCore.Routing;
 using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,7 @@ public class ShellMiddlewareLazyActivationTests
             ctx => { nextCalled = true; return Task.CompletedTask; },
             new FixedShellResolver("unknown"),
             new ThrowingRegistry(new ShellBlueprintNotFoundException("unknown")),
+            new DynamicShellEndpointDataSource(),
             new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new ShellMiddlewareOptions()));
 
@@ -44,6 +46,7 @@ public class ShellMiddlewareLazyActivationTests
             ctx => { nextCalled = true; return Task.CompletedTask; },
             new FixedShellResolver("flaky"),
             new ThrowingRegistry(new ShellBlueprintUnavailableException("flaky", inner)),
+            new DynamicShellEndpointDataSource(),
             new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new ShellMiddlewareOptions()));
 
@@ -67,6 +70,7 @@ public class ShellMiddlewareLazyActivationTests
             ctx => { nextCalled = true; return Task.CompletedTask; },
             new FixedShellResolver("acme"),
             registry,
+            new DynamicShellEndpointDataSource(),
             new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new ShellMiddlewareOptions()));
 

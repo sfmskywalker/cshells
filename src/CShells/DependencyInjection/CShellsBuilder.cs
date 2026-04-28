@@ -18,7 +18,6 @@ public class CShellsBuilder
     private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
     private readonly List<IShellBlueprint> _inlineBlueprints = [];
     private readonly List<Func<IServiceProvider, IShellBlueprintProvider>> _providerFactories = [];
-    private readonly List<string> _preWarmNames = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CShellsBuilder"/> class.
@@ -34,9 +33,6 @@ public class CShellsBuilder
 
     /// <summary>Factories that resolve additional <see cref="IShellBlueprintProvider"/> instances at DI-resolution time.</summary>
     internal IReadOnlyList<Func<IServiceProvider, IShellBlueprintProvider>> ProviderFactories => _providerFactories;
-
-    /// <summary>Shell names to activate at host startup. Populated by <see cref="PreWarmShells"/>.</summary>
-    internal IReadOnlyList<string> PreWarmNames => _preWarmNames;
 
     /// <summary>
     /// Gets the service collection.
@@ -156,20 +152,4 @@ public class CShellsBuilder
         return this;
     }
 
-    /// <summary>
-    /// Records a list of shell names to activate during host startup. Pre-warming is optional;
-    /// without it, shells activate lazily on first request.
-    /// </summary>
-    /// <remarks>
-    /// A pre-warm activation failure is logged and does not abort host startup. Callers who
-    /// need strict pre-warming should activate from their own hosted service with an explicit
-    /// error policy.
-    /// </remarks>
-    public CShellsBuilder PreWarmShells(params string[] names)
-    {
-        Guard.Against.Null(names);
-        foreach (var name in names)
-            _preWarmNames.Add(Guard.Against.NullOrWhiteSpace(name));
-        return this;
-    }
 }

@@ -115,8 +115,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ShellLifecycleLogger>();
         services.AddSingleton<IShellLifecycleSubscriber>(sp => sp.GetRequiredService<ShellLifecycleLogger>());
 
-        // Pre-warm list singleton, populated from the builder. Consumed by the startup hosted service.
-        services.TryAddSingleton<PreWarmShellList>(_ => new PreWarmShellList(builder.PreWarmNames));
         services.AddHostedService<CShellsStartupHostedService>();
 
         configure?.Invoke(builder);

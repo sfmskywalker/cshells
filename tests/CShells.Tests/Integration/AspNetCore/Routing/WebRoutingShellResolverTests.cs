@@ -9,8 +9,7 @@ namespace CShells.Tests.Integration.AspNetCore.Routing;
 /// End-to-end integration tests for <see cref="WebRoutingShellResolver"/> using a real
 /// <see cref="DefaultShellRouteIndex"/> backed by <see cref="StubShellBlueprintProvider"/>.
 /// These cover the headline US1 / US2 regressions: a cold blueprint resolves and a reloaded
-/// (drained) blueprint re-activates on the next matching request — both without any
-/// <c>PreWarmShells</c> call.
+/// (drained) blueprint re-activates on the next matching request.
 /// </summary>
 public class WebRoutingShellResolverTests
 {
