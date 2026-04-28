@@ -9,7 +9,6 @@ namespace CShells.AspNetCore.Routing;
 /// </summary>
 internal sealed class ShellRouteIndexSnapshot
 {
-    public required FrozenDictionary<string, ShellRouteEntry> ByPathSegment { get; init; }
     public required FrozenDictionary<string, ShellRouteEntry> ByHost { get; init; }
     public required FrozenDictionary<string, ShellRouteEntry> ByHeaderValue { get; init; }
     public required FrozenDictionary<string, ShellRouteEntry> ByClaimValue { get; init; }
@@ -19,7 +18,6 @@ internal sealed class ShellRouteIndexSnapshot
 
     public static ShellRouteIndexSnapshot Empty { get; } = new()
     {
-        ByPathSegment = FrozenDictionary<string, ShellRouteEntry>.Empty,
         ByHost = FrozenDictionary<string, ShellRouteEntry>.Empty,
         ByHeaderValue = FrozenDictionary<string, ShellRouteEntry>.Empty,
         ByClaimValue = FrozenDictionary<string, ShellRouteEntry>.Empty,

@@ -22,7 +22,6 @@ internal sealed class DefaultShellRouteIndex(
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private ShellRouteIndexSnapshot? _snapshot;
-    private Exception? _initialPopulationFailure;
 
     /// <inheritdoc />
     public async ValueTask<ShellRouteMatch?> TryMatchAsync(
@@ -91,11 +90,7 @@ internal sealed class DefaultShellRouteIndex(
     /// Invalidates the snapshot so the next non-name-mode lookup rebuilds it. Called by
     /// <see cref="ShellRouteIndexInvalidator"/> on relevant lifecycle transitions.
     /// </summary>
-    internal void Invalidate()
-    {
-        Volatile.Write(ref _snapshot, null);
-        _initialPopulationFailure = null;
-    }
+    internal void Invalidate() => Volatile.Write(ref _snapshot, null);
 
     private async ValueTask<ShellRouteMatch?> TryMatchByPathSegmentAsync(
         string segment,
@@ -154,7 +149,6 @@ internal sealed class DefaultShellRouteIndex(
             {
                 var built = await BuildSnapshotAsync(cancellationToken).ConfigureAwait(false);
                 Volatile.Write(ref _snapshot, built);
-                _initialPopulationFailure = null;
                 return built;
             }
             catch (OperationCanceledException)
@@ -163,11 +157,10 @@ internal sealed class DefaultShellRouteIndex(
             }
             catch (Exception ex)
             {
-                // Initial population failure: persist the failure so the next call surfaces
-                // the same exception type. Subsequent invalidation can clear it.
-                _initialPopulationFailure = ex;
+                // Initial population failure: leave _snapshot null so the next call retries
+                // BuildSnapshotAsync from scratch. The provider may be transiently unavailable.
                 _logger.LogWarning(ex,
-                    "Initial route-index population failed; non-name-mode routing will surface ShellRouteIndexUnavailableException until the index can be rebuilt.");
+                    "Initial route-index population failed; non-name-mode routing will surface ShellRouteIndexUnavailableException until the next attempt succeeds.");
                 throw new ShellRouteIndexUnavailableException(
                     $"Route index initial population failed via provider '{_provider.GetType().Name}'.", ex);
             }
@@ -182,7 +175,9 @@ internal sealed class DefaultShellRouteIndex(
     {
         var entries = await EnumerateAllEntriesAsync(cancellationToken).ConfigureAwait(false);
 
-        var byPathSegment = new Dictionary<string, ShellRouteEntry>(StringComparer.OrdinalIgnoreCase);
+        // Note: path-segment matches are NOT indexed here — TryMatchByPathSegmentAsync hits
+        // the provider directly via GetAsync(segment) on the request hot path. The snapshot
+        // only carries entries needed by non-name modes (root, host, header, claim).
         var byHost = new Dictionary<string, ShellRouteEntry>(StringComparer.OrdinalIgnoreCase);
         var byHeaderValue = new Dictionary<string, ShellRouteEntry>(StringComparer.OrdinalIgnoreCase);
         var byClaimValue = new Dictionary<string, ShellRouteEntry>(StringComparer.OrdinalIgnoreCase);
@@ -192,7 +187,6 @@ internal sealed class DefaultShellRouteIndex(
 
         foreach (var entry in entries)
         {
-            // Path mode: empty path = root-path opt-in; non-empty path goes into the segment table.
             if (entry.Path is { Length: 0 })
             {
                 if (rootPathEntry is null)
@@ -204,10 +198,6 @@ internal sealed class DefaultShellRouteIndex(
                         "Multiple blueprints opt into root-path routing (WebRouting:Path = \"\"). Root-path lookups will return null per existing ambiguous-fallthrough semantics. Conflicting: '{First}' and '{Second}'.",
                         rootPathEntry.ShellName, entry.ShellName);
                 }
-            }
-            else if (entry.Path is { Length: > 0 } path && !byPathSegment.TryAdd(path, entry))
-            {
-                LogDuplicateMode("Path", path, byPathSegment[path].ShellName, entry.ShellName);
             }
 
             if (entry.Host is { Length: > 0 } host && !byHost.TryAdd(host, entry))
@@ -222,7 +212,6 @@ internal sealed class DefaultShellRouteIndex(
 
         return new ShellRouteIndexSnapshot
         {
-            ByPathSegment = byPathSegment.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
             ByHost = byHost.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
             ByHeaderValue = byHeaderValue.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
             ByClaimValue = byClaimValue.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
