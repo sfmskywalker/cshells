@@ -1,147 +1,185 @@
-using CShells.Lifecycle;
+using System.Security.Claims;
+using System.Text;
+using CShells.AspNetCore.Routing;
 using CShells.Resolution;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.AspNetCore.Resolution;
 
 /// <summary>
-/// Resolves the request's target shell by inspecting each active shell's
-/// <c>WebRouting:*</c> configuration keys — path, host, header, claim, or root path.
+/// Resolves the request's target shell by consulting the blueprint-backed
+/// <see cref="IShellRouteIndex"/>. Path / host / header / claim / root-path matching uses
+/// blueprint metadata directly, so blueprints are visible to routing whether or not their
+/// shells are currently active. The middleware then activates matched shells lazily via
+/// <see cref="CShells.Lifecycle.IShellRegistry.GetOrActivateAsync"/>.
 /// </summary>
 [ResolverOrder(0)]
 public class WebRoutingShellResolver(
-    IShellRegistry registry,
-    WebRoutingShellResolverOptions options) : IShellResolverStrategy
+    IShellRouteIndex routeIndex,
+    WebRoutingShellResolverOptions options,
+    ILogger<WebRoutingShellResolver>? logger = null) : IShellResolverStrategy
 {
-    private readonly IShellRegistry _registry = Guard.Against.Null(registry);
+    private readonly IShellRouteIndex _routeIndex = Guard.Against.Null(routeIndex);
     private readonly WebRoutingShellResolverOptions _options = Guard.Against.Null(options);
+    private readonly ILogger<WebRoutingShellResolver> _logger = logger ?? NullLogger<WebRoutingShellResolver>.Instance;
 
     /// <inheritdoc />
-    public ShellId? Resolve(ShellResolutionContext context)
+    public async Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(context);
-        return TryResolveByPath(context)
-            ?? TryResolveByHost(context)
-            ?? TryResolveByHeader(context)
-            ?? TryResolveByClaim(context)
-            ?? TryResolveByRootPath();
-    }
 
-    private IEnumerable<IShell> ActiveShells() => _registry.GetActiveShells();
+        var criteria = BuildCriteria(context);
 
-    private ShellId? TryResolveByPath(ShellResolutionContext context)
-    {
-        if (!_options.EnablePathRouting)
+        // No mode contributes any criterion (e.g. all routing disabled). Skip silently —
+        // the next strategy in the pipeline decides.
+        if (!HasAnyCriterion(criteria))
             return null;
 
-        var path = context.Get<string>(ShellResolutionContextKeys.Path);
-        if (string.IsNullOrEmpty(path) || path.Length <= 1)
-            return null;
-
-        if (_options.ExcludePaths is { Length: > 0 } excludePaths &&
-            excludePaths.Any(excluded => path.StartsWith(excluded, StringComparison.OrdinalIgnoreCase)))
+        ShellRouteMatch? match;
+        try
         {
+            match = await _routeIndex.TryMatchAsync(criteria, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ShellRouteIndexUnavailableException ex)
+        {
+            _logger.LogWarning(ex,
+                "Route index unavailable for path '{Path}'; falling through to next resolver strategy.",
+                context.Get<string>(ShellResolutionContextKeys.Path));
             return null;
         }
 
-        var pathValue = path.AsSpan(1);
-        var slashIndex = pathValue.IndexOf('/');
-        var firstSegment = slashIndex >= 0 ? pathValue[..slashIndex].ToString() : pathValue.ToString();
-
-        return FindMatchingShell(firstSegment, "Path");
-    }
-
-    private ShellId? TryResolveByHost(ShellResolutionContext context)
-    {
-        if (!_options.EnableHostRouting)
-            return null;
-
-        var host = context.Get<string>(ShellResolutionContextKeys.Host);
-        return string.IsNullOrEmpty(host) ? null : FindMatchingShell(host, "Host");
-    }
-
-    private ShellId? TryResolveByHeader(ShellResolutionContext context)
-    {
-        if (string.IsNullOrWhiteSpace(_options.HeaderName))
-            return null;
-
-        var headerValue = context.Get<string>($"Header:{_options.HeaderName}");
-        return string.IsNullOrEmpty(headerValue)
-            ? null
-            : FindMatchingShellByIdentifier(headerValue, _options.HeaderName, "HeaderName");
-    }
-
-    private ShellId? TryResolveByClaim(ShellResolutionContext context)
-    {
-        if (string.IsNullOrWhiteSpace(_options.ClaimKey))
-            return null;
-
-        var claimValue = context.Get<string>($"Claim:{_options.ClaimKey}");
-        return string.IsNullOrEmpty(claimValue)
-            ? null
-            : FindMatchingShellByIdentifier(claimValue, _options.ClaimKey, "ClaimKey");
-    }
-
-    private ShellId? FindMatchingShell(string valueToMatch, string configKey)
-    {
-        foreach (var shell in ActiveShells())
+        if (match is not null)
         {
-            var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
-            var routeValue = settings.GetConfiguration($"WebRouting:{configKey}");
-
-            if (routeValue?.StartsWith('/') == true)
-                throw new InvalidOperationException($"Web routing path cannot start with a slash: '{routeValue}'");
-
-            if (!string.IsNullOrEmpty(routeValue) && routeValue.Equals(valueToMatch, StringComparison.OrdinalIgnoreCase))
-                return new ShellId(shell.Descriptor.Name);
+            if (_options.LogMatches)
+                _logger.LogDebug("Resolved shell '{Shell}' (mode: {Mode}) for path '{Path}'.",
+                    match.ShellId.Name, match.MatchedMode,
+                    context.Get<string>(ShellResolutionContextKeys.Path));
+            return match.ShellId;
         }
+
+        LogNoMatch(criteria);
         return null;
     }
 
-    private ShellId? FindMatchingShellByIdentifier(string identifierValue, string configuredKey, string configKey)
+    private ShellRouteCriteria BuildCriteria(ShellResolutionContext context)
     {
-        foreach (var shell in ActiveShells())
-        {
-            var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
-            var shellConfigKey = settings.GetConfiguration($"WebRouting:{configKey}");
-            if (string.IsNullOrEmpty(shellConfigKey))
-                continue;
+        string? pathFirstSegment = null;
+        var isRootPath = false;
 
-            if (shellConfigKey.Equals(configuredKey, StringComparison.OrdinalIgnoreCase) &&
-                identifierValue.Equals(shell.Descriptor.Name, StringComparison.OrdinalIgnoreCase))
+        if (_options.EnablePathRouting)
+        {
+            var path = context.Get<string>(ShellResolutionContextKeys.Path);
+            if (!IsExcludedPath(path))
             {
-                return new ShellId(shell.Descriptor.Name);
+                if (string.IsNullOrEmpty(path) || path == "/")
+                {
+                    isRootPath = true;
+                }
+                else
+                {
+                    var span = path.AsSpan();
+                    if (span[0] == '/')
+                        span = span[1..];
+
+                    if (span.Length == 0)
+                    {
+                        isRootPath = true;
+                    }
+                    else
+                    {
+                        var slashIndex = span.IndexOf('/');
+                        pathFirstSegment = (slashIndex >= 0 ? span[..slashIndex] : span).ToString();
+                    }
+                }
             }
         }
-        return null;
-    }
 
-    /// <summary>
-    /// Returns the single shell whose <c>WebRouting:Path</c> is set to the empty string,
-    /// indicating it opts into root-level routing. Ambiguous configuration (multiple shells
-    /// opting in) returns <c>null</c> so the next strategy can decide.
-    /// </summary>
-    private ShellId? TryResolveByRootPath()
-    {
-        if (!_options.EnablePathRouting)
-            return null;
+        string? host = null;
+        if (_options.EnableHostRouting)
+            host = context.Get<string>(ShellResolutionContextKeys.Host);
 
-        ShellId? rootShellId = null;
+        string? headerValue = null;
+        if (!string.IsNullOrWhiteSpace(_options.HeaderName))
+            headerValue = context.Get<string>($"Header:{_options.HeaderName}");
 
-        foreach (var shell in ActiveShells())
+        string? claimValue = null;
+        if (!string.IsNullOrWhiteSpace(_options.ClaimKey))
         {
-            var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
-            var routeValue = settings.GetConfiguration("WebRouting:Path");
+            claimValue = context.Get<string>($"Claim:{_options.ClaimKey}");
 
-            if (routeValue is not { Length: 0 })
-                continue;
-
-            if (rootShellId.HasValue)
-                return null;
-
-            rootShellId = new ShellId(shell.Descriptor.Name);
+            // The legacy resolver also supported reading claims directly off the
+            // ClaimsPrincipal in the resolution context. Preserve that fallback so consumers
+            // that populate the principal but not the colon-keyed claim still work.
+            if (claimValue is null && context.Get<ClaimsPrincipal>(ShellResolutionContextKeys.User) is { } user)
+                claimValue = user.FindFirst(_options.ClaimKey)?.Value;
         }
 
-        return rootShellId;
+        return new ShellRouteCriteria(
+            PathFirstSegment: pathFirstSegment,
+            IsRootPath: isRootPath,
+            Host: host,
+            HeaderName: _options.HeaderName,
+            HeaderValue: headerValue,
+            ClaimKey: _options.ClaimKey,
+            ClaimValue: claimValue);
+    }
+
+    private bool IsExcludedPath(string? path)
+    {
+        if (path is null || _options.ExcludePaths is not { Length: > 0 } excluded)
+            return false;
+
+        foreach (var excludedPath in excluded)
+            if (path.StartsWith(excludedPath, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
+    private static bool HasAnyCriterion(ShellRouteCriteria criteria) =>
+        criteria.PathFirstSegment is { Length: > 0 }
+        || criteria.IsRootPath
+        || criteria.Host is { Length: > 0 }
+        || criteria.HeaderValue is { Length: > 0 }
+        || criteria.ClaimValue is { Length: > 0 };
+
+    private void LogNoMatch(ShellRouteCriteria criteria)
+    {
+        if (!_logger.IsEnabled(LogLevel.Information))
+            return;
+
+        var cap = _options.NoMatchLogCandidateCap;
+        var snapshot = _routeIndex.GetCandidateSnapshot(cap + 1);
+        var truncated = snapshot.Length > cap;
+        var visible = truncated ? cap : snapshot.Length;
+
+        var candidatesBuilder = new StringBuilder();
+        for (var i = 0; i < visible; i++)
+        {
+            if (i > 0) candidatesBuilder.Append(", ");
+            var entry = snapshot[i];
+            candidatesBuilder.Append(entry.ShellName).Append('(');
+            var modes = new List<string>();
+            if (entry.Path is not null) modes.Add($"Path=\"{entry.Path}\"");
+            if (entry.Host is not null) modes.Add($"Host=\"{entry.Host}\"");
+            if (entry.HeaderName is not null) modes.Add($"HeaderName=\"{entry.HeaderName}\"");
+            if (entry.ClaimKey is not null) modes.Add($"ClaimKey=\"{entry.ClaimKey}\"");
+            candidatesBuilder.Append(string.Join("; ", modes));
+            candidatesBuilder.Append(')');
+        }
+        if (truncated)
+            candidatesBuilder.Append($" (+{snapshot.Length - cap} more)");
+
+        _logger.LogInformation(
+            "No shell matched the request. Considered: PathFirstSegment={PathFirstSegment}, IsRootPath={IsRootPath}, Host={Host}, HeaderName={HeaderName}, HeaderValue={HeaderValue}, ClaimKey={ClaimKey}, ClaimValue={ClaimValue}. Candidate blueprints: [{Candidates}]",
+            criteria.PathFirstSegment ?? "(none)",
+            criteria.IsRootPath,
+            criteria.Host ?? "(none)",
+            criteria.HeaderName ?? "(none)",
+            criteria.HeaderValue ?? "(none)",
+            criteria.ClaimKey ?? "(none)",
+            criteria.ClaimValue ?? "(none)",
+            candidatesBuilder.ToString());
     }
 }

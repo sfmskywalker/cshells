@@ -30,7 +30,7 @@ internal sealed class CShellsStartupHostedService(
     {
         if (_preWarmList.Count == 0)
         {
-            _logger.LogInformation("CShells startup: no pre-warm list configured; registry remains idle until first activation.");
+            _logger.LogInformation("CShells startup: no shells pre-warmed; routing will activate shells lazily on first request.");
             return;
         }
 

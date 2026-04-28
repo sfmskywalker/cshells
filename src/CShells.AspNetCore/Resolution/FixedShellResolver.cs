@@ -7,5 +7,6 @@ namespace CShells.AspNetCore.Resolution;
 /// </summary>
 public class FixedShellResolver(ShellId shellId) : IShellResolverStrategy
 {
-    public ShellId? Resolve(ShellResolutionContext context) => shellId;
+    public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+        Task.FromResult<ShellId?>(shellId);
 }

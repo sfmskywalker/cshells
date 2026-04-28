@@ -46,7 +46,8 @@ public class ShellMiddleware(
         // even when the general resolver pipeline would have picked a different default.
         var endpointShellId = context.GetEndpoint()?.Metadata.GetMetadata<ShellEndpointMetadata>()?.ShellId;
 
-        ShellId? shellId = endpointShellId ?? ResolveShellWithCache(context, resolutionContext);
+        ShellId? shellId = endpointShellId
+            ?? await ResolveShellWithCacheAsync(context, resolutionContext, context.RequestAborted).ConfigureAwait(false);
 
         if (shellId is null)
         {
@@ -90,31 +91,37 @@ public class ShellMiddleware(
         await _next(context);
     }
 
-    private ShellId? ResolveShellWithCache(HttpContext context, ShellResolutionContext resolutionContext)
+    private async ValueTask<ShellId?> ResolveShellWithCacheAsync(
+        HttpContext context,
+        ShellResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
     {
         if (!_options.EnableCaching)
-            return _resolver.Resolve(resolutionContext);
+            return await _resolver.ResolveAsync(resolutionContext, cancellationToken).ConfigureAwait(false);
 
         var cacheKey = BuildCacheKey(context);
 
-        return _cache.GetOrCreate(cacheKey, entry =>
+        if (_cache.TryGetValue<ShellId?>(cacheKey, out var cached))
+            return cached;
+
+        var resolvedShellId = await _resolver.ResolveAsync(resolutionContext, cancellationToken).ConfigureAwait(false);
+
+        using var entry = _cache.CreateEntry(cacheKey);
+        entry.Value = resolvedShellId;
+
+        if (resolvedShellId is null)
         {
-            var resolvedShellId = _resolver.Resolve(resolutionContext);
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMilliseconds(1);
+        }
+        else
+        {
+            entry.SlidingExpiration = _options.CacheSlidingExpiration;
+            entry.AbsoluteExpirationRelativeToNow = _options.CacheAbsoluteExpiration;
+            entry.Size = 1;
+            _logger.LogDebug("Cached shell '{ShellId}' for key '{CacheKey}'", resolvedShellId.Value, cacheKey);
+        }
 
-            if (resolvedShellId is null)
-            {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMilliseconds(1);
-            }
-            else
-            {
-                entry.SlidingExpiration = _options.CacheSlidingExpiration;
-                entry.AbsoluteExpirationRelativeToNow = _options.CacheAbsoluteExpiration;
-                entry.Size = 1;
-                _logger.LogDebug("Cached shell '{ShellId}' for key '{CacheKey}'", resolvedShellId.Value, cacheKey);
-            }
-
-            return resolvedShellId;
-        });
+        return resolvedShellId;
     }
 
     private static string BuildCacheKey(HttpContext context)
