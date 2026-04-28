@@ -234,4 +234,37 @@ public class DefaultShellRouteIndexTests
 
         Assert.Null(match);
     }
+
+    [Fact(DisplayName = "ContainsShellName returns false before any snapshot is built")]
+    public void ContainsShellName_NoSnapshot_ReturnsFalse()
+    {
+        var provider = new StubShellBlueprintProvider()
+            .Add("Default", b => b.WithConfiguration("WebRouting:Path", ""));
+
+        var index = new DefaultShellRouteIndex(provider);
+
+        Assert.False(index.ContainsShellName("Default"));
+        Assert.False(index.ContainsShellName("acme"));
+        // No snapshot should have been built as a side effect of this query.
+        Assert.Equal(0, provider.ListCount);
+    }
+
+    [Fact(DisplayName = "ContainsShellName matches case-insensitively against the current snapshot")]
+    public async Task ContainsShellName_MatchesCaseInsensitively()
+    {
+        var provider = new StubShellBlueprintProvider()
+            .Add("Default", b => b.WithConfiguration("WebRouting:Path", ""));
+
+        var index = new DefaultShellRouteIndex(provider);
+
+        // Trigger a snapshot rebuild by issuing a root-path lookup.
+        await index.TryMatchAsync(new ShellRouteCriteria(
+            PathFirstSegment: null, IsRootPath: true, Host: null,
+            HeaderName: null, HeaderValue: null, ClaimKey: null, ClaimValue: null));
+
+        Assert.True(index.ContainsShellName("Default"));
+        Assert.True(index.ContainsShellName("default"));
+        Assert.True(index.ContainsShellName("DEFAULT"));
+        Assert.False(index.ContainsShellName("acme"));
+    }
 }

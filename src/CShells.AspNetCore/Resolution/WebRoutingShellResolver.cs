@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using CShells.AspNetCore.Routing;
@@ -69,10 +70,14 @@ public class WebRoutingShellResolver(
 
         if (_options.EnablePathRouting)
         {
+            // Only consider root-path or path-segment matching when the resolution context
+            // actually carries a Path value. Non-HTTP contexts (e.g. message-queue resolvers)
+            // and tests that don't populate Path leave it null, and we don't want to treat
+            // a missing key as an implicit root-path request.
             var path = context.Get<string>(ShellResolutionContextKeys.Path);
-            if (!IsExcludedPath(path))
+            if (path is not null && !IsExcludedPath(path))
             {
-                if (string.IsNullOrEmpty(path) || path == "/")
+                if (path.Length == 0 || path == "/")
                 {
                     isRootPath = true;
                 }
@@ -149,8 +154,11 @@ public class WebRoutingShellResolver(
         if (!_logger.IsEnabled(LogLevel.Information))
             return;
 
-        var cap = _options.NoMatchLogCandidateCap;
-        var snapshot = _routeIndex.GetCandidateSnapshot(cap + 1);
+        // Clamp to a non-negative cap; treat 0 as "log the no-match line but omit candidates".
+        var cap = Math.Max(0, _options.NoMatchLogCandidateCap);
+        var snapshot = cap == 0
+            ? ImmutableArray<ShellRouteEntry>.Empty
+            : _routeIndex.GetCandidateSnapshot(cap + 1);
         var truncated = snapshot.Length > cap;
         var visible = truncated ? cap : snapshot.Length;
 

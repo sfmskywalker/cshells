@@ -18,11 +18,22 @@ namespace CShells.AspNetCore.Routing;
 /// from process start.
 /// </para>
 /// <para>
-/// We invalidate on transitions to <see cref="ShellLifecycleState.Initializing"/> (a new
-/// generation is starting — routing config may have changed via reload, or a brand-new
-/// blueprint was added) and to <see cref="ShellLifecycleState.Disposed"/> (a generation has
-/// gone away — a blueprint may have been removed via the management API). Other transitions
-/// do not change routing metadata and are ignored.
+/// We invalidate on transitions that may change the snapshot's routing metadata:
+/// </para>
+/// <list type="bullet">
+///   <item><see cref="ShellLifecycleState.Initializing"/> for a name NOT yet known to the
+///         snapshot — a brand-new blueprint just appeared (e.g., created via the management
+///         API and now activated for the first time).</item>
+///   <item><see cref="ShellLifecycleState.Disposed"/> — a generation has gone away; the
+///         underlying blueprint may have been removed (or its config replaced via reload),
+///         so we re-read the catalogue.</item>
+/// </list>
+/// <para>
+/// We deliberately do NOT invalidate on <see cref="ShellLifecycleState.Initializing"/> for
+/// a name already present in the snapshot — that's the routine lazy-activation path for an
+/// existing blueprint, and the routing metadata didn't change. Doing so would force a
+/// <c>provider.ListAsync</c> rescan on every first request to every shell, which would
+/// negate the snapshot's caching benefit at scale.
 /// </para>
 /// <para>
 /// Subscriber-isolation per Constitution Principle VII: if invalidation throws, we log and
@@ -48,13 +59,23 @@ internal sealed class ShellRouteIndexInvalidator(
 
         try
         {
-            if (_routeIndex is DefaultShellRouteIndex defaultIndex)
+            if (_routeIndex is not DefaultShellRouteIndex defaultIndex)
+                return Task.CompletedTask;
+
+            // Initializing for a name already in the snapshot is the routine lazy-activation
+            // path for an existing blueprint — nothing to invalidate. Skipping here keeps
+            // first-request activation O(1) on the snapshot side and avoids per-shell
+            // provider.ListAsync rescans.
+            if (current == ShellLifecycleState.Initializing
+                && defaultIndex.ContainsShellName(shell.Descriptor.Name))
             {
-                defaultIndex.Invalidate();
-                _logger.LogDebug(
-                    "Invalidated route-index snapshot in response to '{ShellName}' transition {Previous} → {Current}.",
-                    shell.Descriptor.Name, previous, current);
+                return Task.CompletedTask;
             }
+
+            defaultIndex.Invalidate();
+            _logger.LogDebug(
+                "Invalidated route-index snapshot in response to '{ShellName}' transition {Previous} → {Current}.",
+                shell.Descriptor.Name, previous, current);
         }
         catch (Exception ex)
         {

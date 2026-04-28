@@ -92,6 +92,33 @@ internal sealed class DefaultShellRouteIndex(
     /// </summary>
     internal void Invalidate() => Volatile.Write(ref _snapshot, null);
 
+    /// <summary>
+    /// True iff the current snapshot already contains a route entry for <paramref name="shellName"/>.
+    /// Used by <see cref="ShellRouteIndexInvalidator"/> to skip invalidation for routine
+    /// lazy-activation events that don't change the routing graph: if the name is already
+    /// in the snapshot, its routing metadata was captured when the snapshot was built and
+    /// no rebuild is needed.
+    /// </summary>
+    /// <remarks>
+    /// Returns <c>false</c> when no snapshot has been built yet — in that state there's
+    /// nothing to invalidate, so the caller can also short-circuit. The check is O(N) over
+    /// the snapshot's entry list (<c>All</c>); this is fine because lifecycle fan-out is
+    /// not request-rate.
+    /// </remarks>
+    internal bool ContainsShellName(string shellName)
+    {
+        Guard.Against.NullOrWhiteSpace(shellName);
+        var snapshot = Volatile.Read(ref _snapshot);
+        if (snapshot is null)
+            return false;
+
+        foreach (var entry in snapshot.All)
+            if (string.Equals(entry.ShellName, shellName, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
     private async ValueTask<ShellRouteMatch?> TryMatchByPathSegmentAsync(
         string segment,
         CancellationToken cancellationToken)
