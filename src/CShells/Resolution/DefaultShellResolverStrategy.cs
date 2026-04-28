@@ -13,13 +13,13 @@ public class DefaultShellResolverStrategy(IShellRegistry registry) : IShellResol
     private readonly IShellRegistry _registry = Guard.Against.Null(registry);
 
     /// <inheritdoc />
-    public ShellId? Resolve(ShellResolutionContext context)
+    public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(context);
 
         var defaultShell = _registry.GetActive(ShellConstants.DefaultShellName);
         if (defaultShell is not null)
-            return new ShellId(defaultShell.Descriptor.Name);
+            return Task.FromResult<ShellId?>(new ShellId(defaultShell.Descriptor.Name));
 
         // Deterministic fallback: pick the active shell whose name sorts first under
         // case-insensitive ordinal order. Without a stable sort, routing behaviour could drift
@@ -28,6 +28,7 @@ public class DefaultShellResolverStrategy(IShellRegistry registry) : IShellResol
             .OrderBy(s => s.Descriptor.Name, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
 
-        return firstActive is null ? (ShellId?)null : new ShellId(firstActive.Descriptor.Name);
+        ShellId? result = firstActive is null ? (ShellId?)null : new ShellId(firstActive.Descriptor.Name);
+        return Task.FromResult(result);
     }
 }
