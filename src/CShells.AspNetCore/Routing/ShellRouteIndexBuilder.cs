@@ -62,6 +62,18 @@ internal static class ShellRouteIndexBuilder
             path = null;
         }
 
+        // Path-by-name convention: TryMatchByPathSegmentAsync looks up the blueprint via
+        // IShellBlueprintProvider.GetAsync(segment), so path-mode requires WebRouting:Path
+        // to equal the blueprint's short name (case-insensitively). A non-matching value
+        // is silently inert for path routing on the request hot path; warn here so the
+        // misconfiguration is discoverable at startup rather than via mysterious 404s.
+        if (path is { Length: > 0 } && !string.Equals(path, blueprint.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning(
+                "Blueprint '{Name}' declares WebRouting:Path '{Path}' which differs from the blueprint name. Path-mode routing requires WebRouting:Path to equal the blueprint name (the request's first path segment is looked up directly via IShellBlueprintProvider.GetAsync); this blueprint will not be reachable via path routing. Use the blueprint name as the path, or route via Host / HeaderName / ClaimKey instead.",
+                blueprint.Name, path);
+        }
+
         return ShellRouteEntry.TryCreate(blueprint.Name, path, host, headerName, claimKey);
     }
 }

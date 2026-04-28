@@ -4,8 +4,10 @@ using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -178,6 +180,14 @@ public class ShellMiddleware(
             if (!matcher.TryMatch(context.Request.Path, routeValues))
                 continue;
 
+            // TemplateMatcher only matches structurally; it does NOT evaluate inline route
+            // constraints (`:int`, `:guid`, custom). Without this step, an endpoint like
+            // `{tenant}/orders/{id:int}` would be selected for `/acme/orders/hello`, sending
+            // the request to the wrong handler. Apply the framework's resolved IRouteConstraint
+            // instances so cold-start re-matching honours the same constraints UseRouting does.
+            if (!ApplyInlineConstraints(routeEndpoint.RoutePattern, routeValues, context))
+                continue;
+
             context.SetEndpoint(routeEndpoint);
             context.Request.RouteValues = routeValues;
             _logger.LogDebug(
@@ -185,5 +195,41 @@ public class ShellMiddleware(
                 routeEndpoint.RoutePattern.RawText, shellId);
             return;
         }
+    }
+
+    private static bool ApplyInlineConstraints(
+        RoutePattern pattern,
+        RouteValueDictionary routeValues,
+        HttpContext context)
+    {
+        if (pattern.ParameterPolicies.Count == 0)
+            return true;
+
+        // Lazily resolved on first non-pre-built policy reference.
+        IInlineConstraintResolver? resolver = null;
+
+        foreach (var (parameterName, policies) in pattern.ParameterPolicies)
+        {
+            foreach (var policyRef in policies)
+            {
+                // RoutePattern resolves inline policies at build time and stores them on
+                // the reference. Fall back to runtime resolution for patterns built without
+                // an IInlineConstraintResolver in scope.
+                var policy = policyRef.ParameterPolicy;
+                if (policy is null && policyRef.Content is { Length: > 0 } content)
+                {
+                    resolver ??= context.RequestServices.GetService<IInlineConstraintResolver>();
+                    policy = resolver?.ResolveConstraint(content);
+                }
+
+                if (policy is IRouteConstraint constraint
+                    && !constraint.Match(context, route: null, parameterName, routeValues, RouteDirection.IncomingRequest))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }

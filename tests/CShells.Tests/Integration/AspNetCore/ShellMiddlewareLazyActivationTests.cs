@@ -4,6 +4,8 @@ using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -84,6 +86,63 @@ public class ShellMiddlewareLazyActivationTests
         Assert.NotEqual(StatusCodes.Status503ServiceUnavailable, ctx.Response.StatusCode);
     }
 
+    [Fact(DisplayName = "Cold-start re-match honours inline route constraints")]
+    public async Task ColdStart_ReMatch_HonoursInlineConstraints()
+    {
+        // Two endpoints whose raw templates are structurally identical but disambiguated
+        // by inline constraint. TemplateMatcher alone matches both structurally, so without
+        // constraint evaluation the first-added endpoint would win regardless of whether
+        // the route value satisfies its policy. The fix walks RoutePattern.ParameterPolicies
+        // and rejects candidates whose IRouteConstraints don't accept the route values.
+        var dataSource = new DynamicShellEndpointDataSource();
+
+        var settings = new ShellSettings();
+        var shellId = new ShellId("acme");
+        var shellMetadata = new ShellEndpointMetadata(shellId, settings);
+
+        // Add the int-constrained endpoint FIRST, so structural-only matching would pick it.
+        var intHandlerInvoked = false;
+        var intEndpoint = new RouteEndpoint(
+            _ => { intHandlerInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("acme/orders/{id:int}"),
+            order: 0,
+            new EndpointMetadataCollection(shellMetadata),
+            displayName: "int-handler");
+
+        var alphaHandlerInvoked = false;
+        var alphaEndpoint = new RouteEndpoint(
+            _ => { alphaHandlerInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("acme/orders/{slug:alpha}"),
+            order: 0,
+            new EndpointMetadataCollection(shellMetadata),
+            displayName: "alpha-handler");
+
+        dataSource.AddEndpoints([intEndpoint, alphaEndpoint]);
+
+        var shell = ShellMiddlewareTests.FakeShell.WithServices(_ => { }, name: "acme");
+
+        var middleware = new ShellMiddleware(
+            ctx => ctx.GetEndpoint() is { } ep ? ((RouteEndpoint)ep).RequestDelegate!(ctx) : Task.CompletedTask,
+            new FixedShellResolver("acme"),
+            new ColdActivatingRegistry(shell),
+            dataSource,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new ShellMiddlewareOptions()));
+
+        var ctx = new DefaultHttpContext();
+        ctx.Features.Set<IHttpResponseFeature>(new HttpResponseFeature());
+        ctx.Request.Path = "/acme/orders/hello";
+        // AddRouting registers IInlineConstraintResolver — needed for the constraint-resolution
+        // fallback when RoutePatternFactory.Parse didn't pre-resolve policies on the reference.
+        ctx.RequestServices = new ServiceCollection().AddRouting().BuildServiceProvider();
+
+        await middleware.InvokeAsync(ctx);
+
+        Assert.Equal("alpha-handler", ctx.GetEndpoint()?.DisplayName);
+        Assert.True(alphaHandlerInvoked);
+        Assert.False(intHandlerInvoked, "int-handler must be rejected by the inline `:int` constraint.");
+    }
+
     // =================================================================
     // Test doubles
     // =================================================================
@@ -92,6 +151,29 @@ public class ShellMiddlewareLazyActivationTests
     {
         public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
             Task.FromResult<ShellId?>(new ShellId(name));
+    }
+
+    /// <summary>
+    /// Registry whose <see cref="GetActive"/> always returns <c>null</c> so the middleware
+    /// observes a cold activation, while <see cref="GetOrActivateAsync"/> returns a preset
+    /// shell. Used to exercise the cold-start re-match path.
+    /// </summary>
+    private sealed class ColdActivatingRegistry(IShell shell) : IShellRegistry
+    {
+        public Task<IShell> GetOrActivateAsync(string name, CancellationToken ct = default) => Task.FromResult(shell);
+        public Task<IShell> ActivateAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ReloadResult> ReloadAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ReloadResult>> ReloadActiveAsync(ReloadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UnregisterBlueprintAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ProvidedBlueprint?> GetBlueprintAsync(string name, CancellationToken ct = default) => Task.FromResult<ProvidedBlueprint?>(null);
+        public Task<IShellBlueprintManager?> GetManagerAsync(string name, CancellationToken ct = default) => Task.FromResult<IShellBlueprintManager?>(null);
+        public Task<ShellPage> ListAsync(ShellListQuery query, CancellationToken ct = default) => Task.FromResult(new ShellPage([], null));
+        public IShell? GetActive(string name) => null;
+        public IReadOnlyCollection<IShell> GetAll(string name) => [shell];
+        public IReadOnlyCollection<IShell> GetActiveShells() => [shell];
+        public void Subscribe(IShellLifecycleSubscriber subscriber) { }
+        public void Unsubscribe(IShellLifecycleSubscriber subscriber) { }
     }
 
     /// <summary>Minimal registry that throws a preset exception from GetOrActivateAsync.</summary>

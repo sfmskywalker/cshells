@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Routing;
 using CShells.Tests.TestHelpers;
+using Microsoft.Extensions.Logging;
 
 namespace CShells.Tests.Unit.AspNetCore.Routing;
 
@@ -251,6 +252,41 @@ public class DefaultShellRouteIndexTests
         Assert.Equal(0, provider.ListCount);
     }
 
+    [Fact(DisplayName = "Path != ShellName warns at population time and is silently inert for path mode")]
+    public async Task PathDifferentFromName_WarnsAndDoesNotMatch()
+    {
+        // Convention enforcement: TryMatchByPathSegmentAsync looks up the blueprint by name
+        // equal to the request's first path segment, so a blueprint declaring
+        // WebRouting:Path != Name is unreachable via path mode. The builder must surface
+        // this misconfiguration at startup rather than letting the request silently 404.
+        var provider = new StubShellBlueprintProvider()
+            .Add("acme-corp", b => b.WithConfiguration("WebRouting:Path", "acme"));
+
+        var captured = new List<(LogLevel Level, string Message)>();
+        var logger = new CapturingLogger<DefaultShellRouteIndex>(captured);
+
+        var index = new DefaultShellRouteIndex(provider, logger);
+
+        // Path-by-name lookup for "acme" — the provider has no blueprint named "acme",
+        // only "acme-corp" with Path="acme". Returns null per the convention.
+        var match = await index.TryMatchAsync(new ShellRouteCriteria(
+            PathFirstSegment: "acme", IsRootPath: false, Host: null,
+            HeaderName: null, HeaderValue: null, ClaimKey: null, ClaimValue: null));
+        Assert.Null(match);
+
+        // Triggering a snapshot build (e.g., a host-mode lookup) runs the builder and the
+        // warning fires.
+        await index.TryMatchAsync(new ShellRouteCriteria(
+            PathFirstSegment: null, IsRootPath: true, Host: null,
+            HeaderName: null, HeaderValue: null, ClaimKey: null, ClaimValue: null));
+
+        Assert.Contains(captured, e =>
+            e.Level == LogLevel.Warning
+            && e.Message.Contains("acme-corp")
+            && e.Message.Contains("WebRouting:Path 'acme'")
+            && e.Message.Contains("differs from the blueprint name"));
+    }
+
     [Fact(DisplayName = "Path with leading slash is rejected at index-population time, never throws on hot path")]
     public async Task LeadingSlashPath_ExcludedQuietly()
     {
@@ -298,5 +334,19 @@ public class DefaultShellRouteIndexTests
         Assert.True(index.ContainsShellName("default"));
         Assert.True(index.ContainsShellName("DEFAULT"));
         Assert.False(index.ContainsShellName("acme"));
+    }
+
+    private sealed class CapturingLogger<T>(List<(LogLevel Level, string Message)> sink) : ILogger<T>
+    {
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            sink.Add((logLevel, formatter(state, exception)));
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
     }
 }

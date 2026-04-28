@@ -276,14 +276,21 @@ internal sealed class DefaultShellRouteIndex(
                 }
             }
 
+            // Host mode CAN collide across blueprints (two shells declaring the same
+            // WebRouting:Host); the duplicate-detection log is meaningful here.
             if (entry.Host is { Length: > 0 } host && !byHost.TryAdd(host, entry))
                 LogDuplicateMode("Host", host, byHost[host].ShellName, entry.ShellName);
 
-            if (entry.HeaderName is { Length: > 0 } && !byHeaderValue.TryAdd(entry.ShellName, entry))
-                LogDuplicateMode("HeaderName", entry.ShellName, byHeaderValue[entry.ShellName].ShellName, entry.ShellName);
+            // Header / claim modes are keyed by ShellName (the request's header or claim
+            // value is interpreted as the target shell name per the routing convention).
+            // ShellNames are unique per provider, so these can't collide — no duplicate-
+            // detection log is meaningful. Direct assignment keeps the code honest about
+            // that invariant.
+            if (entry.HeaderName is { Length: > 0 })
+                byHeaderValue[entry.ShellName] = entry;
 
-            if (entry.ClaimKey is { Length: > 0 } && !byClaimValue.TryAdd(entry.ShellName, entry))
-                LogDuplicateMode("ClaimKey", entry.ShellName, byClaimValue[entry.ShellName].ShellName, entry.ShellName);
+            if (entry.ClaimKey is { Length: > 0 })
+                byClaimValue[entry.ShellName] = entry;
         }
 
         return new ShellRouteIndexSnapshot
