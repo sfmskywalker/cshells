@@ -13,9 +13,11 @@ builder.AddShells(cshells =>
     cshells.WithHostAssemblies(); // Re-include the built-in host-derived source explicitly for this sample.
     cshells.WithAssemblyContaining<CoreFeature>(); // Add the separate features assembly as an explicit source.
 
-    // In 007, activation is lazy — shells come up on first touch rather than at startup. This
-    // sample pre-warms the known tenants so the demo worker has shells to iterate from t=0 and
-    // so end-to-end tests can assert post-startup state without triggering an HTTP request.
+    // Routing activates shells lazily on first request (feature 010). This sample still
+    // pre-warms so the demo background worker has shells to iterate from t=0 and so
+    // end-to-end tests can assert post-startup state without first issuing an HTTP request.
+    // PreWarmShells is a perf hint now, not a correctness requirement: removing this line
+    // still serves requests correctly — the first request to each shell pays activation cost.
     cshells.PreWarmShells("Default", "Acme", "Contoso");
 });
 

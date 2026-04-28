@@ -86,7 +86,8 @@ public class ShellMiddlewareLazyActivationTests
 
     private sealed class FixedShellResolver(string name) : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => new(name);
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(new ShellId(name));
     }
 
     /// <summary>Minimal registry that throws a preset exception from GetOrActivateAsync.</summary>

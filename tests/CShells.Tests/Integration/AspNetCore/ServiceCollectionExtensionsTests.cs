@@ -18,12 +18,12 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact(DisplayName = "AddCShellsAspNetCore default resolver returns null when no active shells exist")]
-    public void AddCShellsAspNetCore_DefaultResolver_ReturnsNullWithoutShells()
+    public async Task AddCShellsAspNetCore_DefaultResolver_ReturnsNullWithoutShells()
     {
         using var sp = BuildProvider();
         var resolver = sp.GetRequiredService<IShellResolver>();
 
-        var result = resolver.Resolve(new ShellResolutionContext());
+        var result = await resolver.ResolveAsync(new ShellResolutionContext());
 
         Assert.Null(result);
     }
@@ -79,7 +79,7 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact(DisplayName = "DefaultShellResolver orchestrates strategies in order and returns the first non-null hit")]
-    public void DefaultShellResolver_OrchestratesInOrder()
+    public async Task DefaultShellResolver_OrchestratesInOrder()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -90,7 +90,7 @@ public class ServiceCollectionExtensionsTests
         using var sp = services.BuildServiceProvider();
         var resolver = sp.GetRequiredService<IShellResolver>();
 
-        var result = resolver.Resolve(new ShellResolutionContext());
+        var result = await resolver.ResolveAsync(new ShellResolutionContext());
 
         Assert.NotNull(result);
         Assert.Equal(new ShellId("Custom"), result.Value);
@@ -118,16 +118,19 @@ public class ServiceCollectionExtensionsTests
 
     private sealed class CustomShellResolver : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => new("Custom");
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(new ShellId("Custom"));
     }
 
     private sealed class CustomStrategy : IShellResolverStrategy
     {
-        public ShellId? Resolve(ShellResolutionContext context) => new("Custom");
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(new ShellId("Custom"));
     }
 
     private sealed class NullStrategy : IShellResolverStrategy
     {
-        public ShellId? Resolve(ShellResolutionContext context) => null;
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(null);
     }
 }

@@ -187,12 +187,14 @@ public class ShellMiddlewareTests
 
     private sealed class NullShellResolver : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => null;
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(null);
     }
 
     private sealed class FixedShellResolver(ShellId shellId) : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => shellId;
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(shellId);
     }
 
     internal sealed class FakeRegistry(FakeShell? shell = null) : IShellRegistry
