@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
+using CShells.Lifecycle.Policies;
 using CShells.Management.Api;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -48,6 +49,10 @@ internal sealed class ManagementApiFixture : IAsyncDisposable
             c.WithAssemblies();
             configureCShells?.Invoke(c);
         });
+        // Override the 30s default so tests with stuck drain handlers don't
+        // block for ~33s each during fixture teardown.
+        builder.Services.AddSingleton<IDrainPolicy>(
+            new FixedTimeoutDrainPolicy(TimeSpan.FromSeconds(1)));
 
         _app = builder.Build();
         _app.UseAuthorization();

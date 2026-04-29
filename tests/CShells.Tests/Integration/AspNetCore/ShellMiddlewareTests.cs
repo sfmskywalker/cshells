@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Middleware;
+using CShells.AspNetCore.Routing;
 using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
@@ -135,21 +136,23 @@ public class ShellMiddlewareTests
     }
 
     [Theory(DisplayName = "Constructor guard clauses throw ArgumentNullException")]
-    [InlineData(true, false, false, false, false, "next")]
-    [InlineData(false, true, false, false, false, "resolver")]
-    [InlineData(false, false, true, false, false, "registry")]
-    [InlineData(false, false, false, true, false, "cache")]
-    [InlineData(false, false, false, false, true, "options")]
+    [InlineData(true, false, false, false, false, false, "next")]
+    [InlineData(false, true, false, false, false, false, "resolver")]
+    [InlineData(false, false, true, false, false, false, "registry")]
+    [InlineData(false, false, false, true, false, false, "endpointDataSource")]
+    [InlineData(false, false, false, false, true, false, "cache")]
+    [InlineData(false, false, false, false, false, true, "options")]
     public void Constructor_GuardClauses_ThrowArgumentNullException(
-        bool nullNext, bool nullResolver, bool nullRegistry, bool nullCache, bool nullOptions, string expectedParam)
+        bool nullNext, bool nullResolver, bool nullRegistry, bool nullDataSource, bool nullCache, bool nullOptions, string expectedParam)
     {
         RequestDelegate? next = nullNext ? null : _ => Task.CompletedTask;
         IShellResolver? resolver = nullResolver ? null : new NullShellResolver();
         IShellRegistry? registry = nullRegistry ? null : new FakeRegistry();
+        DynamicShellEndpointDataSource? dataSource = nullDataSource ? null : new DynamicShellEndpointDataSource();
         IMemoryCache? cache = nullCache ? null : new MemoryCache(new MemoryCacheOptions());
         IOptions<ShellMiddlewareOptions>? options = nullOptions ? null : Options.Create(new ShellMiddlewareOptions());
 
-        var ex = Assert.Throws<ArgumentNullException>(() => new ShellMiddleware(next!, resolver!, registry!, cache!, options!));
+        var ex = Assert.Throws<ArgumentNullException>(() => new ShellMiddleware(next!, resolver!, registry!, dataSource!, cache!, options!));
         Assert.Equal(expectedParam, ex.ParamName);
     }
 
@@ -161,12 +164,14 @@ public class ShellMiddlewareTests
         RequestDelegate next,
         IShellResolver? resolver = null,
         IShellRegistry? registry = null,
+        DynamicShellEndpointDataSource? endpointDataSource = null,
         IMemoryCache? cache = null,
         IOptions<ShellMiddlewareOptions>? options = null) =>
         new(
             next,
             resolver ?? new NullShellResolver(),
             registry ?? new FakeRegistry(),
+            endpointDataSource ?? new DynamicShellEndpointDataSource(),
             cache ?? new MemoryCache(new MemoryCacheOptions()),
             options ?? Options.Create(new ShellMiddlewareOptions()));
 
@@ -187,12 +192,14 @@ public class ShellMiddlewareTests
 
     private sealed class NullShellResolver : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => null;
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(null);
     }
 
     private sealed class FixedShellResolver(ShellId shellId) : IShellResolver
     {
-        public ShellId? Resolve(ShellResolutionContext context) => shellId;
+        public Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult<ShellId?>(shellId);
     }
 
     internal sealed class FakeRegistry(FakeShell? shell = null) : IShellRegistry

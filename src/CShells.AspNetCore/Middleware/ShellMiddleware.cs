@@ -3,7 +3,11 @@ using CShells.AspNetCore.Routing;
 using CShells.Lifecycle;
 using CShells.Resolution;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -25,6 +29,7 @@ public class ShellMiddleware(
     RequestDelegate next,
     IShellResolver resolver,
     IShellRegistry registry,
+    DynamicShellEndpointDataSource endpointDataSource,
     IMemoryCache cache,
     IOptions<ShellMiddlewareOptions> options,
     ILogger<ShellMiddleware>? logger = null)
@@ -32,6 +37,7 @@ public class ShellMiddleware(
     private readonly RequestDelegate _next = Guard.Against.Null(next);
     private readonly IShellResolver _resolver = Guard.Against.Null(resolver);
     private readonly IShellRegistry _registry = Guard.Against.Null(registry);
+    private readonly DynamicShellEndpointDataSource _endpointDataSource = Guard.Against.Null(endpointDataSource);
     private readonly IMemoryCache _cache = Guard.Against.Null(cache);
     private readonly ShellMiddlewareOptions _options = Guard.Against.Null(options).Value;
     private readonly ILogger<ShellMiddleware> _logger = logger ?? NullLogger<ShellMiddleware>.Instance;
@@ -46,7 +52,8 @@ public class ShellMiddleware(
         // even when the general resolver pipeline would have picked a different default.
         var endpointShellId = context.GetEndpoint()?.Metadata.GetMetadata<ShellEndpointMetadata>()?.ShellId;
 
-        ShellId? shellId = endpointShellId ?? ResolveShellWithCache(context, resolutionContext);
+        ShellId? shellId = endpointShellId
+            ?? await ResolveShellWithCacheAsync(context, resolutionContext, context.RequestAborted).ConfigureAwait(false);
 
         if (shellId is null)
         {
@@ -56,6 +63,9 @@ public class ShellMiddleware(
         }
 
         _logger.LogInformation("Resolved shell '{ShellId}' for request path '{Path}'", shellId.Value, context.Request.Path);
+
+        // Check whether the shell is already active so we can detect cold activation below.
+        var wasCold = _registry.GetActive(shellId.Value.Name) is null;
 
         IShell shell;
         try
@@ -78,6 +88,13 @@ public class ShellMiddleware(
             return;
         }
 
+        // Cold activation: UseRouting() ran before this middleware and found no endpoints
+        // (they hadn't been registered yet). Now that activation has completed and the
+        // ShellEndpointRegistrationHandler has published the shell's endpoints, re-match
+        // the request so the endpoint middleware downstream can execute the handler.
+        if (wasCold && context.GetEndpoint() is null)
+            TryMatchEndpointAfterColdActivation(context, shellId.Value);
+
         // BeginScope increments the shell's active-scope counter (so in-flight drains' phase-1
         // waits for this request to complete). The scope is released via OnCompleted (not
         // `await using`) so upstream middleware can still read RequestServices during its
@@ -90,36 +107,129 @@ public class ShellMiddleware(
         await _next(context);
     }
 
-    private ShellId? ResolveShellWithCache(HttpContext context, ShellResolutionContext resolutionContext)
+    private async ValueTask<ShellId?> ResolveShellWithCacheAsync(
+        HttpContext context,
+        ShellResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
     {
         if (!_options.EnableCaching)
-            return _resolver.Resolve(resolutionContext);
+            return await _resolver.ResolveAsync(resolutionContext, cancellationToken).ConfigureAwait(false);
 
         var cacheKey = BuildCacheKey(context);
 
-        return _cache.GetOrCreate(cacheKey, entry =>
+        if (_cache.TryGetValue<ShellId?>(cacheKey, out var cached))
+            return cached;
+
+        var resolvedShellId = await _resolver.ResolveAsync(resolutionContext, cancellationToken).ConfigureAwait(false);
+
+        using var entry = _cache.CreateEntry(cacheKey);
+        entry.Value = resolvedShellId;
+
+        if (resolvedShellId is null)
         {
-            var resolvedShellId = _resolver.Resolve(resolutionContext);
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMilliseconds(1);
+        }
+        else
+        {
+            entry.SlidingExpiration = _options.CacheSlidingExpiration;
+            entry.AbsoluteExpirationRelativeToNow = _options.CacheAbsoluteExpiration;
+            entry.Size = 1;
+            _logger.LogDebug("Cached shell '{ShellId}' for key '{CacheKey}'", resolvedShellId.Value, cacheKey);
+        }
 
-            if (resolvedShellId is null)
-            {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMilliseconds(1);
-            }
-            else
-            {
-                entry.SlidingExpiration = _options.CacheSlidingExpiration;
-                entry.AbsoluteExpirationRelativeToNow = _options.CacheAbsoluteExpiration;
-                entry.Size = 1;
-                _logger.LogDebug("Cached shell '{ShellId}' for key '{CacheKey}'", resolvedShellId.Value, cacheKey);
-            }
-
-            return resolvedShellId;
-        });
+        return resolvedShellId;
     }
 
     private static string BuildCacheKey(HttpContext context)
     {
         var request = context.Request;
         return $"{request.Host}:{request.Path}:{request.Method}";
+    }
+
+    /// <summary>
+    /// After a cold shell activation, UseRouting() has already run and found no endpoint.
+    /// The shell's endpoints are now registered in the <see cref="DynamicShellEndpointDataSource"/>.
+    /// Walk the data source and set the first matching endpoint on the context so the downstream
+    /// endpoint middleware can execute it.
+    /// </summary>
+    private void TryMatchEndpointAfterColdActivation(HttpContext context, ShellId shellId)
+    {
+        foreach (var endpoint in _endpointDataSource.Endpoints)
+        {
+            if (endpoint is not RouteEndpoint routeEndpoint)
+                continue;
+
+            var metadata = routeEndpoint.Metadata.GetMetadata<ShellEndpointMetadata>();
+            if (metadata is null || !metadata.ShellId.Equals(shellId))
+                continue;
+
+            // Check HTTP method constraint first (cheap).
+            var methodMetadata = routeEndpoint.Metadata.GetMetadata<HttpMethodMetadata>();
+            if (methodMetadata is not null &&
+                !methodMetadata.HttpMethods.Contains(context.Request.Method, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            var template = TemplateParser.Parse(routeEndpoint.RoutePattern.RawText ?? "");
+            var defaults = new RouteValueDictionary();
+            foreach (var kvp in routeEndpoint.RoutePattern.Defaults)
+                defaults[kvp.Key] = kvp.Value;
+
+            var matcher = new TemplateMatcher(template, defaults);
+            var routeValues = new RouteValueDictionary();
+
+            if (!matcher.TryMatch(context.Request.Path, routeValues))
+                continue;
+
+            // TemplateMatcher only matches structurally; it does NOT evaluate inline route
+            // constraints (`:int`, `:guid`, custom). Without this step, an endpoint like
+            // `{tenant}/orders/{id:int}` would be selected for `/acme/orders/hello`, sending
+            // the request to the wrong handler. Apply the framework's resolved IRouteConstraint
+            // instances so cold-start re-matching honours the same constraints UseRouting does.
+            if (!ApplyInlineConstraints(routeEndpoint.RoutePattern, routeValues, context))
+                continue;
+
+            context.SetEndpoint(routeEndpoint);
+            context.Request.RouteValues = routeValues;
+            _logger.LogDebug(
+                "Cold-start re-matched endpoint '{Pattern}' for shell '{Shell}'",
+                routeEndpoint.RoutePattern.RawText, shellId);
+            return;
+        }
+    }
+
+    private static bool ApplyInlineConstraints(
+        RoutePattern pattern,
+        RouteValueDictionary routeValues,
+        HttpContext context)
+    {
+        if (pattern.ParameterPolicies.Count == 0)
+            return true;
+
+        // Lazily resolved on first non-pre-built policy reference.
+        IInlineConstraintResolver? resolver = null;
+
+        foreach (var (parameterName, policies) in pattern.ParameterPolicies)
+        {
+            foreach (var policyRef in policies)
+            {
+                // RoutePattern resolves inline policies at build time and stores them on
+                // the reference. Fall back to runtime resolution for patterns built without
+                // an IInlineConstraintResolver in scope.
+                var policy = policyRef.ParameterPolicy;
+                if (policy is null && policyRef.Content is { Length: > 0 } content)
+                {
+                    resolver ??= context.RequestServices.GetService<IInlineConstraintResolver>();
+                    policy = resolver?.ResolveConstraint(content);
+                }
+
+                if (policy is IRouteConstraint constraint
+                    && !constraint.Match(context, route: null, parameterName, routeValues, RouteDirection.IncomingRequest))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }

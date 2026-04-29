@@ -18,13 +18,13 @@ public class DefaultShellResolver : IShellResolver
     }
 
     /// <inheritdoc />
-    public ShellId? Resolve(ShellResolutionContext context)
+    public async Task<ShellId?> ResolveAsync(ShellResolutionContext context, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(context);
 
         foreach (var strategy in _orderedStrategies)
         {
-            var shellId = strategy.Resolve(context);
+            var shellId = await strategy.ResolveAsync(context, cancellationToken).ConfigureAwait(false);
             if (shellId.HasValue)
                 return shellId;
         }
