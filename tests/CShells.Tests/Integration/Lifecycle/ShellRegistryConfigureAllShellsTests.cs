@@ -21,6 +21,7 @@ public class ShellRegistryConfigureAllShellsTests
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
 
         Assert.Equal(ShellLifecycleState.Active, shell.State);
+        Assert.Equal("payments", settings.Id.Name);
         Assert.Equal(["CommonFeature", "PaymentsFeature"], settings.EnabledFeatures);
     }
 
@@ -45,6 +46,7 @@ public class ShellRegistryConfigureAllShellsTests
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
 
         Assert.Equal(ShellLifecycleState.Active, shell.State);
+        Assert.Equal("catalog", settings.Id.Name);
         Assert.Equal(["CommonFeature", "ShellSpecificFeature"], settings.EnabledFeatures);
     }
 
@@ -61,6 +63,7 @@ public class ShellRegistryConfigureAllShellsTests
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
 
         Assert.Equal(ShellLifecycleState.Active, shell.State);
+        Assert.Equal("payments", settings.Id.Name);
         Assert.Equal(["Shared", "Extra"], settings.EnabledFeatures);
     }
 

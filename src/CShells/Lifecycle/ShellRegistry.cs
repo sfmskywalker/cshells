@@ -545,6 +545,8 @@ internal sealed class ShellRegistry : IShellRegistry
         if (_shellConfigurators.Count == 0)
             return settings;
 
+        // Build global defaults separately, then merge the blueprint-composed settings over them
+        // below so shell-specific configuration keeps last-write-wins precedence.
         var defaultsBuilder = new ShellBuilder(settings.Id);
         foreach (var configurator in _shellConfigurators)
             configurator(defaultsBuilder);
@@ -578,7 +580,11 @@ internal sealed class ShellRegistry : IShellRegistry
     }
 
     private static Action<T> ChainConfigurators<T>(Action<T> first, Action<T> second) =>
-        first + second;
+        target =>
+        {
+            first(target);
+            second(target);
+        };
 
     private static IReadOnlyList<string> MergeFeatures(
         IReadOnlyList<string> defaults,
