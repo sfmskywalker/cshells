@@ -503,19 +503,10 @@ internal sealed class ShellRegistry : IShellRegistry
         // no-reuse and no-partial-entry without bookkeeping.
         var generation = Interlocked.Increment(ref slot.NextGeneration);
 
-        var settings = await blueprint.ComposeAsync(cancellationToken).ConfigureAwait(false);
+        var settings = await ComposeSettingsAsync(blueprint, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(settings.Id.Name, blueprint.Name, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
                 $"Blueprint '{blueprint.Name}' produced settings with Id.Name '{settings.Id.Name}' — blueprint name mismatch.");
-
-        // Apply ConfigureAllShells configurators so they take effect regardless of blueprint type
-        // (code-seeded via AddShell, configuration-based via WithConfigurationProvider, etc.).
-        if (_shellConfigurators.Count > 0)
-        {
-            var builder = new ShellBuilder(settings);
-            foreach (var configurator in _shellConfigurators)
-                configurator(builder);
-        }
 
         var buildResult = await _providerBuilder!.BuildAsync(settings, cancellationToken).ConfigureAwait(false);
 
@@ -546,6 +537,61 @@ internal sealed class ShellRegistry : IShellRegistry
             descriptor, buildResult.EnabledFeatures.Count, buildResult.MissingFeatures.Count);
 
         return shell;
+    }
+
+    private async Task<ShellSettings> ComposeSettingsAsync(IShellBlueprint blueprint, CancellationToken cancellationToken)
+    {
+        var settings = await blueprint.ComposeAsync(cancellationToken).ConfigureAwait(false);
+        if (_shellConfigurators.Count == 0)
+            return settings;
+
+        var defaultsBuilder = new ShellBuilder(settings.Id);
+        foreach (var configurator in _shellConfigurators)
+            configurator(defaultsBuilder);
+
+        return MergeSettings(defaultsBuilder.Build(), settings);
+    }
+
+    private static ShellSettings MergeSettings(ShellSettings defaults, ShellSettings shellSpecific)
+    {
+        var merged = new ShellSettings(shellSpecific.Id)
+        {
+            EnabledFeatures = MergeFeatures(defaults.EnabledFeatures, shellSpecific.EnabledFeatures),
+            ConfigurationData = new Dictionary<string, object>(defaults.ConfigurationData)
+        };
+
+        foreach (var (key, value) in shellSpecific.ConfigurationData)
+            merged.ConfigurationData[key] = value;
+
+        foreach (var (featureName, configure) in defaults.FeatureConfigurators)
+            merged.FeatureConfigurators[featureName] = configure;
+
+        foreach (var (featureName, configure) in shellSpecific.FeatureConfigurators)
+        {
+            if (merged.FeatureConfigurators.TryGetValue(featureName, out var existing))
+                merged.FeatureConfigurators[featureName] = existing + configure;
+            else
+                merged.FeatureConfigurators[featureName] = configure;
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyList<string> MergeFeatures(
+        IReadOnlyList<string> defaults,
+        IReadOnlyList<string> shellSpecific)
+    {
+        var merged = new List<string>(defaults.Count + shellSpecific.Count);
+
+        foreach (var feature in defaults)
+            if (!merged.Contains(feature, StringComparer.OrdinalIgnoreCase))
+                merged.Add(feature);
+
+        foreach (var feature in shellSpecific)
+            if (!merged.Contains(feature, StringComparer.OrdinalIgnoreCase))
+                merged.Add(feature);
+
+        return [.. merged];
     }
 
     private static async Task RunInitializersAsync(IServiceProvider provider, CancellationToken cancellationToken)

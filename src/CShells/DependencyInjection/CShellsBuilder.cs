@@ -92,9 +92,9 @@ public class CShellsBuilder
     }
 
     /// <summary>
-    /// Registers a configurator applied to every shell — applied to every
-    /// <see cref="ShellBuilder"/> that a <see cref="DelegateShellBlueprint"/> hands out during
-    /// activation or reload.
+    /// Registers a configurator whose settings are used as defaults for every shell during
+    /// activation or reload. Shell-specific blueprint settings are merged afterwards and take
+    /// precedence for conflicting configuration keys.
     /// </summary>
     public CShellsBuilder ConfigureAllShells(Action<ShellBuilder> configure)
     {
@@ -105,9 +105,9 @@ public class CShellsBuilder
 
     /// <summary>
     /// Adds a shell blueprint with the given name. The supplied delegate runs against a fresh
-    /// <see cref="ShellBuilder"/> on every activation / reload. All registered
-    /// <see cref="ConfigureAllShells"/> configurators apply first (in registration order), then
-    /// the shell-specific <paramref name="configure"/>.
+    /// <see cref="ShellBuilder"/> on every activation / reload. Settings from
+    /// <see cref="ConfigureAllShells"/> are merged in by the registry as defaults, so values
+    /// configured here take precedence for conflicting configuration keys.
     /// </summary>
     /// <remarks>
     /// Blueprints added here are vended by the built-in <c>InMemoryShellBlueprintProvider</c>
