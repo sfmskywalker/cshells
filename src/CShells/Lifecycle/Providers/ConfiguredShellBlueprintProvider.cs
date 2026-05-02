@@ -21,6 +21,8 @@ internal sealed class ConfiguredShellBlueprintProvider(
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken = default) =>
         inner.ExistsAsync(name, cancellationToken);
 
+    // BlueprintPage carries summaries only; callers load concrete blueprints through GetAsync,
+    // which wraps them before any ComposeAsync call observes shell settings.
     public Task<BlueprintPage> ListAsync(BlueprintListQuery query, CancellationToken cancellationToken = default) =>
         inner.ListAsync(query, cancellationToken);
 
@@ -98,7 +100,7 @@ internal sealed class ConfiguredShellBlueprintProvider(
                 if (seen.Add(feature))
                     merged.Add(feature);
 
-            return [.. merged];
+            return merged.ToArray();
         }
     }
 }
