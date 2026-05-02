@@ -100,7 +100,7 @@ internal sealed class ConfiguredShellBlueprintProvider(
                 if (seen.Add(feature))
                     merged.Add(feature);
 
-            return merged.ToArray();
+            return [.. merged];
         }
     }
 }
