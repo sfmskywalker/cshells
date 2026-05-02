@@ -119,9 +119,8 @@ public class CShellsBuilder
         Guard.Against.NullOrWhiteSpace(name);
         Guard.Against.Null(configure);
 
-        // ConfigureAllShells configurators are applied by the registered blueprint-provider
-        // wrapper whenever settings are composed, so only the shell-specific delegate is
-        // passed to the blueprint here.
+        // ConfigureAllShells configurators are applied centrally by ConfiguredShellBlueprintProvider
+        // during ComposeAsync, so only the shell-specific delegate is passed to the blueprint here.
         _inlineBlueprints.Add(new DelegateShellBlueprint(name, configure));
         return this;
     }
