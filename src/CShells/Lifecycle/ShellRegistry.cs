@@ -569,7 +569,7 @@ internal sealed class ShellRegistry : IShellRegistry
         foreach (var (featureName, configure) in shellSpecific.FeatureConfigurators)
         {
             if (merged.FeatureConfigurators.TryGetValue(featureName, out var existing))
-                merged.FeatureConfigurators[featureName] = existing + configure;
+                merged.FeatureConfigurators[featureName] = ChainConfigurators(existing, configure);
             else
                 merged.FeatureConfigurators[featureName] = configure;
         }
@@ -577,18 +577,22 @@ internal sealed class ShellRegistry : IShellRegistry
         return merged;
     }
 
+    private static Action<T> ChainConfigurators<T>(Action<T> first, Action<T> second) =>
+        first + second;
+
     private static IReadOnlyList<string> MergeFeatures(
         IReadOnlyList<string> defaults,
         IReadOnlyList<string> shellSpecific)
     {
         var merged = new List<string>(defaults.Count + shellSpecific.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var feature in defaults)
-            if (!merged.Contains(feature, StringComparer.OrdinalIgnoreCase))
+            if (seen.Add(feature))
                 merged.Add(feature);
 
         foreach (var feature in shellSpecific)
-            if (!merged.Contains(feature, StringComparer.OrdinalIgnoreCase))
+            if (seen.Add(feature))
                 merged.Add(feature);
 
         return [.. merged];
