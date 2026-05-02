@@ -115,7 +115,7 @@ public class ShellRegistryGuardTests
     }
 
     [Fact(DisplayName = "Pre-existing IShellBlueprintProvider DI registration alone (no builder state) is allowed (deliberate override)")]
-    public void PreExistingProviderRegistration_Alone_IsAllowed()
+    public async Task PreExistingProviderRegistration_Alone_IsAllowed()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -129,6 +129,32 @@ public class ShellRegistryGuardTests
         using var sp = services.BuildServiceProvider();
         var registry = sp.GetRequiredService<IShellRegistry>();
         Assert.NotNull(registry);
+
+        var shell = await registry.GetOrActivateAsync("custom");
+        Assert.Equal("custom", shell.Descriptor.Name);
+    }
+
+    [Fact(DisplayName = "Pre-existing IShellBlueprintProvider DI registration receives ConfigureAllShells defaults")]
+    public async Task PreExistingProviderRegistration_WithConfigureAllShells_ComposesDefaults()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IShellBlueprintProvider>(_ => new StubShellBlueprintProvider().Add("custom"));
+
+        services.AddCShells(c => c
+            .WithAssemblies()
+            .ConfigureAllShells(shell => shell
+                .WithFeatures("CommonFeature")
+                .WithConfiguration("Plan", "Standard")));
+
+        await using var sp = services.BuildServiceProvider();
+        var provider = sp.GetRequiredService<IShellBlueprintProvider>();
+        var provided = await provider.GetAsync("custom");
+
+        Assert.NotNull(provided);
+        var settings = await provided.Blueprint.ComposeAsync();
+        Assert.Contains("CommonFeature", settings.EnabledFeatures);
+        Assert.Equal("Standard", settings.GetConfiguration("Plan"));
     }
 
     [Fact(DisplayName = "Third-party custom IShellBlueprintProvider activates shells identically to shipped providers (SC-008)")]
