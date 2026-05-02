@@ -105,6 +105,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IShellBlueprintProvider>(),
             sp.GetRequiredService<ShellProviderBuilder>(),
             sp,
+            builder.ShellConfigurators,
             sp.GetService<ILogger<ShellRegistry>>(),
             sp.GetServices<IShellLifecycleSubscriber>()));
         services.TryAddSingleton<IShellRegistry>(sp => sp.GetRequiredService<ShellRegistry>());

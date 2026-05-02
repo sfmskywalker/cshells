@@ -119,14 +119,9 @@ public class CShellsBuilder
         Guard.Against.NullOrWhiteSpace(name);
         Guard.Against.Null(configure);
 
-        Action<ShellBuilder> combined = shellBuilder =>
-        {
-            foreach (var common in _shellConfigurators)
-                common(shellBuilder);
-            configure(shellBuilder);
-        };
-
-        _inlineBlueprints.Add(new DelegateShellBlueprint(name, combined));
+        // ConfigureAllShells configurators are applied centrally by ShellRegistry during
+        // activation, so only the shell-specific delegate is passed to the blueprint here.
+        _inlineBlueprints.Add(new DelegateShellBlueprint(name, configure));
         return this;
     }
 

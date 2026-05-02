@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using CShells.Configuration;
 using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ internal sealed class ShellRegistry : IShellRegistry
     private readonly ShellProviderBuilder? _providerBuilder;
     private readonly IServiceProvider? _rootProvider;
     private readonly IShellBlueprintProvider _blueprintProvider;
+    private readonly IReadOnlyList<Action<ShellBuilder>> _shellConfigurators;
     private readonly ILogger<ShellRegistry> _logger;
     private readonly ConcurrentDictionary<string, NameSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
     private ImmutableList<IShellLifecycleSubscriber> _subscribers = [];
@@ -25,12 +27,14 @@ internal sealed class ShellRegistry : IShellRegistry
         IShellBlueprintProvider blueprintProvider,
         ShellProviderBuilder? providerBuilder = null,
         IServiceProvider? rootProvider = null,
+        IReadOnlyList<Action<ShellBuilder>>? shellConfigurators = null,
         ILogger<ShellRegistry>? logger = null,
         IEnumerable<IShellLifecycleSubscriber>? subscribers = null)
     {
         _blueprintProvider = Guard.Against.Null(blueprintProvider);
         _providerBuilder = providerBuilder;
         _rootProvider = rootProvider;
+        _shellConfigurators = shellConfigurators ?? [];
         _logger = logger ?? NullLogger<ShellRegistry>.Instance;
 
         // Subscribers registered in DI are subscribed at construction time so they observe
@@ -47,7 +51,7 @@ internal sealed class ShellRegistry : IShellRegistry
 
     // Convenience ctor used by tests that don't need the provider-build pipeline.
     internal ShellRegistry(IShellBlueprintProvider blueprintProvider, ILogger<ShellRegistry>? logger)
-        : this(blueprintProvider, providerBuilder: null, rootProvider: null, logger, subscribers: null)
+        : this(blueprintProvider, providerBuilder: null, rootProvider: null, shellConfigurators: null, logger, subscribers: null)
     {
     }
 
@@ -503,6 +507,15 @@ internal sealed class ShellRegistry : IShellRegistry
         if (!string.Equals(settings.Id.Name, blueprint.Name, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
                 $"Blueprint '{blueprint.Name}' produced settings with Id.Name '{settings.Id.Name}' — blueprint name mismatch.");
+
+        // Apply ConfigureAllShells configurators so they take effect regardless of blueprint type
+        // (code-seeded via AddShell, configuration-based via WithConfigurationProvider, etc.).
+        if (_shellConfigurators.Count > 0)
+        {
+            var builder = new ShellBuilder(settings);
+            foreach (var configurator in _shellConfigurators)
+                configurator(builder);
+        }
 
         var buildResult = await _providerBuilder!.BuildAsync(settings, cancellationToken).ConfigureAwait(false);
 
