@@ -27,6 +27,19 @@ public class GetBlueprintEndpointTests
         Assert.Equal("Enterprise", bp.ConfigurationData["Plan"].ToString());
     }
 
+    [Fact(DisplayName = "GetBlueprint includes ConfigureAllShells defaults")]
+    public async Task GetBlueprint_IncludesConfigureAllShellsDefaults()
+    {
+        await using var fixture = new ManagementApiFixture(c => c
+            .ConfigureAllShells(shell => shell.WithConfiguration("Plan", "Standard"))
+            .AddShell("acme", _ => { }));
+
+        var bp = await fixture.GetJsonAsync<BlueprintResponse>("/admin/acme/blueprint");
+
+        Assert.NotNull(bp);
+        Assert.Equal("Standard", bp.ConfigurationData["Plan"].ToString());
+    }
+
     [Fact(DisplayName = "GetBlueprint does not activate the shell as a side effect")]
     public async Task GetBlueprint_DoesNotActivateShell()
     {

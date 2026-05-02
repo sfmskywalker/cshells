@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using CShells.Configuration;
 using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,7 +17,6 @@ internal sealed class ShellRegistry : IShellRegistry
     private readonly ShellProviderBuilder? _providerBuilder;
     private readonly IServiceProvider? _rootProvider;
     private readonly IShellBlueprintProvider _blueprintProvider;
-    private readonly IReadOnlyList<Action<ShellBuilder>> _shellConfigurators;
     private readonly ILogger<ShellRegistry> _logger;
     private readonly ConcurrentDictionary<string, NameSlot> _slots = new(StringComparer.OrdinalIgnoreCase);
     private ImmutableList<IShellLifecycleSubscriber> _subscribers = [];
@@ -27,14 +25,12 @@ internal sealed class ShellRegistry : IShellRegistry
         IShellBlueprintProvider blueprintProvider,
         ShellProviderBuilder? providerBuilder = null,
         IServiceProvider? rootProvider = null,
-        IReadOnlyList<Action<ShellBuilder>>? shellConfigurators = null,
         ILogger<ShellRegistry>? logger = null,
         IEnumerable<IShellLifecycleSubscriber>? subscribers = null)
     {
         _blueprintProvider = Guard.Against.Null(blueprintProvider);
         _providerBuilder = providerBuilder;
         _rootProvider = rootProvider;
-        _shellConfigurators = shellConfigurators ?? [];
         _logger = logger ?? NullLogger<ShellRegistry>.Instance;
 
         // Subscribers registered in DI are subscribed at construction time so they observe
@@ -51,7 +47,7 @@ internal sealed class ShellRegistry : IShellRegistry
 
     // Convenience ctor used by tests that don't need the provider-build pipeline.
     internal ShellRegistry(IShellBlueprintProvider blueprintProvider, ILogger<ShellRegistry>? logger)
-        : this(blueprintProvider, providerBuilder: null, rootProvider: null, shellConfigurators: null, logger, subscribers: null)
+        : this(blueprintProvider, providerBuilder: null, rootProvider: null, logger, subscribers: null)
     {
     }
 
@@ -503,7 +499,7 @@ internal sealed class ShellRegistry : IShellRegistry
         // no-reuse and no-partial-entry without bookkeeping.
         var generation = Interlocked.Increment(ref slot.NextGeneration);
 
-        var settings = await ComposeSettingsAsync(blueprint, cancellationToken).ConfigureAwait(false);
+        var settings = await blueprint.ComposeAsync(cancellationToken).ConfigureAwait(false);
         if (!string.Equals(settings.Id.Name, blueprint.Name, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
                 $"Blueprint '{blueprint.Name}' produced settings with Id.Name '{settings.Id.Name}' — blueprint name mismatch.");
@@ -537,71 +533,6 @@ internal sealed class ShellRegistry : IShellRegistry
             descriptor, buildResult.EnabledFeatures.Count, buildResult.MissingFeatures.Count);
 
         return shell;
-    }
-
-    private async Task<ShellSettings> ComposeSettingsAsync(IShellBlueprint blueprint, CancellationToken cancellationToken)
-    {
-        var settings = await blueprint.ComposeAsync(cancellationToken).ConfigureAwait(false);
-        if (_shellConfigurators.Count == 0)
-            return settings;
-
-        // Build global defaults separately, then merge the blueprint-composed settings over them
-        // below so shell-specific configuration keeps last-write-wins precedence.
-        var defaultsBuilder = new ShellBuilder(settings.Id);
-        foreach (var configurator in _shellConfigurators)
-            configurator(defaultsBuilder);
-
-        return MergeSettings(defaultsBuilder.Build(), settings);
-    }
-
-    private static ShellSettings MergeSettings(ShellSettings defaults, ShellSettings shellSpecific)
-    {
-        var merged = new ShellSettings(shellSpecific.Id)
-        {
-            EnabledFeatures = MergeFeatures(defaults.EnabledFeatures, shellSpecific.EnabledFeatures),
-            ConfigurationData = new Dictionary<string, object>(defaults.ConfigurationData)
-        };
-
-        foreach (var (key, value) in shellSpecific.ConfigurationData)
-            merged.ConfigurationData[key] = value;
-
-        foreach (var (featureName, configure) in defaults.FeatureConfigurators)
-            merged.FeatureConfigurators[featureName] = configure;
-
-        foreach (var (featureName, configure) in shellSpecific.FeatureConfigurators)
-        {
-            if (merged.FeatureConfigurators.TryGetValue(featureName, out var existing))
-                merged.FeatureConfigurators[featureName] = ChainConfigurators(existing, configure);
-            else
-                merged.FeatureConfigurators[featureName] = configure;
-        }
-
-        return merged;
-    }
-
-    private static Action<T> ChainConfigurators<T>(Action<T> first, Action<T> second) =>
-        target =>
-        {
-            first(target);
-            second(target);
-        };
-
-    private static IReadOnlyList<string> MergeFeatures(
-        IReadOnlyList<string> defaults,
-        IReadOnlyList<string> shellSpecific)
-    {
-        var merged = new List<string>(defaults.Count + shellSpecific.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var feature in defaults)
-            if (seen.Add(feature))
-                merged.Add(feature);
-
-        foreach (var feature in shellSpecific)
-            if (seen.Add(feature))
-                merged.Add(feature);
-
-        return [.. merged];
     }
 
     private static async Task RunInitializersAsync(IServiceProvider provider, CancellationToken cancellationToken)

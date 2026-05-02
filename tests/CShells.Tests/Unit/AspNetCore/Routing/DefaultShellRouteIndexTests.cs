@@ -1,5 +1,8 @@
 using CShells.AspNetCore.Routing;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Tests.TestHelpers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace CShells.Tests.Unit.AspNetCore.Routing;
@@ -102,6 +105,26 @@ public class DefaultShellRouteIndexTests
             .Add("acme", b => b.WithConfiguration("WebRouting:Host", "acme.example.com"));
 
         var index = new DefaultShellRouteIndex(provider);
+
+        var match = await index.TryMatchAsync(new ShellRouteCriteria(
+            PathFirstSegment: null, IsRootPath: false, Host: "acme.example.com",
+            HeaderName: null, HeaderValue: null, ClaimKey: null, ClaimValue: null));
+
+        Assert.NotNull(match);
+        Assert.Equal("acme", match!.ShellId.Name);
+        Assert.Equal(ShellRoutingMode.Host, match.MatchedMode);
+    }
+
+    [Fact(DisplayName = "Host-mode lookup sees ConfigureAllShells defaults from registered provider")]
+    public async Task Host_SeesConfigureAllShellsDefaultsFromRegisteredProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddCShells(cshells => cshells
+            .WithAssemblies()
+            .ConfigureAllShells(shell => shell.WithConfiguration("WebRouting:Host", "acme.example.com"))
+            .AddShell("acme", _ => { }));
+        await using var provider = services.BuildServiceProvider();
+        var index = new DefaultShellRouteIndex(provider.GetRequiredService<IShellBlueprintProvider>());
 
         var match = await index.TryMatchAsync(new ShellRouteCriteria(
             PathFirstSegment: null, IsRootPath: false, Host: "acme.example.com",

@@ -96,16 +96,19 @@ public static class ServiceCollectionExtensions
                     "and register only that single provider.");
             }
 
-            return externalCount == 1
+            var provider = externalCount == 1
                 ? builder.ProviderFactories[0](sp)
                 : new InMemoryShellBlueprintProvider(builder.InlineBlueprints);
+
+            return builder.ShellConfigurators.Count == 0
+                ? provider
+                : new ConfiguredShellBlueprintProvider(provider, builder.ShellConfigurators);
         });
 
         services.TryAddSingleton<ShellRegistry>(sp => new ShellRegistry(
             sp.GetRequiredService<IShellBlueprintProvider>(),
             sp.GetRequiredService<ShellProviderBuilder>(),
             sp,
-            builder.ShellConfigurators,
             sp.GetService<ILogger<ShellRegistry>>(),
             sp.GetServices<IShellLifecycleSubscriber>()));
         services.TryAddSingleton<IShellRegistry>(sp => sp.GetRequiredService<ShellRegistry>());
