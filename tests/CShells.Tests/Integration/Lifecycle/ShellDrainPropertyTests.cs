@@ -105,8 +105,11 @@ public class ShellDrainPropertyTests
 
         var first = results[0];
         Assert.All(results, r => Assert.Same(first, r));
-        Assert.Same(first, shell.Drain);
 
+        // Don't assert shell.Drain here — with no handlers the drain completes (and disposes
+        // the shell, clearing _drain to null) before Task.WhenAll returns. The CAS contract is
+        // already proven by Assert.All above; shell.Drain identity is covered by
+        // Drain_SameInstance_AsRegistryDrainAsyncReturn.
         await first.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
 }

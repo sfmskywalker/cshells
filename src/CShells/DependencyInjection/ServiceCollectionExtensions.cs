@@ -1,3 +1,4 @@
+using CShells.Configuration;
 using CShells.Features;
 using CShells.Hosting;
 using CShells.Lifecycle;
@@ -96,9 +97,13 @@ public static class ServiceCollectionExtensions
                     "and register only that single provider.");
             }
 
-            return externalCount == 1
+            var provider = externalCount == 1
                 ? builder.ProviderFactories[0](sp)
                 : new InMemoryShellBlueprintProvider(builder.InlineBlueprints);
+
+            return builder.ShellConfigurators.Count == 0
+                ? provider
+                : new ConfiguredShellBlueprintProvider(provider, builder.ShellConfigurators);
         });
 
         services.TryAddSingleton<ShellRegistry>(sp => new ShellRegistry(
@@ -140,6 +145,48 @@ public static class ServiceCollectionExtensions
                 "manage IShellBlueprintProvider yourself outside the CShells builder.");
         }
 
+        if (hadBlueprintProviderRegistrationBefore && builder.ShellConfigurators.Count > 0)
+            DecoratePreExistingBlueprintProvider(services, builder.ShellConfigurators);
+
         return builder;
+    }
+
+    private static void DecoratePreExistingBlueprintProvider(
+        IServiceCollection services,
+        IReadOnlyList<Action<ShellBuilder>> shellConfigurators)
+    {
+        var index = FindLastBlueprintProviderRegistration(services);
+        if (index < 0)
+            return;
+
+        var descriptor = services[index];
+        services.RemoveAt(index);
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IShellBlueprintProvider),
+            sp => new ConfiguredShellBlueprintProvider(CreateBlueprintProvider(sp, descriptor), shellConfigurators),
+            descriptor.Lifetime));
+    }
+
+    private static int FindLastBlueprintProviderRegistration(IServiceCollection services)
+    {
+        for (var i = services.Count - 1; i >= 0; i--)
+            if (services[i].ServiceType == typeof(IShellBlueprintProvider))
+                return i;
+
+        return -1;
+    }
+
+    private static IShellBlueprintProvider CreateBlueprintProvider(IServiceProvider services, ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is IShellBlueprintProvider instance)
+            return instance;
+
+        if (descriptor.ImplementationFactory is not null)
+            return (IShellBlueprintProvider)descriptor.ImplementationFactory(services);
+
+        if (descriptor.ImplementationType is not null)
+            return (IShellBlueprintProvider)ActivatorUtilities.CreateInstance(services, descriptor.ImplementationType);
+
+        throw new InvalidOperationException("Unsupported IShellBlueprintProvider registration.");
     }
 }

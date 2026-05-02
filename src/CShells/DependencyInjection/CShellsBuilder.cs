@@ -92,9 +92,9 @@ public class CShellsBuilder
     }
 
     /// <summary>
-    /// Registers a configurator applied to every shell — applied to every
-    /// <see cref="ShellBuilder"/> that a <see cref="DelegateShellBlueprint"/> hands out during
-    /// activation or reload.
+    /// Registers a configurator whose settings are used as defaults whenever shell blueprints
+    /// are composed. Shell-specific blueprint settings are merged afterwards and take
+    /// precedence for conflicting configuration keys.
     /// </summary>
     public CShellsBuilder ConfigureAllShells(Action<ShellBuilder> configure)
     {
@@ -105,9 +105,9 @@ public class CShellsBuilder
 
     /// <summary>
     /// Adds a shell blueprint with the given name. The supplied delegate runs against a fresh
-    /// <see cref="ShellBuilder"/> on every activation / reload. All registered
-    /// <see cref="ConfigureAllShells"/> configurators apply first (in registration order), then
-    /// the shell-specific <paramref name="configure"/>.
+    /// <see cref="ShellBuilder"/> whenever the blueprint is composed. Settings from
+    /// <see cref="ConfigureAllShells"/> are merged in as defaults, so values
+    /// configured here take precedence for conflicting configuration keys.
     /// </summary>
     /// <remarks>
     /// Blueprints added here are vended by the built-in <c>InMemoryShellBlueprintProvider</c>
@@ -119,14 +119,9 @@ public class CShellsBuilder
         Guard.Against.NullOrWhiteSpace(name);
         Guard.Against.Null(configure);
 
-        Action<ShellBuilder> combined = shellBuilder =>
-        {
-            foreach (var common in _shellConfigurators)
-                common(shellBuilder);
-            configure(shellBuilder);
-        };
-
-        _inlineBlueprints.Add(new DelegateShellBlueprint(name, combined));
+        // ConfigureAllShells configurators are applied centrally by ConfiguredShellBlueprintProvider
+        // during ComposeAsync, so only the shell-specific delegate is passed to the blueprint here.
+        _inlineBlueprints.Add(new DelegateShellBlueprint(name, configure));
         return this;
     }
 
