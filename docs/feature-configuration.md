@@ -33,11 +33,14 @@ The `Features` property supports an object-map syntax where each property key is
 
 Features with no settings use an empty object `{}`. All properties within a feature's object are treated as settings — there is no special `Name` property since the object key serves as the feature name.
 
+Do not repeat the feature name inside an object-map entry. If a `Name` property is present there, it is delivered to the feature as configuration and does not rename, enable, disable, or replace the feature identified by the object key.
+
 ### Validation Rules
 
 - **No duplicates**: Each feature name must appear exactly once per shell.
 - **No mixing**: A shell's `Features` value must be entirely array syntax or entirely object-map syntax. Mixing both styles is rejected with an error that identifies the affected shell.
 - **Values must be objects**: In object-map syntax, every feature value must be a JSON object (not a string, number, or array).
+- **No silent skips**: Blank array entries and array objects with missing or blank `Name` values are rejected before the shell is activated.
 
 ## Inline Configuration (Array Syntax)
 
@@ -61,6 +64,28 @@ Each entry in the `Features` array can be either a string (feature name) or an o
   }
 }
 ```
+
+For compatibility with older configuration, array objects may also place settings under a `Settings` wrapper:
+
+```json
+{
+  "CShells": {
+    "Shells": [
+      {
+        "Name": "Default",
+        "Features": [
+          {
+            "Name": "Analytics",
+            "Settings": { "TopPostsCount": 10 }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Do not mix the `Settings` wrapper with direct sibling settings in the same feature entry.
 
 ### Consuming Inline Settings
 

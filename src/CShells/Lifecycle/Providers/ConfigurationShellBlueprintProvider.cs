@@ -43,7 +43,7 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         var direct = _shellsSection.GetSection(name);
         if (direct.Exists())
         {
-            var candidate = direct["Name"] ?? direct.Key;
+            var candidate = ResolveShellName(direct);
             if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult<ProvidedBlueprint?>(
@@ -55,7 +55,7 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         // "Name" property whose value differs from the key. Scan to honor that override.
         foreach (var child in _shellsSection.GetChildren())
         {
-            var candidate = child["Name"] ?? child.Key;
+            var candidate = ResolveShellName(child);
             if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult<ProvidedBlueprint?>(
@@ -73,8 +73,7 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         query.EnsureValid();
 
         var ordered = _shellsSection.GetChildren()
-            .Select(c => c["Name"] ?? c.Key)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(ResolveShellName)
             .Where(name => query.NamePrefix is null ||
                            name.StartsWith(query.NamePrefix, StringComparison.OrdinalIgnoreCase))
             .Where(name => query.Cursor is null ||
@@ -95,5 +94,20 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
 
         var nextCursor = hasMore && items.Count > 0 ? items[^1].Name : null;
         return Task.FromResult(new BlueprintPage(items, nextCursor));
+    }
+
+    private static string ResolveShellName(IConfigurationSection shellSection)
+    {
+        var configuredName = shellSection["Name"];
+        if (!string.IsNullOrWhiteSpace(configuredName))
+            return configuredName.Trim();
+
+        if (int.TryParse(shellSection.Key, out _))
+        {
+            throw new InvalidOperationException(
+                $"Configured shell entry '{shellSection.Path}' must define a non-empty 'Name' property when using array syntax.");
+        }
+
+        return shellSection.Key.Trim();
     }
 }

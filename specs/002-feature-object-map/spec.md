@@ -13,6 +13,9 @@
 - Q: How should object-map feature order be handled before dependency resolution? → A: Preserve object-map entry order exactly as declared in configuration.
 - Q: Which configuration entry points should accept object-map syntax? → A: Support object-map syntax for configuration providers and direct JSON deserialization of shell config models.
 - Q: Which syntax should be preferred when serializing shell config models back to JSON? → A: Prefer serializing object-map syntax whenever possible.
+- Q: What should happen when an object-map feature contains an inner blank `Name` property? → A: The feature remains identified by the map key and the blank `Name` remains feature configuration; it must not cause the feature entry or its settings to be skipped.
+- Q: How should invalid array feature entries be handled? → A: Reject them with actionable errors; array entries with blank string values or missing/blank `Name` properties must never be silently ignored.
+- Q: How should the legacy array `Settings` wrapper be treated? → A: Continue to support `{ "Name": "Feature", "Settings": { ... } }` as compatibility syntax, but reject entries that mix `Settings` with direct sibling settings.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -62,6 +65,7 @@ As a shell configuration author, I want invalid feature configuration shapes to 
 2. **Given** a shell configuration source that produces an ambiguous `Features` definition for the same shell, **When** the shell settings are loaded, **Then** loading fails instead of silently choosing one interpretation.
 3. **Given** a shell config model with an invalid object-map feature entry loaded through direct JSON deserialization, **When** the model is converted into runtime shell settings, **Then** loading fails with an error that identifies the shell name and the invalid feature entry.
 4. **Given** a shell configuration loaded through `IConfiguration` that configures the same feature more than once, **When** the shell settings are loaded, **Then** loading fails with an error that identifies the shell and duplicate feature name.
+5. **Given** a shell configuration loaded through `IConfiguration` that contains an object-map feature with an inner blank `Name` property and other settings, **When** the shell settings are loaded, **Then** the feature is enabled under the map key and all settings, including `Name`, remain available to that feature.
 
 ### Edge Cases
 
@@ -69,6 +73,9 @@ As a shell configuration author, I want invalid feature configuration shapes to 
 - A feature map contains nested settings objects and arrays, which must remain available to the feature as structured configuration values.
 - A feature map contains a null, scalar, or array value for a feature entry and must be rejected as invalid input.
 - A feature map entry may contain a setting named `Name`; the feature identity remains the map key and the inner `Name` value remains available as feature configuration.
+- A feature map entry may contain a blank setting named `Name`; the feature identity still remains the map key.
+- An array entry with a blank string value or blank/missing `Name` must be rejected before activation.
+- An array object may use a legacy `Settings` wrapper for feature settings, but must not mix that wrapper with direct sibling settings.
 - Object-map entries preserve declaration order before dependency resolution is applied.
 - Features serialized back to JSON use empty objects for enabled features that have no explicit settings.
 - Equivalent feature definitions may be supplied in either syntax, but a single `Features` node is treated as one shape only: array or object map.
@@ -85,16 +92,20 @@ As a shell configuration author, I want invalid feature configuration shapes to 
 - **FR-003**: The system MUST treat an empty object-map value for a feature as an enabled feature with no feature-specific settings.
 - **FR-004**: The system MUST treat every property inside an object-map feature value as configuration data for that feature.
 - **FR-004a**: In object-map syntax, the system MUST determine feature identity exclusively from the map key and MUST NOT assign special meaning to an inner `Name` property.
+- **FR-004b**: In object-map syntax, an inner `Name` property with a blank value MUST remain feature configuration and MUST NOT cause the feature entry or its settings to be skipped.
 - **FR-005**: The system MUST preserve nested feature settings from object-map values so they remain available through the same feature configuration access pattern used by existing configured features.
 - **FR-005a**: The system MUST preserve object-map declaration order as the configured feature order before any dependency ordering is applied.
 - **FR-006**: The system MUST produce the same enabled feature names and feature-specific configuration values for semantically equivalent array-based and object-map definitions.
 - **FR-006a**: When serializing shell configuration models to JSON, the system MUST prefer object-map syntax for the `Features` value whenever the configured features can be represented in that syntax.
 - **FR-006b**: When serializing an enabled feature with no explicit settings in object-map syntax, the system MUST emit that feature with an empty object value.
 - **FR-007**: The system MUST continue to support the current array object form where a feature is declared as an object containing a `Name` property and additional settings.
+- **FR-007a**: The system MUST continue to support the legacy array object form where feature settings are nested under a `Settings` object.
+- **FR-007b**: The system MUST reject array object entries that mix a `Settings` wrapper with direct sibling settings.
 - **FR-008**: The system MUST reject object-map feature entries whose value is not an object.
 - **FR-009**: The system MUST report invalid feature definitions with an actionable error that identifies the affected shell and feature entry.
 - **FR-010**: The system MUST reject ambiguous `Features` definitions for the same shell rather than silently merging array and object-map interpretations.
 - **FR-011**: The system MUST reject duplicate configured feature names within a single shell definition, regardless of whether the input uses array syntax or object-map syntax.
+- **FR-012**: All `IConfiguration`-backed shell composition paths MUST use the same feature normalization rules as `ShellBuilder.FromConfiguration`.
 
 ### Key Entities *(include if feature involves data)*
 

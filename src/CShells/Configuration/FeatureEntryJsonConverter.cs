@@ -96,16 +96,33 @@ public class FeatureEntryJsonConverter : JsonConverter<FeatureEntry>
             throw new JsonException("Feature name cannot be null or empty");
 
         var entry = new FeatureEntry { Name = name.Trim() };
+        var settingsWrapper = root.EnumerateObject()
+            .FirstOrDefault(property => property.Name.Equals("Settings", StringComparison.OrdinalIgnoreCase));
+        var hasSettingsWrapper = settingsWrapper.Value.ValueKind != JsonValueKind.Undefined;
+        var directSettings = root.EnumerateObject()
+            .Where(property => !property.Name.Equals(NameProperty, StringComparison.OrdinalIgnoreCase))
+            .Where(property => !property.Name.Equals("Settings", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (hasSettingsWrapper)
+        {
+            if (directSettings.Count > 0)
+                throw new JsonException(
+                    $"Feature '{entry.Name}' mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
+
+            if (settingsWrapper.Value.ValueKind != JsonValueKind.Object)
+                throw new JsonException(
+                    $"Feature '{entry.Name}' uses a 'Settings' wrapper that must contain an object value.");
+
+            foreach (var property in settingsWrapper.Value.EnumerateObject())
+                entry.Settings[property.Name] = CloneJsonElement(property.Value);
+
+            return entry;
+        }
 
         // All other properties are settings
-        foreach (var property in root.EnumerateObject())
-        {
-            if (property.Name.Equals(NameProperty, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            // Clone the JsonElement to keep it alive after document disposal
+        foreach (var property in directSettings)
             entry.Settings[property.Name] = CloneJsonElement(property.Value);
-        }
 
         return entry;
     }
@@ -127,6 +144,4 @@ public class FeatureEntryJsonConverter : JsonConverter<FeatureEntry>
         };
     }
 }
-
-
 

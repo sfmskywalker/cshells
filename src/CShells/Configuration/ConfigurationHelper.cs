@@ -301,10 +301,10 @@ internal static class ConfigurationHelper
     {
         var shape = DetectFeaturesShape(featuresSection);
 
-        return shape switch
+        var entries = shape switch
         {
             FeaturesShape.Empty => [],
-            FeaturesShape.Array => ParseArrayFeaturesFromConfiguration(featuresSection),
+            FeaturesShape.Array => ParseArrayFeaturesFromConfiguration(featuresSection, shellName),
             FeaturesShape.Object => ParseObjectMapFeaturesFromConfiguration(featuresSection, shellName),
             FeaturesShape.Ambiguous => throw new InvalidOperationException(
                 $"Shell '{shellName ?? "unknown"}' has an ambiguous 'Features' section that mixes array and object-map children. " +
@@ -312,11 +312,15 @@ internal static class ConfigurationHelper
             _ => throw new InvalidOperationException(
                 $"Shell '{shellName ?? "unknown"}' has an unrecognized 'Features' configuration shape '{shape}'."),
         };
+
+        ValidateNoDuplicateFeatures(entries, shellName ?? "unknown");
+        return entries;
     }
 
-    private static List<FeatureEntry> ParseArrayFeaturesFromConfiguration(IConfigurationSection featuresSection)
+    private static List<FeatureEntry> ParseArrayFeaturesFromConfiguration(IConfigurationSection featuresSection, string? shellName = null)
     {
         var entries = new List<FeatureEntry>();
+        var shellContext = shellName is not null ? $" in shell '{shellName}'" : "";
 
         foreach (var featureSection in featuresSection.GetChildren())
         {
@@ -324,35 +328,52 @@ internal static class ConfigurationHelper
             if (!featureSection.GetChildren().Any())
             {
                 var name = featureSection.Value;
-                if (!string.IsNullOrWhiteSpace(name))
-                    entries.Add(FeatureEntry.FromName(name.Trim()));
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    throw new InvalidOperationException(
+                        $"Feature array entry '{featureSection.Key}'{shellContext} must define a non-empty feature name.");
+                }
+
+                entries.Add(FeatureEntry.FromName(name.Trim()));
             }
             else
             {
                 // This is an object with Name and settings
                 var name = featureSection["Name"];
                 if (string.IsNullOrWhiteSpace(name))
-                    continue;
+                {
+                    throw new InvalidOperationException(
+                        $"Feature array entry '{featureSection.Key}'{shellContext} must define a non-empty 'Name' property.");
+                }
 
                 var entry = new FeatureEntry { Name = name.Trim() };
+                var children = featureSection.GetChildren().ToList();
+                var settingsWrapper = children.FirstOrDefault(c => c.Key.Equals("Settings", StringComparison.OrdinalIgnoreCase));
+                var directSettings = children
+                    .Where(c => !c.Key.Equals("Name", StringComparison.OrdinalIgnoreCase))
+                    .Where(c => !c.Key.Equals("Settings", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
 
-                // All other children are settings
-                foreach (var settingSection in featureSection.GetChildren())
+                if (settingsWrapper is not null)
                 {
-                    if (settingSection.Key.Equals("Name", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    if (directSettings.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Feature '{entry.Name}'{shellContext} mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
+                    }
 
-                    if (settingSection.GetChildren().Any())
+                    var settingsChildren = settingsWrapper.GetChildren().ToList();
+                    if (settingsWrapper.Value is not null && settingsChildren.Count == 0)
                     {
-                        // Complex nested setting - store as JsonElement
-                        var json = SerializeConfigurationSection(settingSection);
-                        entry.Settings[settingSection.Key] = JsonSerializer.Deserialize<JsonElement>(json);
+                        throw new InvalidOperationException(
+                            $"Feature '{entry.Name}'{shellContext} uses a 'Settings' wrapper that must contain an object value.");
                     }
-                    else
-                    {
-                        // Simple value
-                        entry.Settings[settingSection.Key] = settingSection.Value;
-                    }
+
+                    PopulateEntrySettings(entry, settingsChildren);
+                }
+                else
+                {
+                    PopulateEntrySettings(entry, directSettings);
                 }
 
                 entries.Add(entry);
@@ -409,5 +430,21 @@ internal static class ConfigurationHelper
         }
 
         return entries;
+    }
+
+    private static void PopulateEntrySettings(FeatureEntry entry, IEnumerable<IConfigurationSection> settingSections)
+    {
+        foreach (var settingSection in settingSections)
+        {
+            if (settingSection.GetChildren().Any())
+            {
+                var json = SerializeConfigurationSection(settingSection);
+                entry.Settings[settingSection.Key] = JsonSerializer.Deserialize<JsonElement>(json);
+            }
+            else
+            {
+                entry.Settings[settingSection.Key] = settingSection.Value;
+            }
+        }
     }
 }

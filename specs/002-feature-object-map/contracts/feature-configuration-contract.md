@@ -26,6 +26,17 @@ The behavior applies to:
 }
 ```
 
+Array object entries may also use a legacy `Settings` wrapper:
+
+```json
+{
+  "Name": "Default",
+  "Features": [
+    { "Name": "Analytics", "Settings": { "TopPostsCount": 10 } }
+  ]
+}
+```
+
 ### Object-Map Form
 
 ```json
@@ -44,9 +55,11 @@ The behavior applies to:
 - Array entries normalize into feature definitions in array order.
 - Object-map entries normalize into feature definitions in property declaration order.
 - In object-map form, the property key is the only feature identifier.
-- In object-map form, every property inside the feature value object, including `Name`, is treated as feature configuration.
+- In object-map form, every property inside the feature value object, including `Name`, is treated as feature configuration even when blank.
 - In object-map form, the feature value must be an object.
 - Nested objects and arrays inside feature settings remain part of the feature configuration payload.
+- In array object form, `Name` identifies the feature and all other direct properties are settings.
+- In legacy array object form, `Settings` may wrap the settings object. `Settings` must not be mixed with direct sibling settings.
 
 ## Invalid Input Rules
 
@@ -55,6 +68,9 @@ The following inputs must be rejected:
 - A `Features` section that combines array-like numeric children and object-map named children for the same shell
 - An object-map entry whose value is `null`, a scalar, or an array
 - An array-object entry that omits the `Name` property in array form
+- An array entry whose string value is blank
+- An array-object entry whose `Name` property is blank
+- An array-object entry that mixes a `Settings` wrapper with direct sibling settings
 - Any input that cannot be normalized without silently discarding feature configuration data
 
 ## Serialization Rules
