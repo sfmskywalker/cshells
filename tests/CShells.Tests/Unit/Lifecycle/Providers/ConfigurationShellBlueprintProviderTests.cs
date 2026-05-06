@@ -39,6 +39,22 @@ public class ConfigurationShellBlueprintProviderTests
         Assert.Equal("Acme", result!.Blueprint.Name);
     }
 
+    [Fact(DisplayName = "GetAsync falls back to object-map key when explicit Name is blank")]
+    public async Task Get_ObjectMapBlankName_FallsBackToKey()
+    {
+        var section = BuildSection(new Dictionary<string, string?>
+        {
+            ["Default:Name"] = "",
+            ["Default:Features:0"] = "Core",
+        });
+        var provider = new ConfigurationShellBlueprintProvider(section);
+
+        var result = await provider.GetAsync("Default");
+
+        Assert.NotNull(result);
+        Assert.Equal("Default", result!.Blueprint.Name);
+    }
+
     [Fact(DisplayName = "GetAsync is case-insensitive")]
     public async Task Get_CaseInsensitive()
     {
@@ -108,6 +124,53 @@ public class ConfigurationShellBlueprintProviderTests
         var third = await provider.ListAsync(new BlueprintListQuery(Cursor: second.NextCursor, Limit: 2));
         Assert.Equal(["e"], third.Items.Select(i => i.Name));
         Assert.Null(third.NextCursor);
+    }
+
+    [Fact(DisplayName = "ListAsync falls back to object-map key when explicit Name is blank")]
+    public async Task List_ObjectMapBlankName_FallsBackToKey()
+    {
+        var section = BuildSection(new Dictionary<string, string?>
+        {
+            ["Default:Name"] = "",
+            ["Default:Features:0"] = "Core",
+        });
+        var provider = new ConfigurationShellBlueprintProvider(section);
+
+        var page = await provider.ListAsync(new BlueprintListQuery(Limit: 10));
+
+        Assert.Equal(["Default"], page.Items.Select(i => i.Name));
+    }
+
+    [Fact(DisplayName = "ListAsync rejects array shell entries without Name")]
+    public async Task List_ArrayEntryWithoutName_Throws()
+    {
+        var section = BuildSection(new Dictionary<string, string?>
+        {
+            ["0:Features:0"] = "Core",
+        });
+        var provider = new ConfigurationShellBlueprintProvider(section);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.ListAsync(new BlueprintListQuery(Limit: 10)));
+        Assert.Contains("Name", ex.Message);
+        Assert.Contains("array syntax", ex.Message);
+    }
+
+    [Fact(DisplayName = "GetAsync skips unrelated invalid array shell entries during fallback scan")]
+    public async Task Get_FallbackScanSkipsUnrelatedInvalidArrayEntry()
+    {
+        var section = BuildSection(new Dictionary<string, string?>
+        {
+            ["0:Features:0"] = "Core",
+            ["1:Name"] = "Acme",
+            ["1:Features:0"] = "Core",
+        });
+        var provider = new ConfigurationShellBlueprintProvider(section);
+
+        var result = await provider.GetAsync("Acme");
+
+        Assert.NotNull(result);
+        Assert.Equal("Acme", result!.Blueprint.Name);
     }
 
     private static IConfiguration BuildSection(IDictionary<string, string?> pairs) =>
