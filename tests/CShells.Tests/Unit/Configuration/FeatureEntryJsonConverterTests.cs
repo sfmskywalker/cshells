@@ -83,6 +83,35 @@ public class FeatureEntryJsonConverterTests
         Assert.Contains("object", ex.Message);
     }
 
+    [Fact(DisplayName = "Deserialize object feature entry reports scalar Settings before mixed styles")]
+    public void Deserialize_ObjectFeatureEntryWithScalarSettingsWrapperAndDirectSettings_ReportsScalarSettings()
+    {
+        // Arrange
+        var json = """{ "Name": "Analytics", "Settings": "invalid", "Window": "Weekly" }""";
+
+        // Act & Assert
+        var ex = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<FeatureEntry>(json, Options));
+        Assert.Contains("Settings", ex.Message);
+        Assert.Contains("object", ex.Message);
+        Assert.DoesNotContain("mixes", ex.Message);
+    }
+
+    [Fact(DisplayName = "Extracting ShellConfig feature names rejects blank programmatic entries")]
+    public void ShellBuilder_FromShellConfigWithBlankFeatureName_Throws()
+    {
+        // Arrange
+        var config = new ShellConfig
+        {
+            Name = "TestShell",
+            Features = [new FeatureEntry { Name = "" }]
+        };
+        var builder = new ShellBuilder("TestShell");
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => builder.FromConfiguration(config));
+        Assert.Contains("non-empty feature name", ex.Message);
+    }
+
     [Fact(DisplayName = "Deserialize object feature entry with nested settings")]
     public void Deserialize_ObjectFeatureEntryWithNestedSettings_PreservesStructure()
     {

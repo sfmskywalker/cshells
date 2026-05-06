@@ -194,8 +194,16 @@ internal static class ConfigurationHelper
     public static string[] ExtractFeatureNames(IEnumerable<FeatureEntry> features)
     {
         return features
-            .Where(f => !string.IsNullOrWhiteSpace(f.Name))
-            .Select(f => f.Name.Trim())
+            .Select((feature, index) =>
+            {
+                if (string.IsNullOrWhiteSpace(feature.Name))
+                {
+                    throw new InvalidOperationException(
+                        $"Configured feature entry at index {index} must define a non-empty feature name.");
+                }
+
+                return feature.Name.Trim();
+            })
             .ToArray();
     }
 
@@ -356,17 +364,17 @@ internal static class ConfigurationHelper
 
                 if (settingsWrapper is not null)
                 {
-                    if (directSettings.Count > 0)
-                    {
-                        throw new InvalidOperationException(
-                            $"Feature '{entry.Name}'{shellContext} mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
-                    }
-
                     var settingsChildren = settingsWrapper.GetChildren().ToList();
                     if (settingsWrapper.Value is not null && settingsChildren.Count == 0)
                     {
                         throw new InvalidOperationException(
                             $"Feature '{entry.Name}'{shellContext} uses a 'Settings' wrapper that must contain an object value.");
+                    }
+
+                    if (directSettings.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Feature '{entry.Name}'{shellContext} mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
                     }
 
                     PopulateEntrySettings(entry, settingsChildren);

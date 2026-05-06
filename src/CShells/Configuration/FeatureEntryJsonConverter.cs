@@ -106,13 +106,13 @@ public class FeatureEntryJsonConverter : JsonConverter<FeatureEntry>
 
         if (hasSettingsWrapper)
         {
-            if (directSettings.Count > 0)
-                throw new JsonException(
-                    $"Feature '{entry.Name}' mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
-
             if (settingsWrapper.Value.ValueKind != JsonValueKind.Object)
                 throw new JsonException(
                     $"Feature '{entry.Name}' uses a 'Settings' wrapper that must contain an object value.");
+
+            if (directSettings.Count > 0)
+                throw new JsonException(
+                    $"Feature '{entry.Name}' mixes the 'Settings' wrapper with direct settings. Use one feature settings style.");
 
             foreach (var property in settingsWrapper.Value.EnumerateObject())
                 entry.Settings[property.Name] = CloneJsonElement(property.Value);
@@ -144,4 +144,3 @@ public class FeatureEntryJsonConverter : JsonConverter<FeatureEntry>
         };
     }
 }
-

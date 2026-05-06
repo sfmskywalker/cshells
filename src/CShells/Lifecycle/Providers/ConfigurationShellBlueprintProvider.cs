@@ -55,7 +55,9 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         // "Name" property whose value differs from the key. Scan to honor that override.
         foreach (var child in _shellsSection.GetChildren())
         {
-            var candidate = ResolveShellName(child);
+            if (!TryResolveShellName(child, out var candidate))
+                continue;
+
             if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult<ProvidedBlueprint?>(
@@ -109,5 +111,24 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         }
 
         return shellSection.Key.Trim();
+    }
+
+    private static bool TryResolveShellName(IConfigurationSection shellSection, out string name)
+    {
+        var configuredName = shellSection["Name"];
+        if (!string.IsNullOrWhiteSpace(configuredName))
+        {
+            name = configuredName.Trim();
+            return true;
+        }
+
+        if (int.TryParse(shellSection.Key, out _))
+        {
+            name = "";
+            return false;
+        }
+
+        name = shellSection.Key.Trim();
+        return true;
     }
 }

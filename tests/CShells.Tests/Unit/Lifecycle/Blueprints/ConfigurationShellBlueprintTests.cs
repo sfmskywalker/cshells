@@ -129,6 +129,24 @@ public class ConfigurationShellBlueprintTests
         Assert.Contains("Analytics", ex.Message);
     }
 
+    [Fact(DisplayName = "Array feature reports scalar Settings before mixed styles")]
+    public async Task ComposeAsync_ArrayObjectScalarSettingsWrapperAndDirectSettings_ReportsScalarSettings()
+    {
+        var dict = new Dictionary<string, string?>
+        {
+            ["Features:0:Name"] = "Analytics",
+            ["Features:0:Settings"] = "invalid",
+            ["Features:0:Window"] = "Weekly",
+        };
+        var root = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+        var bp = new ConfigurationShellBlueprint("payments", root);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => bp.ComposeAsync());
+        Assert.Contains("Settings", ex.Message);
+        Assert.Contains("object", ex.Message);
+        Assert.DoesNotContain("mixes", ex.Message);
+    }
+
     [Fact(DisplayName = "Duplicate configured features throw before activation")]
     public async Task ComposeAsync_DuplicateFeatures_Throws()
     {

@@ -156,6 +156,23 @@ public class ConfigurationShellBlueprintProviderTests
         Assert.Contains("array syntax", ex.Message);
     }
 
+    [Fact(DisplayName = "GetAsync skips unrelated invalid array shell entries during fallback scan")]
+    public async Task Get_FallbackScanSkipsUnrelatedInvalidArrayEntry()
+    {
+        var section = BuildSection(new Dictionary<string, string?>
+        {
+            ["0:Features:0"] = "Core",
+            ["1:Name"] = "Acme",
+            ["1:Features:0"] = "Core",
+        });
+        var provider = new ConfigurationShellBlueprintProvider(section);
+
+        var result = await provider.GetAsync("Acme");
+
+        Assert.NotNull(result);
+        Assert.Equal("Acme", result!.Blueprint.Name);
+    }
+
     private static IConfiguration BuildSection(IDictionary<string, string?> pairs) =>
         new ConfigurationBuilder().AddInMemoryCollection(pairs).Build();
 }
