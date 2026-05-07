@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using CShells.Features;
 using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,23 +29,29 @@ public class ShellDrainPropertyTests
     [Fact(DisplayName = "Drain is non-null while state is Deactivating/Draining/Drained")]
     public async Task Drain_IsNonNull_DuringDeactivatingDrainingDrained()
     {
-        await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
-            .WithAssemblies()
-            .AddShell("beta", _ => { }));
+        var gate = new BlockingDrainGate();
+        await using var host = ShellRegistryActivateTests.BuildHost(cshells =>
+        {
+            cshells.Services.AddSingleton(gate);
+            cshells
+                .WithAssemblyContaining<ShellDrainPropertyTests>()
+                .AddShell("beta", shell => shell.WithFeature<BlockingDrainFeature>());
+        });
         var registry = host.GetRequiredService<IShellRegistry>();
         var shell = await registry.ActivateAsync("beta");
 
         var op = await registry.DrainAsync(shell);
+        try
+        {
+            await gate.Started.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // Even before the run completes, the drain reference is published and observable.
-        Assert.NotNull(shell.Drain);
-
-        // Wait for terminal state. With no drain handlers configured, the drain completes
-        // immediately and disposes the shell — at which point Drain is cleared back to null
-        // (covered by Drain_IsNull_AfterDispose). To observe the Drained state, we just
-        // assert the published drain reference matched op while it was in flight.
-        Assert.Same(op, shell.Drain);
-
+            Assert.NotNull(shell.Drain);
+            Assert.Same(op, shell.Drain);
+        }
+        finally
+        {
+            gate.Release();
+        }
         var result = await op.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(DrainStatus.Completed, result.Status);
     }
@@ -71,17 +78,30 @@ public class ShellDrainPropertyTests
     [Fact(DisplayName = "Drain returns the same instance as IShellRegistry.DrainAsync")]
     public async Task Drain_SameInstance_AsRegistryDrainAsyncReturn()
     {
-        await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
-            .WithAssemblies()
-            .AddShell("delta", _ => { }));
+        var gate = new BlockingDrainGate();
+        await using var host = ShellRegistryActivateTests.BuildHost(cshells =>
+        {
+            cshells.Services.AddSingleton(gate);
+            cshells
+                .WithAssemblyContaining<ShellDrainPropertyTests>()
+                .AddShell("delta", shell => shell.WithFeature<BlockingDrainFeature>());
+        });
         var registry = host.GetRequiredService<IShellRegistry>();
         var shell = await registry.ActivateAsync("delta");
 
         var fromRegistry = await registry.DrainAsync(shell);
-        var fromShell = shell.Drain;
+        try
+        {
+            await gate.Started.WaitAsync(TimeSpan.FromSeconds(5));
+            var fromShell = shell.Drain;
 
-        Assert.NotNull(fromShell);
-        Assert.Same(fromRegistry, fromShell);
+            Assert.NotNull(fromShell);
+            Assert.Same(fromRegistry, fromShell);
+        }
+        finally
+        {
+            gate.Release();
+        }
 
         await fromRegistry.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
@@ -111,5 +131,34 @@ public class ShellDrainPropertyTests
         // already proven by Assert.All above; shell.Drain identity is covered by
         // Drain_SameInstance_AsRegistryDrainAsyncReturn.
         await first.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    public sealed class BlockingDrainFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) =>
+            services.AddTransient<IDrainHandler, BlockingDrainHandler>();
+    }
+
+    private sealed class BlockingDrainHandler(BlockingDrainGate gate) : IDrainHandler
+    {
+        public async Task DrainAsync(IDrainExtensionHandle _, CancellationToken ct)
+        {
+            gate.SignalStarted();
+            await gate.Released.WaitAsync(ct);
+        }
+    }
+
+    private sealed class BlockingDrainGate
+    {
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => started.Task;
+
+        public Task Released => released.Task;
+
+        public void SignalStarted() => started.TrySetResult();
+
+        public void Release() => released.TrySetResult();
     }
 }
