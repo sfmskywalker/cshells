@@ -104,8 +104,8 @@ public class ShellRegistryActivateTests
         Assert.Same(shell, resolved);
     }
 
-    [Fact(DisplayName = "Activation exposes dependency-expanded feature set through ShellSettings")]
-    public async Task ActivateAsync_DependencyExpandedFeatures_AreExposedThroughShellSettings()
+    [Fact(DisplayName = "Activation expands feature dependencies in ShellSettings")]
+    public async Task ActivateAsync_DependencyFeatures_AreExpandedInShellSettings()
     {
         await using var host = BuildHost(cshells => cshells
             .WithAssemblyContaining<ShellRegistryActivateTests>()
