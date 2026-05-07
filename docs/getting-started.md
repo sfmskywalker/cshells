@@ -67,22 +67,20 @@ Define your shells in `appsettings.json`:
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Cache", "Blog"],
+    "Shells": {
+      "Default": {
+        "Features": { "Cache": {}, "Blog": {} },
         "Configuration": {
           "WebRouting": { "Path": "" }
         }
       },
-      {
-        "Name": "Premium",
-        "Features": ["Cache", "Blog", "Analytics"],
+      "Premium": {
+        "Features": { "Cache": {}, "Blog": {}, "Analytics": {} },
         "Configuration": {
           "WebRouting": { "Path": "premium" }
         }
       }
-    ]
+    }
   }
 }
 ```

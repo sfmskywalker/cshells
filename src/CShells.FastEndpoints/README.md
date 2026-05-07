@@ -63,10 +63,9 @@ public class GetWeatherEndpoint : EndpointWithoutRequest<WeatherResponse>
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "FastEndpoints", "MyApi"],
+    "Shells": {
+      "Default": {
+        "Features": { "Core": {}, "FastEndpoints": {}, "MyApi": {} },
         "Configuration": {
           "WebRouting": {
             "Path": "",
@@ -77,7 +76,7 @@ public class GetWeatherEndpoint : EndpointWithoutRequest<WeatherResponse>
           }
         }
       }
-    ]
+    }
   }
 }
 ```

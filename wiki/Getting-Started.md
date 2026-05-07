@@ -91,17 +91,16 @@ In `appsettings.json`:
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["CoreFeature", "Weather"],
+    "Shells": {
+      "Default": {
+        "Features": { "CoreFeature": {}, "Weather": {} },
         "Configuration": {
           "WebRouting": {
             "Path": ""
           }
         }
       }
-    ]
+    }
   }
 }
 ```

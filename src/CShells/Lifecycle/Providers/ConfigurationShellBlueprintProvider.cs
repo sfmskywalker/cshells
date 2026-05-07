@@ -24,6 +24,7 @@ namespace CShells.Lifecycle.Providers;
 public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvider
 {
     private readonly IConfiguration _shellsSection;
+    private const string ShellsPath = "CShells:Shells";
 
     /// <summary>Stable identifier emitted as <see cref="BlueprintSummary.SourceId"/>.</summary>
     public const string SourceIdValue = nameof(ConfigurationShellBlueprintProvider);
@@ -37,33 +38,12 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
     public Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(name);
+        ValidateShellEntries();
 
-        // O(1) fast path: direct key lookup. Covers the common case where the configuration
-        // key matches the shell name.
-        var direct = _shellsSection.GetSection(name);
-        if (direct.Exists())
-        {
-            var candidate = ResolveShellName(direct);
-            if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return Task.FromResult<ProvidedBlueprint?>(
-                    new ProvidedBlueprint(new ConfigurationShellBlueprint(candidate, direct)));
-            }
-        }
-
-        // O(N) fallback: the configured child may expose a different name via an explicit
-        // "Name" property whose value differs from the key. Scan to honor that override.
-        foreach (var child in _shellsSection.GetChildren())
-        {
-            if (!TryResolveShellName(child, out var candidate))
-                continue;
-
-            if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return Task.FromResult<ProvidedBlueprint?>(
-                    new ProvidedBlueprint(new ConfigurationShellBlueprint(candidate, child)));
-            }
-        }
+        var direct = FindShellSection(name);
+        if (direct is not null)
+            return Task.FromResult<ProvidedBlueprint?>(
+                new ProvidedBlueprint(new ConfigurationShellBlueprint(ValidateShellName(direct), direct)));
 
         return Task.FromResult<ProvidedBlueprint?>(null);
     }
@@ -74,8 +54,10 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         Guard.Against.Null(query);
         query.EnsureValid();
 
+        ValidateShellEntries();
+
         var ordered = _shellsSection.GetChildren()
-            .Select(ResolveShellName)
+            .Select(ValidateShellName)
             .Where(name => query.NamePrefix is null ||
                            name.StartsWith(query.NamePrefix, StringComparison.OrdinalIgnoreCase))
             .Where(name => query.Cursor is null ||
@@ -98,37 +80,37 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         return Task.FromResult(new BlueprintPage(items, nextCursor));
     }
 
-    private static string ResolveShellName(IConfigurationSection shellSection)
+    private void ValidateShellEntries()
     {
-        var configuredName = shellSection["Name"];
-        if (!string.IsNullOrWhiteSpace(configuredName))
-            return configuredName.Trim();
-
-        if (int.TryParse(shellSection.Key, out _))
-        {
-            throw new InvalidOperationException(
-                $"Configured shell entry '{shellSection.Path}' must define a non-empty 'Name' property when using array syntax.");
-        }
-
-        return shellSection.Key.Trim();
+        foreach (var child in _shellsSection.GetChildren())
+            ValidateShellName(child);
     }
 
-    private static bool TryResolveShellName(IConfigurationSection shellSection, out string name)
+    private IConfigurationSection? FindShellSection(string name)
     {
-        var configuredName = shellSection["Name"];
-        if (!string.IsNullOrWhiteSpace(configuredName))
+        foreach (var child in _shellsSection.GetChildren())
+            if (string.Equals(ValidateShellName(child), name, StringComparison.OrdinalIgnoreCase))
+                return child;
+
+        return null;
+    }
+
+    private static string ValidateShellName(IConfigurationSection shellSection)
+    {
+        var shellName = shellSection.Key.Trim();
+
+        if (string.IsNullOrWhiteSpace(shellName))
         {
-            name = configuredName.Trim();
-            return true;
+            throw new InvalidOperationException(
+                $"Configured shell entry '{shellSection.Path}' under '{ShellsPath}' must use a non-empty shell name as the map key.");
         }
 
-        if (int.TryParse(shellSection.Key, out _))
+        if (int.TryParse(shellName, out _))
         {
-            name = "";
-            return false;
+            throw new InvalidOperationException(
+                $"Configured shell entry '{shellSection.Path}' under '{ShellsPath}' uses unsupported array syntax. Configure shells as named map entries, for example '{ShellsPath}:Default'.");
         }
 
-        name = shellSection.Key.Trim();
-        return true;
+        return shellName;
     }
 }

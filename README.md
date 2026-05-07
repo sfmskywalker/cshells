@@ -199,22 +199,23 @@ public class WeatherFeature : IShellFeature
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "Weather"],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {},
+          "Weather": {}
+        },
         "Configuration": {
           "WebRouting": {
             "Path": ""
           }
         }
       },
-      {
-        "Name": "Admin",
-        "Features": [
-          "Core",
-          { "Name": "Admin", "MaxUsers": 100, "EnableAuditLog": true }
-        ],
+      "Admin": {
+        "Features": {
+          "Core": {},
+          "Admin": { "MaxUsers": 100, "EnableAuditLog": true }
+        },
         "Configuration": {
           "WebRouting": {
             "Path": "admin",
@@ -222,10 +223,18 @@ public class WeatherFeature : IShellFeature
           }
         }
       }
-    ]
+    }
   }
 }
 ```
+
+Shell names are the keys under `CShells:Shells`. This makes overrides stable, for example:
+
+```bash
+CSHELLS__SHELLS__DEFAULT__FEATURES__WEATHER__APIKEY=...
+```
+
+Use PascalCase shell names in JSON, such as `Default` or `MyShell`; environment variable keys are commonly written in uppercase.
 
 You can also override the configuration section name via `builder.AddShells("MySection")`.
 

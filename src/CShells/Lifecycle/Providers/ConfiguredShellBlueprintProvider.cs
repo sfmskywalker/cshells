@@ -58,7 +58,9 @@ internal sealed class ConfiguredShellBlueprintProvider(
             var merged = new ShellSettings(shellSpecific.Id)
             {
                 EnabledFeatures = MergeFeatures(defaults.EnabledFeatures, shellSpecific.EnabledFeatures),
-                ConfigurationData = new Dictionary<string, object>(defaults.ConfigurationData)
+                ConfigurationData = new Dictionary<string, object>(
+                    defaults.ConfigurationData,
+                    StringComparer.OrdinalIgnoreCase)
             };
 
             foreach (var (key, value) in shellSpecific.ConfigurationData)

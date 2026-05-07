@@ -3,12 +3,13 @@ using System.Text.Json.Serialization;
 namespace CShells.Configuration;
 
 /// <summary>
-/// Configuration model for a shell section in appsettings.json.
+/// Configuration model for a single shell definition.
 /// </summary>
 public class ShellConfig
 {
     /// <summary>
-    /// Gets or sets the name of the shell.
+    /// Gets or sets the optional shell name used by standalone shell configuration providers.
+    /// Root <c>CShells:Shells</c> configuration derives shell identity from the parent map key.
     /// </summary>
     public string Name { get; set; } = string.Empty;
 

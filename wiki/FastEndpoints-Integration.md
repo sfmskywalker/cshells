@@ -76,10 +76,9 @@ public class GetProductsEndpoint : EndpointWithoutRequest<List<ProductDto>>
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "FastEndpoints", "Products"],
+    "Shells": {
+      "Default": {
+        "Features": { "Core": {}, "FastEndpoints": {}, "Products": {} },
         "Configuration": {
           "WebRouting": {
             "Path": "",
@@ -90,7 +89,7 @@ public class GetProductsEndpoint : EndpointWithoutRequest<List<ProductDto>>
           }
         }
       }
-    ]
+    }
   }
 }
 ```

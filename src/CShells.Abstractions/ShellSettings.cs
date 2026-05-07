@@ -36,7 +36,7 @@ public class ShellSettings
     /// Gets or sets shell-specific configuration data as a dictionary.
     /// Keys use colon-separated format for hierarchical data (e.g., "WebRouting:Path").
     /// </summary>
-    public IDictionary<string, object> ConfigurationData { get; set; } = new Dictionary<string, object>();
+    public IDictionary<string, object> ConfigurationData { get; set; } = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the code-first feature configurators registered via

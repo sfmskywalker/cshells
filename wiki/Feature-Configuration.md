@@ -10,7 +10,7 @@ Shell features can receive configuration from three places, listed in order of p
 
 1. **Environment variables** — override everything
 2. **Inline feature settings** — settings placed alongside the feature name in the `Features` section
-3. **Shell `Configuration` section** — `CShells:Shells[n]:Configuration:<FeatureName>`
+3. **Shell `Configuration` section** — `CShells:Shells:<ShellName>:Configuration:<FeatureName>`
 
 ---
 
@@ -21,9 +21,8 @@ Use an object-map where each property key is the feature name and the value supp
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": {
           "Core": {},
           "Database": {
@@ -33,7 +32,7 @@ Use an object-map where each property key is the feature name and the value supp
           "Logging": {}
         }
       }
-    ]
+    }
   }
 }
 ```
@@ -55,9 +54,8 @@ Place settings in a mixed array of strings and objects (the original syntax, sti
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": [
           "Core",
           {
@@ -68,7 +66,7 @@ Place settings in a mixed array of strings and objects (the original syntax, sti
           "Logging"
         ]
       }
-    ]
+    }
   }
 }
 ```
@@ -84,10 +82,13 @@ Use the `Configuration` section for shell-level configuration that applies to mu
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "Database", "Logging"],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {},
+          "Database": {},
+          "Logging": {}
+        },
         "Configuration": {
           "Database": {
             "ConnectionString": "Server=prod;Database=App;Integrated Security=true",
@@ -99,7 +100,7 @@ Use the `Configuration` section for shell-level configuration that applies to mu
           }
         }
       }
-    ]
+    }
   }
 }
 ```
@@ -241,7 +242,7 @@ Never store secrets in `appsettings.json`. Use environment variables or a secret
 ### Development (User Secrets)
 
 ```bash
-dotnet user-secrets set "CShells:Shells:0:Configuration:Database:ConnectionString" "Server=localhost;..."
+dotnet user-secrets set "CShells:Shells:Default:Configuration:Database:ConnectionString" "Server=localhost;..."
 ```
 
 ### Production (Environment Variables)
@@ -249,7 +250,7 @@ dotnet user-secrets set "CShells:Shells:0:Configuration:Database:ConnectionStrin
 Use double-underscore (`__`) as the hierarchy separator:
 
 ```bash
-CShells__Shells__0__Configuration__Database__ConnectionString="Server=prod;..."
+CSHELLS__SHELLS__DEFAULT__CONFIGURATION__DATABASE__CONNECTIONSTRING="Server=prod;..."
 ```
 
 ### Azure Key Vault / AWS Secrets Manager

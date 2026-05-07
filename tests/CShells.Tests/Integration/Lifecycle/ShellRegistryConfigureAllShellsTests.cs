@@ -31,8 +31,7 @@ public class ShellRegistryConfigureAllShellsTests
         // Build a minimal IConfiguration that defines a shell with one feature.
         var configData = new Dictionary<string, string?>
         {
-            ["CShells:Shells:0:Name"] = "catalog",
-            ["CShells:Shells:0:Features:0"] = "ShellSpecificFeature",
+            ["CShells:Shells:catalog:Features:ShellSpecificFeature:Enabled"] = "true",
         };
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configData)
@@ -90,8 +89,7 @@ public class ShellRegistryConfigureAllShellsTests
     {
         var configData = new Dictionary<string, string?>
         {
-            ["CShells:Shells:0:Name"] = "catalog",
-            ["CShells:Shells:0:Configuration:Plan"] = "Enterprise",
+            ["CShells:Shells:catalog:Configuration:Plan"] = "Enterprise",
         };
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configData)
