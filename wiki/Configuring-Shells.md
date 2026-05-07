@@ -23,22 +23,23 @@ The default configuration source. CShells reads from the `"CShells"` section by 
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "Weather"],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {},
+          "Weather": {}
+        },
         "Configuration": {
           "WebRouting": {
             "Path": ""
           }
         }
       },
-      {
-        "Name": "Admin",
-        "Features": [
-          "Core",
-          { "Name": "Admin", "MaxUsers": 100, "EnableAuditLog": true }
-        ],
+      "Admin": {
+        "Features": {
+          "Core": {},
+          "Admin": { "MaxUsers": 100, "EnableAuditLog": true }
+        },
         "Configuration": {
           "WebRouting": {
             "Path": "admin",
@@ -46,7 +47,7 @@ The default configuration source. CShells reads from the `"CShells"` section by 
           }
         }
       }
-    ]
+    }
   }
 }
 ```

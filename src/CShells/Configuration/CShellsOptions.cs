@@ -11,7 +11,7 @@ public class CShellsOptions
     public const string SectionName = "CShells";
 
     /// <summary>
-    /// Gets or sets the collection of shell configurations.
+    /// Gets or sets shell configurations keyed by shell name.
     /// </summary>
-    public List<ShellConfig> Shells { get; set; } = [];
+    public Dictionary<string, ShellConfig> Shells { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

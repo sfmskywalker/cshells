@@ -40,12 +40,11 @@ Note: path-based resolution is attempted first by the unified resolver. The reso
   ```json
   {
     "CShells": {
-      "Shells": [
-        {
-          "Name": "Acme",
+      "Shells": {
+        "Acme": {
           "Configuration": { "WebRouting": { "HeaderName": "X-Tenant-Id" } }
         }
-      ]
+      }
     }
   }
   ```
@@ -93,16 +92,14 @@ Configure a path prefix per shell in `appsettings.json`:
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Configuration": { "WebRouting": { "Path": "" } }
       },
-      {
-        "Name": "Acme",
+      "Acme": {
         "Configuration": { "WebRouting": { "Path": "acme" } }
       }
-    ]
+    }
   }
 }
 ```
@@ -118,12 +115,11 @@ Result (assuming both shells are currently applied):
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Acme",
+    "Shells": {
+      "Acme": {
         "Configuration": { "WebRouting": { "Host": "acme.example.com" } }
       }
-    ]
+    }
   }
 }
 ```

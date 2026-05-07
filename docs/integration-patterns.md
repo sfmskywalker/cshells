@@ -13,10 +13,10 @@ Give each shell a unique path prefix:
 ```json
 {
   "CShells": {
-    "Shells": [
-      { "Name": "Acme",    "Configuration": { "WebRouting": { "Path": "tenants/acme" } } },
-      { "Name": "Contoso", "Configuration": { "WebRouting": { "Path": "tenants/contoso" } } }
-    ]
+    "Shells": {
+      "Acme": { "Configuration": { "WebRouting": { "Path": "tenants/acme" } }  },
+      "Contoso": { "Configuration": { "WebRouting": { "Path": "tenants/contoso" } }  }
+    }
   }
 }
 ```
@@ -32,9 +32,9 @@ Result:
 ```json
 {
   "CShells": {
-    "Shells": [
-      { "Name": "Acme", "Configuration": { "WebRouting": { "Host": "acme.example.com" } } }
-    ]
+    "Shells": {
+      "Acme": { "Configuration": { "WebRouting": { "Host": "acme.example.com" } }  }
+    }
   }
 }
 ```
@@ -61,7 +61,15 @@ Register host routes **before** `MapShells()` to avoid shadowing.
 Set `Path` to `""` when the **entire** application is multi-tenant:
 
 ```json
-{ "Name": "Default", "Configuration": { "WebRouting": { "Path": "" } } }
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Configuration": { "WebRouting": { "Path": "" } }
+      }
+    }
+  }
+}
 ```
 
 > **Warning:** shell routes will match all root-level requests. Only use this when you have no host-specific routes.

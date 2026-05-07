@@ -54,19 +54,17 @@ public class WeatherFeature : IWebShellFeature
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Weather"],
+    "Shells": {
+      "Default": {
+        "Features": { "Weather": {} },
         "Configuration": {
           "WebRouting": {
             "Path": ""
           }
         }
       },
-      {
-        "Name": "Admin",
-        "Features": ["Admin"],
+      "Admin": {
+        "Features": { "Admin": {} },
         "Configuration": {
           "WebRouting": {
             "Path": "admin",
@@ -74,7 +72,7 @@ public class WeatherFeature : IWebShellFeature
           }
         }
       }
-    ]
+    }
   }
 }
 ```

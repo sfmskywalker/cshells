@@ -47,16 +47,14 @@ Give each shell a unique path prefix to avoid route conflicts:
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Acme",
+    "Shells": {
+      "Acme": {
         "Configuration": { "WebRouting": { "Path": "tenants/acme" } }
       },
-      {
-        "Name": "Contoso",
+      "Contoso": {
         "Configuration": { "WebRouting": { "Path": "tenants/contoso" } }
       }
-    ]
+    }
   }
 }
 ```
@@ -72,9 +70,14 @@ Use host routing when each tenant has its own subdomain:
 
 ```json
 {
-  "Name": "Acme",
-  "Configuration": {
-    "WebRouting": { "Host": "acme.example.com" }
+  "CShells": {
+    "Shells": {
+      "Acme": {
+        "Configuration": {
+          "WebRouting": { "Host": "acme.example.com" }
+        }
+      }
+    }
   }
 }
 ```
@@ -106,9 +109,14 @@ Use an empty path prefix when the entire application is multi-tenant:
 
 ```json
 {
-  "Name": "Default",
-  "Configuration": {
-    "WebRouting": { "Path": "" }
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Configuration": {
+          "WebRouting": { "Path": "" }
+        }
+      }
+    }
   }
 }
 ```

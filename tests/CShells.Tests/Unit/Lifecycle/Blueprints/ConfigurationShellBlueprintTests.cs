@@ -10,6 +10,28 @@ public class ConfigurationShellBlueprintTests
     {
         public new void Set(string key, string? value) => Data[key] = value;
     }
+
+    [Fact(DisplayName = "ComposeAsync uses blueprint name and loads map feature settings with shell configuration")]
+    public async Task ComposeAsync_MapFeatureSettingsAndShellConfiguration_LoadsRuntimeSettings()
+    {
+        var dict = new Dictionary<string, string?>
+        {
+            ["Features:Identity:SigningKey"] = "secret",
+            ["Configuration:WebRouting:Path"] = "",
+            ["Configuration:Plan"] = "Enterprise",
+        };
+        var root = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal("Default", settings.Id.Name);
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Equal("secret", settings.ConfigurationData["Identity:SigningKey"]);
+        Assert.Equal("", settings.ConfigurationData["WebRouting:Path"]);
+        Assert.Equal("Enterprise", settings.ConfigurationData["Plan"]);
+    }
+
     [Fact(DisplayName = "ComposeAsync reflects runtime changes to the underlying IConfiguration")]
     public async Task ComposeAsync_ReflectsRuntimeConfigChanges()
     {

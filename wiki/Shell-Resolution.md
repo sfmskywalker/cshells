@@ -37,14 +37,13 @@ A shell is resolved when the first URL path segment matches the shell's `WebRout
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Acme",
+    "Shells": {
+      "Acme": {
         "Configuration": {
           "WebRouting": { "Path": "acme" }
         }
       }
-    ]
+    }
   }
 }
 ```
@@ -61,9 +60,14 @@ A shell is resolved when the request `Host` header matches the shell's `WebRouti
 
 ```json
 {
-  "Name": "Acme",
-  "Configuration": {
-    "WebRouting": { "Host": "acme.example.com" }
+  "CShells": {
+    "Shells": {
+      "Acme": {
+        "Configuration": {
+          "WebRouting": { "Host": "acme.example.com" }
+        }
+      }
+    }
   }
 }
 ```

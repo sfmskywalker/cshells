@@ -135,3 +135,10 @@ Package versions are centrally managed in `Directory.Packages.props` — never s
 | Reference feature implementations | `samples/CShells.Workbench.Features/` |
 | Integration test helper | `tests/CShells.Tests/TestHelpers/DefaultShellHostFixture.cs` |
 
+
+## Active Technologies
+- C# 14 / .NET 10 with `Microsoft.Extensions.Configuration`, `System.Text.Json`, and existing CShells abstractions; no new third-party packages (011-map-shell-config)
+- Configuration provider inputs only; no persistent storage (011-map-shell-config)
+
+## Recent Changes
+- 011-map-shell-config: Planned map-based shell configuration under `CShells:Shells`

@@ -46,12 +46,11 @@ public class CoreFeature : IShellFeature
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": [ "Core" ]
+    "Shells": {
+      "Default": {
+        "Features": { "Core": {} }
       }
-    ]
+    }
   }
 }
 ```

@@ -18,15 +18,14 @@ The `Features` property supports an object-map syntax where each property key is
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": {
           "Core": {},
           "Analytics": { "TopPostsCount": 10 }
         }
       }
-    ]
+    }
   }
 }
 ```
@@ -49,9 +48,8 @@ Each entry in the `Features` array can be either a string (feature name) or an o
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": [
           "Core",
           {
@@ -60,7 +58,7 @@ Each entry in the `Features` array can be either a string (feature name) or an o
           }
         ]
       }
-    ]
+    }
   }
 }
 ```
@@ -70,9 +68,8 @@ For compatibility with older configuration, array objects may also place setting
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": [
           {
             "Name": "Analytics",
@@ -80,7 +77,7 @@ For compatibility with older configuration, array objects may also place setting
           }
         ]
       }
-    ]
+    }
   }
 }
 ```
@@ -156,15 +153,14 @@ public class DatabaseOptions
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
+    "Shells": {
+      "Default": {
         "Features": [
           "Core",
           { "Name": "Database", "ConnectionString": "Server=localhost;Database=App;..." }
         ]
       }
-    ]
+    }
   }
 }
 ```
@@ -174,17 +170,19 @@ Or use the shell's `Configuration` section:
 ```json
 {
   "CShells": {
-    "Shells": [
-      {
-        "Name": "Default",
-        "Features": ["Core", "Database"],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {},
+          "Database": {}
+        },
         "Configuration": {
           "Database": {
             "ConnectionString": "Server=localhost;Database=App;..."
           }
         }
       }
-    ]
+    }
   }
 }
 ```
@@ -195,7 +193,7 @@ Settings are resolved in this order (highest wins):
 
 1. **Environment variables** — `Shells__Default__Configuration__FeatureName__Property`
 2. **Inline feature configuration** — settings in the `Features` array
-3. **Shell Configuration section** — `CShells:Shells[].Configuration.FeatureName`
+3. **Shell Configuration section** — `CShells:Shells.<ShellName>.Configuration.FeatureName`
 4. **Root configuration** — `FeatureName:Property`
 5. **Property defaults** — default values on the options class
 
@@ -249,7 +247,7 @@ Never store secrets in `appsettings.json`. Use the standard .NET mechanisms:
 
 ```bash
 # Development — User Secrets
-dotnet user-secrets set "CShells:Shells:0:Configuration:Database:ConnectionString" "Server=dev;..."
+dotnet user-secrets set "CShells:Shells:Default:Configuration:Database:ConnectionString" "Server=dev;..."
 
 # Production — Environment Variables or Azure Key Vault
 ```
