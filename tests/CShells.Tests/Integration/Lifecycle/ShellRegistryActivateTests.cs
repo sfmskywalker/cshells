@@ -104,6 +104,23 @@ public class ShellRegistryActivateTests
         Assert.Same(shell, resolved);
     }
 
+    [Fact(DisplayName = "Activation exposes dependency-expanded feature set through ShellSettings")]
+    public async Task ActivateAsync_DependencyExpandedFeatures_AreExposedThroughShellSettings()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<ShellRegistryActivateTests>()
+            .AddShell("payments", shell => shell.WithFeatures(typeof(DependencyExpansionDependentFeature))));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Equal(
+            ["DependencyExpansionDependency", "DependencyExpansionDependent"],
+            settings.EnabledFeatures);
+        Assert.NotNull(shell.ServiceProvider.GetService<DependencyExpansionMarker>());
+    }
+
     internal static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
     {
         var services = new ServiceCollection();
@@ -130,3 +147,22 @@ public class ShellRegistryActivateTests
             => Task.FromResult(new ShellSettings(new ShellId("other-name")));
     }
 }
+
+[ShellFeature("DependencyExpansionDependency")]
+public sealed class DependencyExpansionDependencyFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<DependencyExpansionMarker>();
+    }
+}
+
+[ShellFeature("DependencyExpansionDependent", DependsOn = ["DependencyExpansionDependency"])]
+public sealed class DependencyExpansionDependentFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+public sealed class DependencyExpansionMarker;

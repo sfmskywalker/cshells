@@ -62,6 +62,11 @@ internal sealed class ShellProviderBuilder(
             ? _dependencyResolver.GetOrderedFeatures(availableEnabled, catalog.FeatureMap)
             : [];
 
+        // Dependencies are effective shell features too. Keep the settings instance aligned so
+        // later lifecycle handlers that resolve ShellSettings see the same feature set that was
+        // used to build the provider.
+        settings.EnabledFeatures = orderedFeatures;
+
         var services = new ServiceCollection();
         CopyRootServices(services);
 
