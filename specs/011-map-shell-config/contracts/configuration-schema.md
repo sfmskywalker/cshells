@@ -73,7 +73,7 @@ This path targets:
 CShells:Shells:Default:Features:Identity:SigningKey
 ```
 
-For shell names with multiple words, use PascalCase in JSON and the deployment environment's preferred key form in environment variables. Example:
+For shell names with multiple words, use PascalCase in JSON and the same shell-name segment in environment variables (casing may differ, but do not add underscores within the shell name). Example:
 
 ```json
 {
@@ -90,7 +90,7 @@ For shell names with multiple words, use PascalCase in JSON and the deployment e
 ```
 
 ```text
-CSHELLS__SHELLS__MY_SHELL__FEATURES__IDENTITY__SIGNINGKEY=test
+CSHELLS__SHELLS__MYSHELL__FEATURES__IDENTITY__SIGNINGKEY=test
 ```
 
 ## Layered Merge Contract

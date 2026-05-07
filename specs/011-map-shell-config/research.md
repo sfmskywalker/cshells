@@ -57,7 +57,7 @@
 
 ## Decision 6: Document casing conventions separately for config and environment variables
 
-**Decision**: Recommend PascalCase shell names in JSON/configuration files and show uppercase, underscore-separated environment variable paths where host environments commonly require or prefer uppercase keys, for example `CSHELLS__SHELLS__MY_SHELL__...`.
+**Decision**: Recommend PascalCase shell names in JSON/configuration files and show the same shell-name segment in environment variable paths, allowing casing differences but not added underscores, for example `CSHELLS__SHELLS__MYSHELL__...`.
 
 **Rationale**: Shell names are user-visible in configuration and management surfaces, while environment variables often follow uppercase conventions. Documenting both avoids ambiguity without adding custom normalization rules.
 

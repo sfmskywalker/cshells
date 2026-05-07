@@ -55,7 +55,7 @@ The stable shell identifier derived from the map key.
 - Must be non-empty after trimming.
 - Must not be derived from an inner property.
 - Recommended JSON/configuration convention is PascalCase, for example `Default` or `MyShell`.
-- Environment variable examples may use uppercase and underscores where required by deployment conventions.
+- Environment variable examples may use uppercase for key segments, but must not add underscores inside a shell name segment unless the configured shell name itself contains underscores.
 
 ### Relationships
 

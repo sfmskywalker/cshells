@@ -38,10 +38,8 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
     public Task<ProvidedBlueprint?> GetAsync(string name, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(name);
-        ValidateShellEntries();
-
-        var direct = FindShellSection(name);
-        if (direct is not null)
+        var shells = LoadShellEntries();
+        if (shells.TryGetValue(name, out var direct))
             return Task.FromResult<ProvidedBlueprint?>(
                 new ProvidedBlueprint(new ConfigurationShellBlueprint(ValidateShellName(direct), direct)));
 
@@ -54,9 +52,9 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         Guard.Against.Null(query);
         query.EnsureValid();
 
-        ValidateShellEntries();
+        var shells = LoadShellEntries();
 
-        var ordered = _shellsSection.GetChildren()
+        var ordered = shells.Values
             .Select(ValidateShellName)
             .Where(name => query.NamePrefix is null ||
                            name.StartsWith(query.NamePrefix, StringComparison.OrdinalIgnoreCase))
@@ -80,19 +78,13 @@ public sealed class ConfigurationShellBlueprintProvider : IShellBlueprintProvide
         return Task.FromResult(new BlueprintPage(items, nextCursor));
     }
 
-    private void ValidateShellEntries()
+    private Dictionary<string, IConfigurationSection> LoadShellEntries()
     {
+        var shells = new Dictionary<string, IConfigurationSection>(StringComparer.OrdinalIgnoreCase);
         foreach (var child in _shellsSection.GetChildren())
-            ValidateShellName(child);
-    }
+            shells[ValidateShellName(child)] = child;
 
-    private IConfigurationSection? FindShellSection(string name)
-    {
-        foreach (var child in _shellsSection.GetChildren())
-            if (string.Equals(ValidateShellName(child), name, StringComparison.OrdinalIgnoreCase))
-                return child;
-
-        return null;
+        return shells;
     }
 
     private static string ValidateShellName(IConfigurationSection shellSection)

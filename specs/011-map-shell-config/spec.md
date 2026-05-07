@@ -95,7 +95,7 @@ As a developer adopting CShells, I want documentation and sample configuration t
 - **FR-010**: The system MUST provide actionable error feedback when unsupported array syntax is encountered, including the affected configuration path.
 - **FR-011**: Documentation and sample configuration MUST use map syntax for all `CShells:Shells` examples and MUST remove shell-level `Name` properties from those examples.
 - **FR-012**: Documentation MUST include environment variable override examples that demonstrate named shell paths and explain that named paths are stable across configuration reordering.
-- **FR-013**: Documentation MUST define the shell naming convention for configuration keys: use PascalCase for display-oriented shell names, and use uppercase with underscores when writing environment variable paths where required by the host environment, for example `MyShell` represented as `CSHELLS__SHELLS__MY_SHELL__...`.
+- **FR-013**: Documentation MUST define the shell naming convention for configuration keys: use PascalCase for display-oriented shell names, and use the same shell-name segment without adding underscores when writing environment variable paths, for example `MyShell` represented as `CSHELLS__SHELLS__MYSHELL__...`.
 
 ### Key Entities *(include if feature involves data)*
 

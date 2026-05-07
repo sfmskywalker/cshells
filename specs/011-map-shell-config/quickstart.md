@@ -162,10 +162,10 @@ Use PascalCase shell keys in JSON:
 }
 ```
 
-Use the environment's preferred uppercase/underscore form when writing environment variables:
+Use the same PascalCase shell name segment in environment variable paths — casing may differ, but do not introduce underscores within the shell name segment:
 
 ```bash
-export CSHELLS__SHELLS__MY_SHELL__FEATURES__IDENTITY__SIGNINGKEY=test
+export CSHELLS__SHELLS__MYSHELL__FEATURES__IDENTITY__SIGNINGKEY=test
 ```
 
 The configuration system maps the environment variable path back to the named shell path.
