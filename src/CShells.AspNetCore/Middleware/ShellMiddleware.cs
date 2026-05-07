@@ -88,11 +88,12 @@ public class ShellMiddleware(
             return;
         }
 
-        // Cold activation: UseRouting() ran before this middleware and found no endpoints
-        // (they hadn't been registered yet). Now that activation has completed and the
-        // ShellEndpointRegistrationHandler has published the shell's endpoints, re-match
-        // the request so the endpoint middleware downstream can execute the handler.
-        if (wasCold && context.GetEndpoint() is null)
+        // Cold activation: UseRouting() ran before this middleware and either found no endpoint,
+        // or selected a host fallback endpoint because shell endpoints had not been registered yet.
+        // Now that activation has completed and the ShellEndpointRegistrationHandler has published
+        // the shell's endpoints, re-match the request so downstream endpoint middleware can execute
+        // the shell handler instead of a preselected fallback.
+        if (wasCold && ShouldTryMatchEndpointAfterColdActivation(context.GetEndpoint()))
             TryMatchEndpointAfterColdActivation(context, shellId.Value);
 
         // BeginScope increments the shell's active-scope counter (so in-flight drains' phase-1
@@ -146,11 +147,22 @@ public class ShellMiddleware(
         return $"{request.Host}:{request.Path}:{request.Method}";
     }
 
+    private static bool ShouldTryMatchEndpointAfterColdActivation(Endpoint? endpoint)
+    {
+        if (endpoint is null)
+            return true;
+
+        if (endpoint.Metadata.GetMetadata<ShellEndpointMetadata>() is not null)
+            return false;
+
+        return endpoint is RouteEndpoint { Order: int.MaxValue };
+    }
+
     /// <summary>
-    /// After a cold shell activation, UseRouting() has already run and found no endpoint.
-    /// The shell's endpoints are now registered in the <see cref="DynamicShellEndpointDataSource"/>.
-    /// Walk the data source and set the first matching endpoint on the context so the downstream
-    /// endpoint middleware can execute it.
+    /// After a cold shell activation, UseRouting() has already run and may have found no endpoint
+    /// or selected a host fallback endpoint. The shell's endpoints are now registered in the
+    /// <see cref="DynamicShellEndpointDataSource"/>. Walk the data source and set the first
+    /// matching endpoint on the context so the downstream endpoint middleware can execute it.
     /// </summary>
     private void TryMatchEndpointAfterColdActivation(HttpContext context, ShellId shellId)
     {

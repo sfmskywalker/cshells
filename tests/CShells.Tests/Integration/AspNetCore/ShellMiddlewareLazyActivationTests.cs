@@ -143,6 +143,102 @@ public class ShellMiddlewareLazyActivationTests
         Assert.False(intHandlerInvoked, "int-handler must be rejected by the inline `:int` constraint.");
     }
 
+    [Fact(DisplayName = "Cold-start re-match replaces non-shell fallback endpoint")]
+    public async Task ColdStart_ReMatch_ReplacesFallbackEndpoint()
+    {
+        var dataSource = new DynamicShellEndpointDataSource();
+        var shellId = new ShellId("Default");
+        var settings = new ShellSettings();
+        var shellMetadata = new ShellEndpointMetadata(shellId, settings);
+
+        var shellEndpointInvoked = false;
+        var shellEndpoint = new RouteEndpoint(
+            _ => { shellEndpointInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("elsa/api/package/version"),
+            order: 0,
+            new EndpointMetadataCollection(shellMetadata, new HttpMethodMetadata(["GET"])),
+            displayName: "package-version");
+        dataSource.AddEndpoints([shellEndpoint]);
+
+        var fallbackInvoked = false;
+        var fallbackEndpoint = new RouteEndpoint(
+            _ => { fallbackInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("{*path:nonfile}"),
+            order: int.MaxValue,
+            EndpointMetadataCollection.Empty,
+            displayName: "spa-fallback");
+
+        var shell = ShellMiddlewareTests.FakeShell.WithServices(_ => { }, name: "Default");
+        var middleware = new ShellMiddleware(
+            ctx => ctx.GetEndpoint() is { } endpoint ? ((RouteEndpoint)endpoint).RequestDelegate!(ctx) : Task.CompletedTask,
+            new FixedShellResolver("Default"),
+            new ColdActivatingRegistry(shell),
+            dataSource,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new ShellMiddlewareOptions()));
+
+        var ctx = new DefaultHttpContext();
+        ctx.Features.Set<IHttpResponseFeature>(new HttpResponseFeature());
+        ctx.Request.Method = "GET";
+        ctx.Request.Path = "/elsa/api/package/version";
+        ctx.SetEndpoint(fallbackEndpoint);
+        ctx.RequestServices = new ServiceCollection().AddRouting().BuildServiceProvider();
+
+        await middleware.InvokeAsync(ctx);
+
+        Assert.Equal("package-version", ctx.GetEndpoint()?.DisplayName);
+        Assert.True(shellEndpointInvoked);
+        Assert.False(fallbackInvoked);
+    }
+
+    [Fact(DisplayName = "Cold-start re-match preserves non-shell host endpoint")]
+    public async Task ColdStart_ReMatch_PreservesHostEndpoint()
+    {
+        var dataSource = new DynamicShellEndpointDataSource();
+        var shellId = new ShellId("Default");
+        var settings = new ShellSettings();
+        var shellMetadata = new ShellEndpointMetadata(shellId, settings);
+
+        var shellEndpointInvoked = false;
+        var shellEndpoint = new RouteEndpoint(
+            _ => { shellEndpointInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("host/status"),
+            order: 0,
+            new EndpointMetadataCollection(shellMetadata, new HttpMethodMetadata(["GET"])),
+            displayName: "shell-status");
+        dataSource.AddEndpoints([shellEndpoint]);
+
+        var hostEndpointInvoked = false;
+        var hostEndpoint = new RouteEndpoint(
+            _ => { hostEndpointInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("host/status"),
+            order: 0,
+            new EndpointMetadataCollection(new HttpMethodMetadata(["GET"])),
+            displayName: "host-status");
+
+        var shell = ShellMiddlewareTests.FakeShell.WithServices(_ => { }, name: "Default");
+        var middleware = new ShellMiddleware(
+            ctx => ctx.GetEndpoint() is { } endpoint ? ((RouteEndpoint)endpoint).RequestDelegate!(ctx) : Task.CompletedTask,
+            new FixedShellResolver("Default"),
+            new ColdActivatingRegistry(shell),
+            dataSource,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new ShellMiddlewareOptions()));
+
+        var ctx = new DefaultHttpContext();
+        ctx.Features.Set<IHttpResponseFeature>(new HttpResponseFeature());
+        ctx.Request.Method = "GET";
+        ctx.Request.Path = "/host/status";
+        ctx.SetEndpoint(hostEndpoint);
+        ctx.RequestServices = new ServiceCollection().AddRouting().BuildServiceProvider();
+
+        await middleware.InvokeAsync(ctx);
+
+        Assert.Equal("host-status", ctx.GetEndpoint()?.DisplayName);
+        Assert.True(hostEndpointInvoked);
+        Assert.False(shellEndpointInvoked);
+    }
+
     // =================================================================
     // Test doubles
     // =================================================================
