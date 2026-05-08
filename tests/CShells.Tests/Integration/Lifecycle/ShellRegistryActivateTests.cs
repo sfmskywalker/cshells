@@ -104,8 +104,8 @@ public class ShellRegistryActivateTests
         Assert.Same(shell, resolved);
     }
 
-    [Fact(DisplayName = "Activation exposes dependency-expanded feature set through ShellSettings")]
-    public async Task ActivateAsync_DependencyExpandedFeatures_AreExposedThroughShellSettings()
+    [Fact(DisplayName = "Activation expands feature dependencies in ShellSettings")]
+    public async Task ActivateAsync_DependencyFeatures_AreExpandedInShellSettings()
     {
         await using var host = BuildHost(cshells => cshells
             .WithAssemblyContaining<ShellRegistryActivateTests>()
@@ -119,6 +119,22 @@ public class ShellRegistryActivateTests
             ["DependencyExpansionDependency", "DependencyExpansionDependent"],
             settings.EnabledFeatures);
         Assert.NotNull(shell.ServiceProvider.GetService<DependencyExpansionMarker>());
+    }
+
+    [Fact(DisplayName = "Activation preserves missing feature names in ShellSettings")]
+    public async Task ActivateAsync_MissingFeatures_ArePreservedInShellSettings()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<ShellRegistryActivateTests>()
+            .AddShell("payments", shell => shell.WithFeatures("DependencyExpansionDependent", "MissingFeature")));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Equal(
+            ["DependencyExpansionDependency", "DependencyExpansionDependent", "MissingFeature"],
+            settings.EnabledFeatures);
     }
 
     internal static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
