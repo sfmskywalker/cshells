@@ -191,6 +191,54 @@ public class ShellMiddlewareLazyActivationTests
         Assert.False(fallbackInvoked);
     }
 
+    [Fact(DisplayName = "Cold-start re-match preserves fallback endpoint when no shell endpoint matches")]
+    public async Task ColdStart_ReMatch_PreservesFallbackEndpoint_WhenNoShellEndpointMatches()
+    {
+        var dataSource = new DynamicShellEndpointDataSource();
+        var shellId = new ShellId("Default");
+        var settings = new ShellSettings();
+        var shellMetadata = new ShellEndpointMetadata(shellId, settings);
+
+        var shellEndpointInvoked = false;
+        var shellEndpoint = new RouteEndpoint(
+            _ => { shellEndpointInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("elsa/api/package/version"),
+            order: 0,
+            new EndpointMetadataCollection(shellMetadata, new HttpMethodMetadata(["GET"])),
+            displayName: "package-version");
+        dataSource.AddEndpoints([shellEndpoint]);
+
+        var fallbackInvoked = false;
+        var fallbackEndpoint = new RouteEndpoint(
+            _ => { fallbackInvoked = true; return Task.CompletedTask; },
+            RoutePatternFactory.Parse("{*path:nonfile}"),
+            order: int.MaxValue,
+            EndpointMetadataCollection.Empty,
+            displayName: "spa-fallback");
+
+        var shell = ShellMiddlewareTests.FakeShell.WithServices(_ => { }, name: "Default");
+        var middleware = new ShellMiddleware(
+            ctx => ctx.GetEndpoint() is { } endpoint ? ((RouteEndpoint)endpoint).RequestDelegate!(ctx) : Task.CompletedTask,
+            new FixedShellResolver("Default"),
+            new ColdActivatingRegistry(shell),
+            dataSource,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new ShellMiddlewareOptions()));
+
+        var ctx = new DefaultHttpContext();
+        ctx.Features.Set<IHttpResponseFeature>(new HttpResponseFeature());
+        ctx.Request.Method = "GET";
+        ctx.Request.Path = "/does/not/match";
+        ctx.SetEndpoint(fallbackEndpoint);
+        ctx.RequestServices = new ServiceCollection().AddRouting().BuildServiceProvider();
+
+        await middleware.InvokeAsync(ctx);
+
+        Assert.Equal("spa-fallback", ctx.GetEndpoint()?.DisplayName);
+        Assert.True(fallbackInvoked);
+        Assert.False(shellEndpointInvoked);
+    }
+
     [Fact(DisplayName = "Cold-start re-match preserves non-shell host endpoint")]
     public async Task ColdStart_ReMatch_PreservesHostEndpoint()
     {
