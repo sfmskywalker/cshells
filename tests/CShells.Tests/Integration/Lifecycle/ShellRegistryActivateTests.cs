@@ -121,6 +121,22 @@ public class ShellRegistryActivateTests
         Assert.NotNull(shell.ServiceProvider.GetService<DependencyExpansionMarker>());
     }
 
+    [Fact(DisplayName = "Activation preserves missing feature names in ShellSettings")]
+    public async Task ActivateAsync_MissingFeatures_ArePreservedInShellSettings()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<ShellRegistryActivateTests>()
+            .AddShell("payments", shell => shell.WithFeatures("DependencyExpansionDependent", "MissingFeature")));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Equal(
+            ["DependencyExpansionDependency", "DependencyExpansionDependent", "MissingFeature"],
+            settings.EnabledFeatures);
+    }
+
     internal static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
     {
         var services = new ServiceCollection();
