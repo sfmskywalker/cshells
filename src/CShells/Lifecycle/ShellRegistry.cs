@@ -538,11 +538,11 @@ internal sealed class ShellRegistry : IShellRegistry
     {
         await using var scope = provider.CreateAsyncScope();
         var initializers = scope.ServiceProvider.GetServices<IShellInitializer>().ToList();
-        if (initializers.Count == 0)
+        var registrations = scope.ServiceProvider.GetServices<ShellInitializerRegistration>().ToList();
+        if (initializers.Count == 0 && registrations.Count == 0)
             return;
 
-        var registrations = scope.ServiceProvider.GetServices<ShellInitializerRegistration>().ToList();
-        var planner = new ShellInitializerOrderingPlanner();
+        var planner = new ShellInitializerOrderingPlanner(scope.ServiceProvider.GetService<ILogger<ShellInitializerOrderingPlanner>>());
         var plan = planner.Plan(descriptor, initializers, registrations);
 
         foreach (var diagnostic in plan.Diagnostics)

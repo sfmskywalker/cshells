@@ -79,7 +79,7 @@ internal sealed class ShellInitializerOrderingPlanner(ILogger<ShellInitializerOr
     private static ShellInitializerRegistration ResolveMetadata(
         ShellDescriptor shell,
         Type initializerType,
-        IReadOnlyDictionary<Type, Queue<ShellInitializerRegistration>> explicitRegistrations)
+        Dictionary<Type, Queue<ShellInitializerRegistration>> explicitRegistrations)
     {
         if (explicitRegistrations.TryGetValue(initializerType, out var queue) && queue.Count > 0)
             return queue.Dequeue();

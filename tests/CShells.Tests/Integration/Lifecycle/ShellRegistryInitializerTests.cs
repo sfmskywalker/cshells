@@ -155,6 +155,21 @@ public class ShellRegistryInitializerTests
         Assert.Null(registry.GetActive("payments"));
     }
 
+    [Fact(DisplayName = "Initializer metadata without resolved initializer fails activation")]
+    public async Task InitializerMetadataWithoutInitializer_FailsActivation()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<ShellRegistryInitializerTests>()
+            .AddShell("payments", s => s.WithFeature<OnlyOrderingMetadataFeature>()));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var ex = await Assert.ThrowsAsync<ShellInitializerOrderException>(() => registry.ActivateAsync("payments"));
+
+        Assert.Contains(nameof(MissingInitializer), ex.Message);
+        Assert.Null(registry.GetActive("payments"));
+        Assert.Empty(registry.GetAll("payments"));
+    }
+
     [Fact(DisplayName = "Equal phase/order initializers use deterministic registration order")]
     public async Task EqualPhaseAndOrder_UsesRegistrationOrderTieBreak()
     {
@@ -416,6 +431,18 @@ public class ShellRegistryInitializerTests
     private sealed class MissingInitializer : IShellInitializer
     {
         public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    public sealed class OnlyOrderingMetadataFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) =>
+            services.AddSingleton(new ShellInitializerRegistration(
+                typeof(MissingInitializer),
+                LifecyclePhase.Prepare,
+                Order: 0,
+                RegistrationIndex: -1,
+                IsExplicit: true,
+                Source: "metadata without initializer"));
     }
 
     private sealed class SideEffectInitializer(InitOrderCollector collector) : IShellInitializer
