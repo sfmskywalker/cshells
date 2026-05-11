@@ -1,7 +1,7 @@
 # Tasks: Pattern-Based Shared Assemblies
 
 **Input**: Design documents from `/specs/012-pattern-shared-assemblies/`
-**Prerequisites**: [plan.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/plan.md), [spec.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/spec.md), [research.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/research.md), [data-model.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/data-model.md), [contracts/shared-assemblies.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/contracts/shared-assemblies.md), [quickstart.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/quickstart.md)
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/shared-assemblies.md](contracts/shared-assemblies.md), [quickstart.md](quickstart.md)
 
 **Tests**: Included because the specification defines independent tests and 100% matching/validation success criteria.
 
@@ -11,11 +11,11 @@
 
 **Purpose**: Prepare the work area and test files without changing behavior.
 
-- [X] T001 Review existing feature assembly resolver behavior in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureAssemblyResolver.cs`
-- [X] T002 [P] Create shared assembly pattern test file in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
-- [X] T003 [P] Create shared assembly configuration test file in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
-- [X] T004 [P] Create shared assembly builder test file in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
-- [X] T005 [P] Create shared assembly resolver test file in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
+- [X] T001 Review existing feature assembly resolver behavior in `src/CShells/Features/FeatureAssemblyResolver.cs`
+- [X] T002 [P] Create shared assembly pattern test file in `tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
+- [X] T003 [P] Create shared assembly configuration test file in `tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
+- [X] T004 [P] Create shared assembly builder test file in `tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
+- [X] T005 [P] Create shared assembly resolver test file in `tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
 
 ---
 
@@ -25,12 +25,12 @@
 
 **Critical**: No user story implementation should start until this phase is complete.
 
-- [X] T006 [P] Add public selector kind enum in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Features/SharedAssemblySelectorKind.cs`
-- [X] T007 [P] Add public match diagnostics record in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Features/SharedAssemblyMatch.cs`
-- [X] T008 [P] Add public selector contract in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Features/ISharedAssemblySelector.cs`
-- [X] T009 Add internal prefix/exact parser and matcher in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblyPattern.cs`
-- [X] T010 Add internal selector representation with source metadata in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelector.cs`
-- [X] T011 Add internal selector provider and deduplication support in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T006 [P] Add public selector kind enum in `src/CShells.Abstractions/Features/SharedAssemblySelectorKind.cs`
+- [X] T007 [P] Add public match diagnostics record in `src/CShells.Abstractions/Features/SharedAssemblyMatch.cs`
+- [X] T008 [P] Add public selector contract in `src/CShells.Abstractions/Features/ISharedAssemblySelector.cs`
+- [X] T009 Add internal prefix/exact parser and matcher in `src/CShells/Features/SharedAssemblyPattern.cs`
+- [X] T010 Add internal selector representation with source metadata in `src/CShells/Features/SharedAssemblySelector.cs`
+- [X] T011 Add internal selector provider and deduplication support in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
 
 **Checkpoint**: Foundation ready; exact, prefix-pattern, source metadata, and diagnostics types exist.
 
@@ -44,17 +44,17 @@
 
 ### Tests for User Story 1
 
-- [X] T012 [P] [US1] Add configuration binding tests for root `CShells:SharedAssemblies` in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
-- [X] T013 [P] [US1] Add exact-name and prefix-pattern matcher tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
-- [X] T014 [P] [US1] Add resolver filtering tests for configured `Elsa` and `Elsa.*` selectors in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
+- [X] T012 [P] [US1] Add configuration binding tests for root `CShells:SharedAssemblies` in `tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
+- [X] T013 [P] [US1] Add exact-name and prefix-pattern matcher tests in `tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
+- [X] T014 [P] [US1] Add resolver filtering tests for configured `Elsa` and `Elsa.*` selectors in `tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
 
 ### Implementation for User Story 1
 
-- [X] T015 [US1] Add `SharedAssemblies` root option to `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Configuration/CShellsOptions.cs`
-- [X] T016 [US1] Load root `CShells:SharedAssemblies` entries in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
-- [X] T017 [US1] Store configuration selectors on the builder in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilder.cs`
-- [X] T018 [US1] Apply shared assembly selectors when resolving host assemblies in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureAssemblyResolver.cs`
-- [X] T019 [US1] Wire builder selector filtering into feature assembly resolution in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilder.cs`
+- [X] T015 [US1] Add `SharedAssemblies` root option to `src/CShells/Configuration/CShellsOptions.cs`
+- [X] T016 [US1] Load root `CShells:SharedAssemblies` entries in `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
+- [X] T017 [US1] Store configuration selectors on the builder in `src/CShells/DependencyInjection/CShellsBuilder.cs`
+- [X] T018 [US1] Apply shared assembly selectors when resolving host assemblies in `src/CShells/Features/FeatureAssemblyResolver.cs`
+- [X] T019 [US1] Wire builder selector filtering into feature assembly resolution in `src/CShells/DependencyInjection/CShellsBuilder.cs`
 
 **Checkpoint**: User Story 1 is independently functional and testable as the MVP.
 
@@ -68,17 +68,17 @@
 
 ### Tests for User Story 2
 
-- [X] T020 [P] [US2] Add `WithSharedAssemblies` exact and prefix-pattern API tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
-- [X] T021 [US2] Add `WithSharedAssembliesWhere` predicate include/exclude tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
-- [X] T022 [P] [US2] Add configuration plus code-first deduplication tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
+- [X] T020 [P] [US2] Add `WithSharedAssemblies` exact and prefix-pattern API tests in `tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
+- [X] T021 [US2] Add `WithSharedAssembliesWhere` predicate include/exclude tests in `tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
+- [X] T022 [P] [US2] Add configuration plus code-first deduplication tests in `tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
 
 ### Implementation for User Story 2
 
-- [X] T023 [US2] Add public `WithSharedAssemblies(params string[] patterns)` API in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
-- [X] T024 [US2] Add public `WithSharedAssembliesWhere(Func<string, bool> predicate)` API in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
-- [X] T025 [US2] Register code-first selector sources and predicate wrappers in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilder.cs`
-- [X] T026 [US2] Evaluate predicate selectors against assembly simple names in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
-- [X] T027 [US2] Deduplicate configuration and code-first matches by simple name in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T023 [US2] Add public `WithSharedAssemblies(params string[] patterns)` API in `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
+- [X] T024 [US2] Add public `WithSharedAssembliesWhere(Func<string, bool> predicate)` API in `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
+- [X] T025 [US2] Register code-first selector sources and predicate wrappers in `src/CShells/DependencyInjection/CShellsBuilder.cs`
+- [X] T026 [US2] Evaluate predicate selectors against assembly simple names in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T027 [US2] Deduplicate configuration and code-first matches by simple name in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
 
 **Checkpoint**: User Story 2 works independently with code-first selectors and continues to compose with User Story 1.
 
@@ -92,19 +92,19 @@
 
 ### Tests for User Story 3
 
-- [X] T028 [P] [US3] Add invalid wildcard grammar tests for `*.Contracts` and `Elsa.*.Abstractions` in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
-- [X] T029 [P] [US3] Add blank and whitespace selector validation tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
-- [X] T030 [P] [US3] Add simple-name-only matching tests for full name and path-like candidates in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
-- [X] T031 [P] [US3] Add predicate exception source feedback tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
-- [X] T032 [US3] Add match diagnostics source tests in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
+- [X] T028 [P] [US3] Add invalid wildcard grammar tests for `*.Contracts` and `Elsa.*.Abstractions` in `tests/CShells.Tests/Unit/Features/SharedAssemblyPatternTests.cs`
+- [X] T029 [P] [US3] Add blank and whitespace selector validation tests in `tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
+- [X] T030 [P] [US3] Add simple-name-only matching tests for full name and path-like candidates in `tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
+- [X] T031 [P] [US3] Add predicate exception source feedback tests in `tests/CShells.Tests/Unit/DependencyInjection/CShellsBuilderSharedAssemblyTests.cs`
+- [X] T032 [US3] Add match diagnostics source tests in `tests/CShells.Tests/Unit/Features/FeatureAssemblyResolverSharedAssemblyTests.cs`
 
 ### Implementation for User Story 3
 
-- [X] T033 [US3] Enforce blank selector and non-final `*` validation messages in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblyPattern.cs`
-- [X] T034 [US3] Include configuration paths and code-first source names in selector errors in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
-- [X] T035 [US3] Ensure resolver extracts only `AssemblyName.Name` before matching in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/FeatureAssemblyResolver.cs`
-- [X] T036 [US3] Expose shared assembly match diagnostics from the selector provider in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
-- [X] T037 [US3] Wrap predicate exceptions with actionable selector source feedback in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T033 [US3] Enforce blank selector and non-final `*` validation messages in `src/CShells/Features/SharedAssemblyPattern.cs`
+- [X] T034 [US3] Include configuration paths and code-first source names in selector errors in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T035 [US3] Ensure resolver extracts only `AssemblyName.Name` before matching in `src/CShells/Features/FeatureAssemblyResolver.cs`
+- [X] T036 [US3] Expose shared assembly match diagnostics from the selector provider in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
+- [X] T037 [US3] Wrap predicate exceptions with actionable selector source feedback in `src/CShells/Features/SharedAssemblySelectorProvider.cs`
 
 **Checkpoint**: User Story 3 confirms the isolation boundary and troubleshooting behavior.
 
@@ -118,15 +118,15 @@
 
 ### Tests for User Story 4
 
-- [X] T038 [P] [US4] Add documentation sample coverage checks in `/Users/sipke/Projects/ValenceWorks/cshells/main/tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
+- [X] T038 [P] [US4] Add documentation sample coverage checks in `tests/CShells.Tests/Unit/Configuration/SharedAssemblyConfigurationTests.cs`
 
 ### Implementation for User Story 4
 
-- [X] T039 [P] [US4] Add root `CShells:SharedAssemblies` example to `/Users/sipke/Projects/ValenceWorks/cshells/main/README.md`
-- [X] T040 [P] [US4] Add shared assembly guidance to `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/getting-started.md`
-- [X] T041 [P] [US4] Add framework integration guidance and isolation cautions to `/Users/sipke/Projects/ValenceWorks/cshells/main/docs/integration-patterns.md`
-- [X] T042 [P] [US4] Update Workbench sample configuration with a representative shared assembly example in `/Users/sipke/Projects/ValenceWorks/cshells/main/samples/CShells.Workbench/appsettings.json`
-- [X] T043 [US4] Validate documented commands from quickstart in `/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/quickstart.md`
+- [X] T039 [P] [US4] Add root `CShells:SharedAssemblies` example to `README.md`
+- [X] T040 [P] [US4] Add shared assembly guidance to `docs/getting-started.md`
+- [X] T041 [P] [US4] Add framework integration guidance and isolation cautions to `docs/integration-patterns.md`
+- [X] T042 [P] [US4] Update Workbench sample configuration with a representative shared assembly example in `samples/CShells.Workbench/appsettings.json`
+- [X] T043 [US4] Validate documented commands from quickstart in `specs/012-pattern-shared-assemblies/quickstart.md`
 
 **Checkpoint**: User Story 4 documentation is independently reviewable and matches implemented behavior.
 
@@ -136,11 +136,11 @@
 
 **Purpose**: Final consistency, cleanup, and full verification.
 
-- [X] T044 [P] Run focused shared assembly tests with `dotnet test tests/CShells.Tests/ --filter "FullyQualifiedName~SharedAssembly"` from `/Users/sipke/Projects/ValenceWorks/cshells/main`
-- [X] T045 Run full test suite with `dotnet test` from `/Users/sipke/Projects/ValenceWorks/cshells/main`
-- [X] T046 [P] Review public XML documentation for new APIs in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells.Abstractions/Features/ISharedAssemblySelector.cs`
-- [X] T047 [P] Review public XML documentation for builder APIs in `/Users/sipke/Projects/ValenceWorks/cshells/main/src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
-- [X] T048 Verify no package versions or new third-party dependencies were added in `/Users/sipke/Projects/ValenceWorks/cshells/main/Directory.Packages.props`
+- [X] T044 [P] Run focused shared assembly tests with `dotnet test tests/CShells.Tests/ --filter "FullyQualifiedName~SharedAssembly"` from the repository root
+- [X] T045 Run full test suite with `dotnet test` from the repository root
+- [X] T046 [P] Review public XML documentation for new APIs in `src/CShells.Abstractions/Features/ISharedAssemblySelector.cs`
+- [X] T047 [P] Review public XML documentation for builder APIs in `src/CShells/DependencyInjection/CShellsBuilderExtensions.cs`
+- [X] T048 Verify no package versions or new third-party dependencies were added in `Directory.Packages.props`
 
 ---
 

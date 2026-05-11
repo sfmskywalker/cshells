@@ -310,13 +310,13 @@ app.Run();
 
 To switch to explicit feature assembly selection, configure it fluently on `CShellsBuilder`:
 
-Use `From*` members to select which assemblies feature discovery should scan, and `WithAssemblyProvider(...)` when you want to attach a provider that contributes assemblies.
+Use `WithAssemblies(...)` and `WithHostAssemblies()` to select which assemblies feature discovery should scan, and `WithAssemblyProvider(...)` when you want to attach a provider that contributes assemblies.
 
 ```csharp
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
-    cshells.FromAssemblies(typeof(Program).Assembly);
+    cshells.WithAssemblies(typeof(Program).Assembly);
 });
 ```
 
@@ -328,10 +328,10 @@ builder.AddShells(cshells =>
     cshells.WithConfigurationProvider(builder.Configuration);
 
     // Explicit developer-supplied assemblies
-    cshells.FromAssemblies(typeof(Program).Assembly);
+    cshells.WithAssemblies(typeof(Program).Assembly);
 
     // Re-include the built-in host-derived default when explicit mode is active
-    cshells.FromHostAssemblies();
+    cshells.WithHostAssemblies();
 
     // Append a custom discovery source
     cshells.WithAssemblyProvider(sp =>
@@ -339,9 +339,9 @@ builder.AddShells(cshells =>
 });
 ```
 
-If you do not call any assembly-source method, CShells preserves the default host-derived discovery behavior. As soon as you call `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)`, CShells switches to explicit provider mode and scans only the assemblies contributed by those appended providers.
+If you do not call any assembly-source method or shared assembly selector, CShells preserves the default host-derived discovery behavior. As soon as you call `WithAssemblies(...)`, `WithHostAssemblies()`, or `WithAssemblyProvider(...)`, CShells switches to explicit provider mode and scans only the assemblies contributed by those appended providers.
 
-Shared assembly selectors let a host include framework families without listing every assembly:
+Shared assembly selectors let a host include framework families without listing every assembly. When no explicit assembly providers are configured, `CShells:SharedAssemblies` narrows the default host-derived discovery set to matching assemblies. When explicit providers are configured, matching host-derived assemblies are added to the explicit provider results and deduplicated.
 
 ```json
 {
