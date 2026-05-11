@@ -136,7 +136,7 @@ For framework ecosystems with many related packages, add host-wide shared assemb
     "Shells": {
       "Default": {
         "Features": {
-          "Core": {}
+          "Core": true
         }
       }
     }

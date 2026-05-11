@@ -65,6 +65,9 @@ internal sealed class ConfiguredShellBlueprintProvider(
                     StringComparer.OrdinalIgnoreCase)
             };
 
+            foreach (var (key, value) in shellSpecific.ConfigurationData)
+                merged.ConfigurationData[key] = value;
+
             ApplyFeatureDeclarations(merged, shellSpecific);
 
             foreach (var (featureName, configure) in defaults.FeatureConfigurators)
@@ -91,9 +94,6 @@ internal sealed class ConfiguredShellBlueprintProvider(
                     target,
                     featureName,
                     shellSpecific.FeatureSettingResets.Contains(featureName, StringComparer.OrdinalIgnoreCase));
-
-            foreach (var (key, value) in shellSpecific.ConfigurationData)
-                target.ConfigurationData[key] = value;
         }
 
         private static Action<T> ChainConfigurators<T>(Action<T> first, Action<T> second) =>

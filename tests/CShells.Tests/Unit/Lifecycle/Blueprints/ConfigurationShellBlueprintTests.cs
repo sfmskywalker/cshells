@@ -58,6 +58,7 @@ public class ConfigurationShellBlueprintTests
         {
             ["Features:Identity"] = "false",
             ["Features:Identity:SigningKey"] = "secret",
+            ["Configuration:Identity:SigningKey"] = "configuration-secret",
             ["Features:Http:BasePath"] = "/workflows",
         };
         var root = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();

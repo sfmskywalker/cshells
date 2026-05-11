@@ -51,10 +51,6 @@ internal sealed class ShellProviderBuilder(
 
         // Explicit disabled entries are already excluded from EnabledFeatures. Unknown positive entries
         // are configuration errors because they attempt to activate unavailable features.
-        var availableEnabled = settings.EnabledFeatures
-            .Where(id => catalog.FeatureMap.ContainsKey(id))
-            .ToList();
-
         var missing = settings.EnabledFeatures
             .Where(id => !catalog.FeatureMap.ContainsKey(id))
             .ToList();
@@ -62,8 +58,8 @@ internal sealed class ShellProviderBuilder(
         if (missing.Count > 0)
             throw new FeatureNotFoundException(missing[0]);
 
-        var orderedFeatures = availableEnabled.Count > 0
-            ? _dependencyResolver.GetOrderedFeatures(availableEnabled, catalog.FeatureMap)
+        var orderedFeatures = settings.EnabledFeatures.Count > 0
+            ? _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, catalog.FeatureMap)
             : [];
 
         // Dependencies are effective shell features too.
@@ -79,7 +75,7 @@ internal sealed class ShellProviderBuilder(
 
         var provider = services.BuildServiceProvider();
 
-        return new BuildResult(provider, holder, orderedFeatures.AsReadOnly(), missing.AsReadOnly());
+        return new BuildResult(provider, holder, orderedFeatures.AsReadOnly());
     }
 
     private void CopyRootServices(IServiceCollection shellServices)
@@ -204,6 +200,5 @@ internal sealed class ShellProviderBuilder(
     public sealed record BuildResult(
         ServiceProvider Provider,
         ShellHolder Holder,
-        IReadOnlyList<string> EnabledFeatures,
-        IReadOnlyList<string> MissingFeatures);
+        IReadOnlyList<string> EnabledFeatures);
 }

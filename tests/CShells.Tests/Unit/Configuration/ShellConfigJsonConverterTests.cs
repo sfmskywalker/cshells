@@ -112,6 +112,21 @@ public class ShellConfigJsonConverterTests
         Assert.True(features.GetProperty("Core").GetBoolean());
     }
 
+    [Fact(DisplayName = "ShellConfig serialization rejects reset declarations with explicit settings")]
+    public void Serialization_ResetDeclarationWithSettings_Throws()
+    {
+        var feature = FeatureEntry.EnableDefaults("Core");
+        feature.Settings["Setting"] = "Value";
+        var config = new ShellConfig
+        {
+            Features = [feature]
+        };
+
+        var ex = Assert.Throws<JsonException>(() => JsonSerializer.Serialize(config, Options));
+        Assert.Contains("reset semantics", ex.Message);
+        Assert.Contains("Core", ex.Message);
+    }
+
     [Fact(DisplayName = "ShellConfig serialization emits false for disabled declarations")]
     public void Serialization_EmitsFalse_ForDisabledDeclarations()
     {

@@ -256,7 +256,7 @@ public class ShellBuilder
 
     /// <summary>
     /// Loads configuration from an <see cref="IConfigurationSection"/> and merges it with existing settings.
-    /// Features are merged (combined), while Configuration from the section takes precedence.
+    /// Configuration is loaded first, then feature declarations are applied so disable/reset declarations win.
     /// </summary>
     /// <param name="section">The configuration section representing a shell.</param>
     /// <returns>The builder for method chaining.</returns>
@@ -264,22 +264,22 @@ public class ShellBuilder
     {
         Guard.Against.Null(section);
 
+        // Load shell-level configuration first so disable/reset feature declarations can remove feature-scoped keys.
+        var configurationSection = section.GetSection("Configuration");
+        ConfigurationHelper.LoadConfigurationFromSection(configurationSection, _settings.ConfigurationData);
+
         // Parse features from configuration (handles array and object-map forms)
         var featuresSection = section.GetSection("Features");
         var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, _settings.Id.Name);
 
         ConfigurationHelper.ApplyFeatureEntries(features, _settings);
 
-        // Load shell-level configuration
-        var configurationSection = section.GetSection("Configuration");
-        ConfigurationHelper.LoadConfigurationFromSection(configurationSection, _settings.ConfigurationData);
-
         return this;
     }
 
     /// <summary>
     /// Loads configuration from a <see cref="ShellConfig"/> and merges it with existing settings.
-    /// Features are merged (combined), while Configuration takes precedence.
+    /// Configuration is loaded first, then feature declarations are applied so disable/reset declarations win.
     /// </summary>
     /// <param name="config">The shell configuration.</param>
     /// <returns>The builder for method chaining.</returns>
@@ -287,10 +287,10 @@ public class ShellBuilder
     {
         Guard.Against.Null(config);
 
-        ConfigurationHelper.ApplyFeatureEntries(config.Features, _settings);
-
-        // Apply shell-level configuration
+        // Apply shell-level configuration first so disable/reset feature declarations can remove feature-scoped keys.
         ConfigurationHelper.PopulateShellConfiguration(config.Configuration, _settings.ConfigurationData);
+
+        ConfigurationHelper.ApplyFeatureEntries(config.Features, _settings);
 
         return this;
     }

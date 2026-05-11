@@ -186,6 +186,69 @@ public class ShellBuilderTests
         Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
     }
 
+    [Fact(DisplayName = "FromConfiguration disable removes same-section shell configuration feature settings")]
+    public void FromConfiguration_Disable_RemovesSameSectionShellConfigurationFeatureSettings()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": false
+                },
+                "Configuration": {
+                    "Identity": {
+                        "SigningKey": "configured"
+                    }
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(config.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Identity"], settings.DisabledFeatures);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
+    [Fact(DisplayName = "FromConfiguration true reset removes same-section shell configuration feature settings")]
+    public void FromConfiguration_TrueReset_RemovesSameSectionShellConfigurationFeatureSettings()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": true
+                },
+                "Configuration": {
+                    "Identity": {
+                        "SigningKey": "configured"
+                    }
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(config.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Equal(["Identity"], settings.FeatureSettingResets);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
     [Fact(DisplayName = "FromConfiguration object re-enables disabled feature with settings")]
     public void FromConfiguration_Object_ReEnablesDisabledFeatureWithSettings()
     {

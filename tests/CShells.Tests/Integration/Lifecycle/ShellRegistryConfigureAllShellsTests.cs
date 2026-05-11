@@ -109,6 +109,56 @@ public class ShellRegistryConfigureAllShellsTests
         Assert.Equal("Global", settings.ConfigurationData["Region"]);
     }
 
+    [Fact(DisplayName = "Configuration-based shell disable removes ConfigureAllShells feature configuration")]
+    public async Task ConfigureAllShells_ConfigBasedDisableRemovesFeatureConfiguration()
+    {
+        var configData = new Dictionary<string, string?>
+        {
+            ["CShells:Shells:catalog:Features:CommonFeature"] = "false",
+            ["CShells:Shells:catalog:Configuration:CommonFeature:Token"] = "shell",
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData)
+            .Build();
+
+        await using var host = BuildHostWithConfiguration(configuration, cshells => cshells
+            .ConfigureAllShells(shell => shell
+                .WithFeature("CommonFeature", feature => feature.WithSetting("Token", "default"))));
+
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("catalog");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Empty(settings.EnabledFeatures);
+        Assert.Equal(["CommonFeature"], settings.DisabledFeatures);
+        Assert.False(settings.ConfigurationData.ContainsKey("CommonFeature:Token"));
+    }
+
+    [Fact(DisplayName = "Configuration-based shell true reset removes ConfigureAllShells feature configuration")]
+    public async Task ConfigureAllShells_ConfigBasedTrueResetRemovesFeatureConfiguration()
+    {
+        var configData = new Dictionary<string, string?>
+        {
+            ["CShells:Shells:catalog:Features:CommonFeature"] = "true",
+            ["CShells:Shells:catalog:Configuration:CommonFeature:Token"] = "shell",
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData)
+            .Build();
+
+        await using var host = BuildHostWithConfiguration(configuration, cshells => cshells
+            .ConfigureAllShells(shell => shell
+                .WithFeature("CommonFeature", feature => feature.WithSetting("Token", "default"))));
+
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("catalog");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Equal(["CommonFeature"], settings.EnabledFeatures);
+        Assert.Equal(["CommonFeature"], settings.FeatureSettingResets);
+        Assert.False(settings.ConfigurationData.ContainsKey("CommonFeature:Token"));
+    }
+
     private static ServiceProvider BuildHostWithConfiguration(
         IConfiguration configuration,
         Action<CShellsBuilder> configure)

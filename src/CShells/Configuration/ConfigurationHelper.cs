@@ -8,7 +8,7 @@ namespace CShells.Configuration;
 /// </summary>
 internal static class ConfigurationHelper
 {
-    private const string SupportedFeatureValueForms = "true, false, or an object";
+    private const string SupportedFeatureValueForms = "true, false, string 'true'/'false', or an object";
 
     /// <summary>
     /// Converts a value to JsonElement for consistent serialization.

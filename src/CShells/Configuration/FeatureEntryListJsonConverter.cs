@@ -45,6 +45,11 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
             {
                 writer.WriteBooleanValue(false);
             }
+            else if (entry.ResetsSettings && entry.Settings.Count > 0)
+            {
+                throw new JsonException(
+                    $"Cannot serialize feature '{entry.Name}' with both reset semantics and explicit settings.");
+            }
             else if (entry.ResetsSettings && entry.Settings.Count == 0)
             {
                 writer.WriteBooleanValue(true);
@@ -121,7 +126,7 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
             if (property.Value.ValueKind != JsonValueKind.Object)
             {
                 throw new JsonException(
-                    $"Feature '{featureName}' in object-map syntax must be true, false, or an object, but found {property.Value.ValueKind}.");
+                    $"Feature '{featureName}' in object-map syntax must be true, false, string 'true'/'false', or an object, but found {property.Value.ValueKind}.");
             }
 
             var entry = new FeatureEntry { Name = featureName };
