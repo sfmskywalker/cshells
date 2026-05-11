@@ -36,9 +36,47 @@ public static class CShellsBuilderExtensions
         Guard.Against.Null(builder);
         Guard.Against.Null(configuration);
 
-        var shellsSection = configuration.GetSection(sectionName).GetSection("Shells");
+        var rootSection = configuration.GetSection(sectionName);
+        var sharedAssembliesSection = rootSection.GetSection("SharedAssemblies");
+        foreach (var child in sharedAssembliesSection.GetChildren())
+            builder.AddSharedAssemblySelector(SharedAssemblySelector.FromPattern(child.Value, child.Path));
+
+        var shellsSection = rootSection.GetSection("Shells");
         var provider = new ConfigurationShellBlueprintProvider(shellsSection);
         builder.AddBlueprintProvider(_ => provider);
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds host-wide shared assembly simple-name selectors for feature discovery.
+    /// </summary>
+    /// <remarks>
+    /// Entries without <c>*</c> match exact assembly simple names. Entries ending in <c>*</c>
+    /// match assembly simple-name prefixes. The wildcard is valid only as the final character.
+    /// </remarks>
+    public static CShellsBuilder WithSharedAssemblies(this CShellsBuilder builder, params string[] patterns)
+    {
+        Guard.Against.Null(builder);
+        Guard.Against.Null(patterns);
+
+        foreach (var (pattern, index) in patterns.Select((pattern, index) => (pattern, index)))
+            builder.AddSharedAssemblySelector(SharedAssemblySelector.FromPattern(pattern, $"{nameof(WithSharedAssemblies)}[{index}]"));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a host-wide predicate selector for shared assembly feature discovery.
+    /// </summary>
+    /// <param name="builder">The CShells builder.</param>
+    /// <param name="predicate">A predicate evaluated against assembly simple names only.</param>
+    /// <returns>The same builder for chaining.</returns>
+    public static CShellsBuilder WithSharedAssembliesWhere(this CShellsBuilder builder, Func<string, bool> predicate)
+    {
+        Guard.Against.Null(builder);
+        Guard.Against.Null(predicate);
+
+        builder.AddSharedAssemblySelector(SharedAssemblySelector.FromPredicate(predicate, nameof(WithSharedAssembliesWhere)));
         return builder;
     }
 

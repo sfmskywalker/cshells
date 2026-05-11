@@ -111,18 +111,42 @@ CShells will:
 
 To switch to explicit feature assembly selection, configure it on the fluent builder:
 
-Use `From*` members to select feature-discovery sources, and `WithAssemblyProvider(...)` when attaching a provider that contributes assemblies.
+Use `WithAssemblies(...)` and `WithHostAssemblies()` to select feature-discovery sources, and `WithAssemblyProvider(...)` when attaching a provider that contributes assemblies.
 
 ```csharp
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
-    cshells.FromAssemblies(typeof(BlogFeature).Assembly);
-    cshells.FromHostAssemblies();
+    cshells.WithAssemblies(typeof(BlogFeature).Assembly);
+    cshells.WithHostAssemblies();
 });
 ```
 
-Any call to `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)` switches CShells into explicit provider mode. In that mode, only the assemblies returned by those appended providers are scanned, and duplicate assemblies are discovered once in first-seen order.
+Any call to `WithAssemblies(...)`, `WithHostAssemblies()`, or `WithAssemblyProvider(...)` switches CShells into explicit provider mode. In that mode, only the assemblies returned by those appended providers are scanned, and duplicate assemblies are discovered once in first-seen order.
+
+For framework ecosystems with many related packages, add host-wide shared assembly selectors under root `CShells:SharedAssemblies`:
+
+```json
+{
+  "CShells": {
+    "SharedAssemblies": [
+      "Elsa",
+      "Elsa.*"
+    ],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {}
+        }
+      }
+    }
+  }
+}
+```
+
+Exact entries match one assembly simple name. Prefix wildcard entries must end in `*`, so `Elsa.*` matches `Elsa.Workflows` but not `Contoso.Workflows`.
+
+When no explicit assembly providers are configured, shared assembly selectors narrow the default host-derived discovery set to matching assemblies. When explicit providers are configured, matching host-derived assemblies are added to the explicit provider results and deduplicated.
 
 ### Testing the Result
 

@@ -15,6 +15,7 @@ namespace CShells.DependencyInjection;
 public class CShellsBuilder
 {
     private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
+    private readonly List<ISharedAssemblySelector> _sharedAssemblySelectors = [];
     private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
     private readonly List<IShellBlueprint> _inlineBlueprints = [];
     private readonly List<Func<IServiceProvider, IShellBlueprintProvider>> _providerFactories = [];
@@ -49,12 +50,21 @@ public class CShellsBuilder
     /// </summary>
     internal bool UsesExplicitFeatureAssemblyProviders => _featureAssemblyProviderRegistrations.Count > 0;
 
+    internal IReadOnlyList<ISharedAssemblySelector> SharedAssemblySelectors => _sharedAssemblySelectors.AsReadOnly();
+
+    internal IReadOnlyList<SharedAssemblyMatch> SharedAssemblyMatches { get; private set; } = [];
+
     /// <summary>
     /// Registers a feature assembly provider factory.
     /// </summary>
     internal void RegisterFeatureAssemblyProvider(Func<IServiceProvider, IFeatureAssemblyProvider> registration)
     {
         _featureAssemblyProviderRegistrations.Add(Guard.Against.Null(registration));
+    }
+
+    internal void AddSharedAssemblySelector(ISharedAssemblySelector selector)
+    {
+        _sharedAssemblySelectors.Add(Guard.Against.Null(selector));
     }
 
     /// <summary>
@@ -86,9 +96,19 @@ public class CShellsBuilder
     {
         Guard.Against.Null(serviceProvider);
 
-        return UsesExplicitFeatureAssemblyProviders
-            ? await CShells.Features.FeatureAssemblyResolver.ResolveAssembliesAsync(BuildFeatureAssemblyProviders(serviceProvider), serviceProvider, cancellationToken)
-            : CShells.Features.FeatureAssemblyResolver.ResolveHostAssemblies();
+        var selectorProvider = new SharedAssemblySelectorProvider(_sharedAssemblySelectors);
+        var resolvedAssemblies = UsesExplicitFeatureAssemblyProviders
+            ? [.. await CShells.Features.FeatureAssemblyResolver.ResolveAssembliesAsync(BuildFeatureAssemblyProviders(serviceProvider), serviceProvider, cancellationToken)]
+            : new List<Assembly>();
+
+        if (selectorProvider.HasSelectors)
+            resolvedAssemblies.AddRange(CShells.Features.FeatureAssemblyResolver.ResolveHostAssemblies(selectorProvider.IsMatch));
+        else if (!UsesExplicitFeatureAssemblyProviders)
+            resolvedAssemblies.AddRange(CShells.Features.FeatureAssemblyResolver.ResolveHostAssemblies());
+
+        SharedAssemblyMatches = selectorProvider.Matches;
+
+        return CShells.Features.FeatureAssemblyResolver.DeduplicateAssemblies(resolvedAssemblies);
     }
 
     /// <summary>
