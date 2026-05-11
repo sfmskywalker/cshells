@@ -15,7 +15,7 @@ namespace CShells.DependencyInjection;
 public class CShellsBuilder
 {
     private readonly List<Func<IServiceProvider, IFeatureAssemblyProvider>> _featureAssemblyProviderRegistrations = [];
-    private readonly List<ISharedAssemblySelector> sharedAssemblySelectors = [];
+    private readonly List<ISharedAssemblySelector> _sharedAssemblySelectors = [];
     private readonly List<Action<ShellBuilder>> _shellConfigurators = new();
     private readonly List<IShellBlueprint> _inlineBlueprints = [];
     private readonly List<Func<IServiceProvider, IShellBlueprintProvider>> _providerFactories = [];
@@ -50,7 +50,7 @@ public class CShellsBuilder
     /// </summary>
     internal bool UsesExplicitFeatureAssemblyProviders => _featureAssemblyProviderRegistrations.Count > 0;
 
-    internal IReadOnlyList<ISharedAssemblySelector> SharedAssemblySelectors => sharedAssemblySelectors.AsReadOnly();
+    internal IReadOnlyList<ISharedAssemblySelector> SharedAssemblySelectors => _sharedAssemblySelectors.AsReadOnly();
 
     internal IReadOnlyList<SharedAssemblyMatch> SharedAssemblyMatches { get; private set; } = [];
 
@@ -64,7 +64,7 @@ public class CShellsBuilder
 
     internal void AddSharedAssemblySelector(ISharedAssemblySelector selector)
     {
-        sharedAssemblySelectors.Add(Guard.Against.Null(selector));
+        _sharedAssemblySelectors.Add(Guard.Against.Null(selector));
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public class CShellsBuilder
     {
         Guard.Against.Null(serviceProvider);
 
-        var selectorProvider = new SharedAssemblySelectorProvider(sharedAssemblySelectors);
+        var selectorProvider = new SharedAssemblySelectorProvider(_sharedAssemblySelectors);
         var resolvedAssemblies = UsesExplicitFeatureAssemblyProviders
             ? [.. await CShells.Features.FeatureAssemblyResolver.ResolveAssembliesAsync(BuildFeatureAssemblyProviders(serviceProvider), serviceProvider, cancellationToken)]
             : new List<Assembly>();

@@ -14,7 +14,7 @@ internal sealed class SharedAssemblySelector : ISharedAssemblySelector
 
     public string Source { get; }
 
-    public static SharedAssemblySelector FromPattern(string pattern, string source) =>
+    public static SharedAssemblySelector FromPattern(string? pattern, string source) =>
         new(SharedAssemblyPattern.Parse(pattern, source), null, source);
 
     public static SharedAssemblySelector FromPredicate(Func<string, bool> predicate, string source) =>

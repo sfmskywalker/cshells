@@ -33,7 +33,7 @@ internal sealed class SharedAssemblyPattern
         if (wildcardIndex < 0)
             return new(trimmed, SharedAssemblySelectorKind.Exact);
 
-        if (wildcardIndex != trimmed.Length - 1 || trimmed.LastIndexOf('*') != wildcardIndex)
+        if (wildcardIndex != trimmed.Length - 1)
             throw new ArgumentException($"Shared assembly selector '{trimmed}' from '{source}' is invalid. The '*' wildcard is allowed only as the final character.", nameof(pattern));
 
         if (trimmed.Length == 1)

@@ -39,7 +39,7 @@ public static class CShellsBuilderExtensions
         var rootSection = configuration.GetSection(sectionName);
         var sharedAssembliesSection = rootSection.GetSection("SharedAssemblies");
         foreach (var child in sharedAssembliesSection.GetChildren())
-            builder.AddSharedAssemblySelector(SharedAssemblySelector.FromPattern(child.Value!, child.Path));
+            builder.AddSharedAssemblySelector(SharedAssemblySelector.FromPattern(child.Value, child.Path));
 
         var shellsSection = rootSection.GetSection("Shells");
         var provider = new ConfigurationShellBlueprintProvider(shellsSection);

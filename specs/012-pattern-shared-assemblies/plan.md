@@ -1,6 +1,6 @@
 # Implementation Plan: Pattern-Based Shared Assemblies
 
-**Branch**: `012-pattern-shared-assemblies` | **Date**: 2026-05-11 | **Spec**: [spec.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/spec.md)
+**Branch**: `012-pattern-shared-assemblies` | **Date**: 2026-05-11 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/012-pattern-shared-assemblies/spec.md`
 
 ## Summary
@@ -94,15 +94,15 @@ samples/
 
 ## Phase 0: Research
 
-Research completed in [research.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/research.md). No `NEEDS CLARIFICATION` items remain.
+Research completed in [research.md](research.md). No `NEEDS CLARIFICATION` items remain.
 
 ## Phase 1: Design & Contracts
 
 Design artifacts:
 
-- [data-model.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/data-model.md)
-- [contracts/shared-assemblies.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/contracts/shared-assemblies.md)
-- [quickstart.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/012-pattern-shared-assemblies/quickstart.md)
+- [data-model.md](data-model.md)
+- [contracts/shared-assemblies.md](contracts/shared-assemblies.md)
+- [quickstart.md](quickstart.md)
 
 ## Constitution Check
 
