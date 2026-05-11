@@ -14,15 +14,18 @@ public class ShellConfig
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the list of enabled features for this shell.
-    /// Accepts two JSON shapes:
+    /// Gets or sets the configured features for this shell.
+    /// The preferred JSON shape is an object map whose property keys are feature names and whose values
+    /// are <c>true</c>, <c>false</c>, or direct feature settings objects.
+    /// Legacy array entries are still normalized to the same runtime model.
+    /// Accepted JSON shapes:
     /// <list type="bullet">
     ///   <item><description>
     ///     <b>Array form</b> — each entry is a string or <c>{ "Name": "…", … }</c> object.
     ///   </description></item>
     ///   <item><description>
-    ///     <b>Object-map form</b> — each property key is the feature name and its value is a settings object
-    ///     (use <c>{}</c> for features with no settings).
+    ///     <b>Object-map form</b> — each property key is the feature name and its value is <c>true</c> to
+    ///     enable with defaults, <c>false</c> to disable, or an object for direct feature settings.
     ///   </description></item>
     /// </list>
     /// Both forms normalize to the same runtime <see cref="FeatureEntry"/> list.
@@ -38,7 +41,8 @@ public class ShellConfig
     /// Object-map form:
     /// <code>
     /// "Features": {
-    ///   "Core": {},
+    ///   "Core": true,
+    ///   "LegacyAuth": false,
     ///   "Analytics": { "TopPostsCount": 10 }
     /// }
     /// </code>

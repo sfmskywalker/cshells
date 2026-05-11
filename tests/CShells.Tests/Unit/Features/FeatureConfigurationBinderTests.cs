@@ -47,6 +47,21 @@ public class FeatureConfigurationBinderTests
         Assert.Equal(7, feature.Settings.MaxItems);
     }
 
+    [Fact(DisplayName = "BindAndConfigure binds Enabled as feature property")]
+    public void BindAndConfigure_WithEnabledProperty_BindsValue()
+    {
+        var configuration = BuildConfiguration(new()
+        {
+            ["Toggle:Enabled"] = "true"
+        });
+        var binder = new FeatureConfigurationBinder(configuration, new NoOpFeatureConfigurationValidator());
+        var feature = new ToggleFeature();
+
+        binder.BindAndConfigure(feature, "Toggle");
+
+        Assert.True(feature.Enabled);
+    }
+
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 
@@ -75,6 +90,15 @@ public class FeatureConfigurationBinderTests
         }
     }
 
+    private sealed class ToggleFeature : IShellFeature
+    {
+        public bool Enabled { get; set; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+    }
+
     private sealed class FeatureSettings
     {
         public string? Mode { get; set; }
@@ -82,5 +106,4 @@ public class FeatureConfigurationBinderTests
         public int MaxItems { get; set; }
     }
 }
-
 

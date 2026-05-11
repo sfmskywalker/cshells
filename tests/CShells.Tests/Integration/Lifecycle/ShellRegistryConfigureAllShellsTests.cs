@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Blueprints;
 using Microsoft.Extensions.Configuration;
@@ -12,7 +13,7 @@ public class ShellRegistryConfigureAllShellsTests
     public async Task ConfigureAllShells_AppliedTo_CodeSeededShell()
     {
         await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
-            .WithAssemblies()
+            .WithAssemblyContaining<ShellRegistryConfigureAllShellsTests>()
             .ConfigureAllShells(shell => shell.WithFeatures("CommonFeature"))
             .AddShell("payments", shell => shell.WithFeatures("PaymentsFeature")));
 
@@ -31,7 +32,7 @@ public class ShellRegistryConfigureAllShellsTests
         // Build a minimal IConfiguration that defines a shell with one feature.
         var configData = new Dictionary<string, string?>
         {
-            ["CShells:Shells:catalog:Features:ShellSpecificFeature:Enabled"] = "true",
+            ["CShells:Shells:catalog:Features:ShellSpecificFeature"] = "true",
         };
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configData)
@@ -53,7 +54,7 @@ public class ShellRegistryConfigureAllShellsTests
     public async Task ConfigureAllShells_DeduplicatesFeatures()
     {
         await using var host = ShellRegistryActivateTests.BuildHost(cshells => cshells
-            .WithAssemblies()
+            .WithAssemblyContaining<ShellRegistryConfigureAllShellsTests>()
             .ConfigureAllShells(shell => shell.WithFeatures("Shared"))
             .AddShell("payments", shell => shell.WithFeatures("Shared", "Extra")));
 
@@ -116,10 +117,50 @@ public class ShellRegistryConfigureAllShellsTests
         services.AddSingleton<IConfiguration>(configuration);
         services.AddCShells(cshells =>
         {
-            cshells.WithAssemblies();
+            cshells.WithAssemblyContaining<ShellRegistryConfigureAllShellsTests>();
             cshells.WithConfigurationProvider(configuration);
             configure(cshells);
         });
         return services.BuildServiceProvider();
+    }
+}
+
+[ShellFeature("CommonFeature")]
+public sealed class CommonConfigureAllShellsFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+[ShellFeature("PaymentsFeature")]
+public sealed class PaymentsConfigureAllShellsFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+[ShellFeature("ShellSpecificFeature")]
+public sealed class ShellSpecificConfigureAllShellsFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+[ShellFeature("Shared")]
+public sealed class SharedConfigureAllShellsFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+[ShellFeature("Extra")]
+public sealed class ExtraConfigureAllShellsFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
     }
 }

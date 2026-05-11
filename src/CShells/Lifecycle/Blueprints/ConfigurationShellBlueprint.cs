@@ -42,8 +42,7 @@ public sealed class ConfigurationShellBlueprint : IShellBlueprint
 
         var featuresSection = _section.GetSection("Features");
         var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, Name);
-        settings.EnabledFeatures = ConfigurationHelper.ExtractFeatureNames(features);
-        ConfigurationHelper.PopulateFeatureSettings(features, settings.ConfigurationData);
+        ConfigurationHelper.ApplyFeatureEntries(features, settings);
 
         var configurationSection = _section.GetSection("Configuration");
         ConfigurationHelper.LoadConfigurationFromSection(configurationSection, settings.ConfigurationData);

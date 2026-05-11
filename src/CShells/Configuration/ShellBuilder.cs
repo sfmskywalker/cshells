@@ -43,11 +43,8 @@ public class ShellBuilder
     public ShellBuilder WithFeatures(params string[] featureIds)
     {
         Guard.Against.Null(featureIds);
-        var current = _settings.EnabledFeatures.ToList();
         foreach (var id in featureIds)
-            if (!current.Contains(id, StringComparer.OrdinalIgnoreCase))
-                current.Add(id);
-        _settings.EnabledFeatures = [..current];
+            ConfigurationHelper.AddEnabledFeature(_settings, id);
         return this;
     }
 
@@ -102,10 +99,7 @@ public class ShellBuilder
     public ShellBuilder WithFeature(string featureId)
     {
         Guard.Against.Null(featureId);
-        var current = _settings.EnabledFeatures.ToList();
-        if (!current.Contains(featureId, StringComparer.OrdinalIgnoreCase))
-            current.Add(featureId);
-        _settings.EnabledFeatures = [..current];
+        ConfigurationHelper.AddEnabledFeature(_settings, featureId);
         return this;
     }
 
@@ -189,10 +183,7 @@ public class ShellBuilder
         Guard.Against.Null(featureId);
         Guard.Against.Null(configure);
 
-        var current = _settings.EnabledFeatures.ToList();
-        if (!current.Contains(featureId, StringComparer.OrdinalIgnoreCase))
-            current.Add(featureId);
-        _settings.EnabledFeatures = [..current];
+        ConfigurationHelper.AddEnabledFeature(_settings, featureId);
 
         var settingsBuilder = new FeatureSettingsBuilder(featureId);
         configure(settingsBuilder);
@@ -208,12 +199,7 @@ public class ShellBuilder
     {
         Guard.Against.Null(feature);
 
-        var current = _settings.EnabledFeatures.ToList();
-        if (!current.Contains(feature.Name, StringComparer.OrdinalIgnoreCase))
-            current.Add(feature.Name);
-        _settings.EnabledFeatures = [..current];
-
-        ConfigurationHelper.PopulateFeatureSettings([feature], _settings.ConfigurationData);
+        ConfigurationHelper.ApplyFeatureEntries([feature], _settings);
 
         return this;
     }
@@ -282,16 +268,7 @@ public class ShellBuilder
         var featuresSection = section.GetSection("Features");
         var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, _settings.Id.Name);
 
-        if (features.Count > 0)
-        {
-            var existingFeatures = _settings.EnabledFeatures.ToList();
-            var newFeatureNames = ConfigurationHelper.ExtractFeatureNames(features);
-            existingFeatures.AddRange(newFeatureNames);
-            _settings.EnabledFeatures = existingFeatures.Distinct().ToArray();
-
-            // Apply feature settings
-            ConfigurationHelper.PopulateFeatureSettings(features, _settings.ConfigurationData);
-        }
+        ConfigurationHelper.ApplyFeatureEntries(features, _settings);
 
         // Load shell-level configuration
         var configurationSection = section.GetSection("Configuration");
@@ -310,18 +287,7 @@ public class ShellBuilder
     {
         Guard.Against.Null(config);
 
-        // Merge features
-        var featureNames = ConfigurationHelper.ExtractFeatureNames(config.Features);
-
-        if (featureNames.Length > 0)
-        {
-            var existingFeatures = _settings.EnabledFeatures.ToList();
-            existingFeatures.AddRange(featureNames);
-            _settings.EnabledFeatures = existingFeatures.Distinct().ToArray();
-        }
-
-        // Apply feature settings
-        ConfigurationHelper.PopulateFeatureSettings(config.Features, _settings.ConfigurationData);
+        ConfigurationHelper.ApplyFeatureEntries(config.Features, _settings);
 
         // Apply shell-level configuration
         ConfigurationHelper.PopulateShellConfiguration(config.Configuration, _settings.ConfigurationData);
@@ -383,4 +349,3 @@ public class FeatureSettingsBuilder
         }
     }
 }
-

@@ -33,6 +33,24 @@ public class ShellSettings
     } = [];
 
     /// <summary>
+    /// Gets or sets feature names that were explicitly disabled by shell configuration.
+    /// </summary>
+    public IReadOnlyList<string> DisabledFeatures
+    {
+        get;
+        set => field = [..value];
+    } = [];
+
+    /// <summary>
+    /// Gets or sets enabled feature names whose lower-priority settings should be reset to feature defaults.
+    /// </summary>
+    public IReadOnlyList<string> FeatureSettingResets
+    {
+        get;
+        set => field = [..value];
+    } = [];
+
+    /// <summary>
     /// Gets or sets shell-specific configuration data as a dictionary.
     /// Keys use colon-separated format for hierarchical data (e.g., "WebRouting:Path").
     /// </summary>
@@ -43,7 +61,7 @@ public class ShellSettings
     /// <c>WithFeature&lt;TFeature&gt;(Action&lt;TFeature&gt;)</c>.
     /// Each entry is keyed by feature name and holds a delegate that is applied to the
     /// live feature instance <em>after</em> configuration binding and <em>before</em>
-    /// <c>ConfigureServices</c> is called, so code always wins over appsettings.
+    /// <c>ConfigureServices</c> is called.
     /// </summary>
     /// <remarks>
     /// This collection is intentionally not serialized / persisted; it only exists in

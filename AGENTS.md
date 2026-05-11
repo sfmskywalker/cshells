@@ -141,6 +141,8 @@ Package versions are centrally managed in `Directory.Packages.props` — never s
 - Configuration provider inputs only; no persistent storage (011-map-shell-config)
 - C# 14 / .NET 10; source projects multi-target `net8.0;net9.0;net10.0` per repository conventions + Existing `Microsoft.Extensions.Configuration`, `Microsoft.Extensions.DependencyInjection`, `System.Reflection`, `Microsoft.Extensions.DependencyModel`; no new third-party packages (012-pattern-shared-assemblies)
 - N/A; selectors come from configuration and code-first registrations only (012-pattern-shared-assemblies)
+- C# 14 / .NET 10; source projects multi-target `net8.0;net9.0;net10.0` per repository conventions + Existing `Microsoft.Extensions.Configuration`, `Microsoft.Extensions.DependencyInjection`, `System.Text.Json`; no new third-party packages (014-polymorphic-feature-config)
+- N/A; configuration provider inputs only (014-polymorphic-feature-config)
 
 ## Recent Changes
 - 011-map-shell-config: Planned map-based shell configuration under `CShells:Shells`

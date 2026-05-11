@@ -98,6 +98,34 @@ public class ShellConfigJsonConverterTests
         Assert.Equal("{}", features.GetProperty("Posts").GetRawText());
     }
 
+    [Fact(DisplayName = "ShellConfig serialization emits true for enabled reset declarations")]
+    public void Serialization_EmitsTrue_ForEnabledResetDeclarations()
+    {
+        var config = new ShellConfig
+        {
+            Features = [FeatureEntry.EnableDefaults("Core")]
+        };
+
+        var json = JsonSerializer.Serialize(config, Options);
+
+        var features = ParseFeatures(json);
+        Assert.True(features.GetProperty("Core").GetBoolean());
+    }
+
+    [Fact(DisplayName = "ShellConfig serialization emits false for disabled declarations")]
+    public void Serialization_EmitsFalse_ForDisabledDeclarations()
+    {
+        var config = new ShellConfig
+        {
+            Features = [FeatureEntry.Disabled("Identity")]
+        };
+
+        var json = JsonSerializer.Serialize(config, Options);
+
+        var features = ParseFeatures(json);
+        Assert.False(features.GetProperty("Identity").GetBoolean());
+    }
+
     [Fact(DisplayName = "ShellConfig deserialization handles object-map with nested settings")]
     public void Deserialization_ObjectMap_NestedSettings()
     {
@@ -121,6 +149,92 @@ public class ShellConfigJsonConverterTests
         var connection = Assert.IsType<JsonElement>(config.Features[0].Settings["Connection"]);
         Assert.Equal("localhost", connection.GetProperty("Server").GetString());
         Assert.Equal(5432, connection.GetProperty("Port").GetInt32());
+    }
+
+    [Fact(DisplayName = "ShellConfig deserialization supports compact enabled feature values")]
+    public void Deserialization_ObjectMap_CompactEnabledValues()
+    {
+        var json = """
+        {
+            "Features": {
+                "Core": true,
+                "Posts": "true",
+                "Analytics": {},
+                "Http": { "BasePath": "/workflows" }
+            }
+        }
+        """;
+
+        var config = Deserialize(json);
+
+        Assert.Equal(4, config.Features.Count);
+        Assert.Equal("Core", config.Features[0].Name);
+        Assert.True(config.Features[0].IsEnabled);
+        Assert.True(config.Features[0].ResetsSettings);
+        Assert.Equal("Posts", config.Features[1].Name);
+        Assert.True(config.Features[1].IsEnabled);
+        Assert.True(config.Features[1].ResetsSettings);
+        Assert.Equal("Analytics", config.Features[2].Name);
+        Assert.True(config.Features[2].IsEnabled);
+        Assert.False(config.Features[2].ResetsSettings);
+        Assert.Empty(config.Features[2].Settings);
+        Assert.Equal("Http", config.Features[3].Name);
+        Assert.Equal("/workflows", config.Features[3].Settings["BasePath"]);
+    }
+
+    [Fact(DisplayName = "ShellConfig object-map treats inner Enabled as setting")]
+    public void Deserialization_ObjectMap_InnerEnabledIsSetting()
+    {
+        var json = """
+        {
+            "Features": {
+                "Example": {
+                    "Enabled": true,
+                    "Limit": 10
+                }
+            }
+        }
+        """;
+
+        var config = Deserialize(json);
+        var feature = Assert.Single(config.Features);
+
+        Assert.True(feature.IsEnabled);
+        Assert.False(feature.ResetsSettings);
+        Assert.Equal(true, feature.Settings["Enabled"]);
+        Assert.Equal(10, feature.Settings["Limit"]);
+    }
+
+    [Fact(DisplayName = "ShellConfig deserialization supports disabled feature values")]
+    public void Deserialization_ObjectMap_DisabledValues()
+    {
+        var json = """
+        {
+            "Features": {
+                "Identity": false,
+                "LegacyAuth": "FALSE"
+            }
+        }
+        """;
+
+        var config = Deserialize(json);
+
+        Assert.Equal(2, config.Features.Count);
+        Assert.Equal("Identity", config.Features[0].Name);
+        Assert.False(config.Features[0].IsEnabled);
+        Assert.Equal("LegacyAuth", config.Features[1].Name);
+        Assert.False(config.Features[1].IsEnabled);
+    }
+
+    [Theory(DisplayName = "ShellConfig deserialization rejects unsupported object-map values")]
+    [InlineData("""{ "Features": { "Identity": null } }""")]
+    [InlineData("""{ "Features": { "Identity": "yes" } }""")]
+    [InlineData("""{ "Features": { "Identity": 0 } }""")]
+    [InlineData("""{ "Features": { "Identity": [] } }""")]
+    public void Deserialization_ObjectMap_UnsupportedValuesThrow(string json)
+    {
+        var ex = Assert.Throws<JsonException>(() => Deserialize(json));
+        Assert.Contains("Identity", ex.Message);
     }
 
     [Fact(DisplayName = "ShellConfig serialization rejects duplicate feature names")]
