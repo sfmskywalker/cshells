@@ -119,7 +119,7 @@ builder.Services.AddControllers();
 builder.AddShells(cshells =>
 {
     cshells.WithConfigurationProvider(builder.Configuration);
-    cshells.FromAssemblies(typeof(MyFeature).Assembly);
+    cshells.WithAssemblies(typeof(MyFeature).Assembly);
     cshells.WithSharedAssemblies("Elsa", "Elsa.*");
     cshells.WithSharedAssembliesWhere(name =>
         name.StartsWith("MyFramework.", StringComparison.OrdinalIgnoreCase));
@@ -166,6 +166,8 @@ Use root `CShells:SharedAssemblies` configuration or code-first builder calls wh
 ```
 
 `Elsa` is an exact assembly simple-name match. `Elsa.*` is a prefix match against simple names only. The wildcard is only valid as the final character; suffix or contains-style patterns such as `*.Contracts` are intentionally invalid.
+
+When no explicit assembly providers are configured, shared assembly selectors narrow the default host-derived discovery set. When explicit providers are configured with `WithAssemblies(...)`, `WithHostAssemblies()`, or `WithAssemblyProvider(...)`, matching host-derived shared assemblies are added to those provider results and deduplicated.
 
 Prefer narrow patterns for framework contracts and common infrastructure. Avoid broad patterns that include shell-specific implementation assemblies, because sharing those assemblies can weaken shell isolation.
 
