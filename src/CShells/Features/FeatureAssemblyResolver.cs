@@ -36,6 +36,23 @@ internal static class FeatureAssemblyResolver
         return resolvedAssemblies.AsReadOnly();
     }
 
+    public static IReadOnlyCollection<Assembly> DeduplicateAssemblies(IEnumerable<Assembly> assemblies)
+    {
+        var resolvedAssemblies = new List<Assembly>();
+        var seenAssemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var assembly in Guard.Against.Null(assemblies))
+        {
+            if (assembly is null)
+                throw new InvalidOperationException("Assembly sequences must not contain null assembly entries.");
+
+            if (seenAssemblies.Add(GetAssemblyIdentity(assembly)))
+                resolvedAssemblies.Add(assembly);
+        }
+
+        return resolvedAssemblies.AsReadOnly();
+    }
+
     public static IReadOnlyCollection<Assembly> ResolveHostAssemblies(Func<AssemblyName, bool>? filter = null)
     {
         var entry = Assembly.GetEntryAssembly();

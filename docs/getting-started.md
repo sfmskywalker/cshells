@@ -124,6 +124,28 @@ builder.AddShells(cshells =>
 
 Any call to `FromAssemblies(...)`, `FromHostAssemblies()`, or `WithAssemblyProvider(...)` switches CShells into explicit provider mode. In that mode, only the assemblies returned by those appended providers are scanned, and duplicate assemblies are discovered once in first-seen order.
 
+For framework ecosystems with many related packages, add host-wide shared assembly selectors under root `CShells:SharedAssemblies`:
+
+```json
+{
+  "CShells": {
+    "SharedAssemblies": [
+      "Elsa",
+      "Elsa.*"
+    ],
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Core": {}
+        }
+      }
+    }
+  }
+}
+```
+
+Exact entries match one assembly simple name. Prefix wildcard entries must end in `*`, so `Elsa.*` matches `Elsa.Workflows` but not `Contoso.Workflows`.
+
 ### Testing the Result
 
 ```
