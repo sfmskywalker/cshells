@@ -514,7 +514,7 @@ internal sealed class ShellRegistry : IShellRegistry
 
         try
         {
-            await RunInitializersAsync(buildResult.Provider, cancellationToken).ConfigureAwait(false);
+            await RunInitializersAsync(descriptor, buildResult.Provider, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -534,14 +534,29 @@ internal sealed class ShellRegistry : IShellRegistry
         return shell;
     }
 
-    private static async Task RunInitializersAsync(IServiceProvider provider, CancellationToken cancellationToken)
+    private async Task RunInitializersAsync(ShellDescriptor descriptor, IServiceProvider provider, CancellationToken cancellationToken)
     {
-        // Initializers run sequentially in DI-registration order.
         await using var scope = provider.CreateAsyncScope();
-        var initializers = scope.ServiceProvider.GetServices<IShellInitializer>();
-        foreach (var initializer in initializers)
+        var initializers = scope.ServiceProvider.GetServices<IShellInitializer>().ToList();
+        if (initializers.Count == 0)
+            return;
+
+        var registrations = scope.ServiceProvider.GetServices<ShellInitializerRegistration>().ToList();
+        var planner = new ShellInitializerOrderingPlanner();
+        var plan = planner.Plan(descriptor, initializers, registrations);
+
+        foreach (var diagnostic in plan.Diagnostics)
         {
-            await initializer.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug(
+                "{Message} Shell: {Shell}. Initializers: {Initializers}",
+                diagnostic.Message,
+                descriptor,
+                string.Join(", ", diagnostic.InitializerTypes.Select(t => t.FullName ?? t.Name)));
+        }
+
+        foreach (var entry in plan.Entries)
+        {
+            await entry.Initializer.InitializeAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 

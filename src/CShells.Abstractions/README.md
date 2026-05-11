@@ -16,6 +16,9 @@ This package contains the fundamental interfaces and models needed to build CShe
 
 - `IShellFeature` - Base interface for defining features that register services
 - `ShellSettings` - Configuration model for shell settings
+- `IShellInitializer` - Startup hook resolved from the shell provider before a shell becomes active
+- `LifecyclePhase`, `LifecycleOrderAttribute`, and `AddShellInitializer<T>()` - First-class initializer ordering APIs
+- `IDrainHandler` - Cooperative drain hook invoked in parallel while an old shell generation shuts down
 - Core abstractions for extensibility
 
 ## Installation
@@ -28,6 +31,7 @@ dotnet add package CShells.Abstractions
 
 ```csharp
 using CShells.Features;
+using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 
 [ShellFeature("MyFeature")]
@@ -36,9 +40,14 @@ public class MyFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IMyService, MyService>();
+        services.AddShellInitializer<MyFeatureInitializer>(
+            LifecyclePhase.Prepare,
+            order: 100);
     }
 }
 ```
+
+`AddShellInitializer<T>()` registers the initializer as transient and attaches deterministic phase/order metadata. Existing direct `IShellInitializer` registrations remain valid and run in `LifecyclePhase.Default` using DI registration order.
 
 ## Learn More
 

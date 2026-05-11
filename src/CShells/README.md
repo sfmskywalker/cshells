@@ -115,13 +115,18 @@ public class PaymentsFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IPaymentProcessor, StripePaymentProcessor>();
-        services.AddTransient<IShellInitializer, PaymentsInitializer>();
+        services.AddShellInitializer<RunPaymentMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
+        services.AddShellInitializer<StartPaymentProcessor>(
+            LifecyclePhase.Start,
+            order: 100);
         services.AddTransient<IDrainHandler, PaymentsDrainHandler>();
     }
 }
 ```
 
-Initializers run sequentially in DI-registration order during `Initializing → Active`. Drain handlers run in parallel during `Draining`, after all outstanding `IShellScope` handles have been released (or the drain deadline elapses).
+Initializers run sequentially during `Initializing -> Active`. Existing direct `IShellInitializer` registrations still run in DI-registration order in `LifecyclePhase.Default`; `AddShellInitializer<T>()` adds explicit phase/order metadata and registers the initializer as transient. Drain handlers run in parallel during `Draining`, after all outstanding `IShellScope` handles have been released or the drain deadline elapses.
 
 ## Reload
 

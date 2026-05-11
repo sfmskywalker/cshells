@@ -1,160 +1,136 @@
 # Shell Lifecycle
 
-CShells provides lifecycle hooks that let shell-scoped services perform work when a shell starts up or shuts down. This is the recommended approach for per-tenant initialization and cleanup — simpler than `IHostedService` because the work runs inside the shell's own DI scope automatically.
+CShells builds one isolated service provider per shell generation. Lifecycle APIs let features run startup work after the provider is built and cooperative shutdown work while an old generation drains.
 
-## Desired State vs. Applied Runtime
+## Runtime States
 
-As of the deferred-activation model, CShells tracks two truths for every configured shell:
+A shell generation moves through:
 
-- **Desired state** — the latest `ShellSettings` definition the runtime has recorded
-- **Applied runtime** — the last fully built, committed shell runtime that is safe to serve
-
-Lifecycle handlers run only for **applied runtime transitions**.
-
-- Recording a new desired generation does **not** trigger `IShellActivatedHandler` by itself.
-- If the new desired generation is deferred (for example, because a feature is missing) or fails to build, the previous applied runtime stays live and no new activation occurs.
-- `IShellDeactivatingHandler` runs only when an applied runtime is actually being replaced or intentionally removed.
-
-## Overview
-
-| Interface | When It Runs | Use Cases |
-|-----------|-------------|-----------|
-| `IShellActivatedHandler` | After the shell's DI container is built and ready | Seed data, warm caches, start connections |
-| `IShellDeactivatingHandler` | Before the shell's DI container is disposed | Flush buffers, close connections, release resources |
-
-## IShellActivatedHandler
-
-Invoked when a shell becomes active — either at application startup or when a shell is dynamically added via `IShellManager.AddShellAsync`.
-
-```csharp
-using CShells.Hosting;
-
-public class SeedDataHandler(IPostRepository repo, ITenantInfo tenant) : IShellActivatedHandler
-{
-    public Task OnActivatedAsync(CancellationToken cancellationToken = default)
-    {
-        // Runs once when this shell starts up.
-        // The service provider is fully built, so all shell-scoped services are available.
-        repo.Add("Welcome", $"Welcome to {tenant.TenantName}!", "System");
-        return Task.CompletedTask;
-    }
-}
+```text
+Initializing -> Active -> Deactivating -> Draining -> Drained -> Disposed
 ```
 
-### Registration
+`IShellInitializer` instances run while the shell is `Initializing`, before the generation is published as `Active`. `IDrainHandler` instances run while the shell is `Draining`, after outstanding `IShellScope` handles finish or the drain deadline is reached.
 
-Register the handler in your feature's `ConfigureServices`:
+## Initializer Ordering
+
+Feature dependencies and initializer order are separate concepts:
+
+- `[ShellFeature(DependsOn = ...)]` still means "configure the dependency first".
+- Lifecycle ordering controls when `IShellInitializer` instances execute after the shell provider has been built.
+- Existing unordered `IShellInitializer` registrations remain valid and run in `LifecyclePhase.Default`.
+- Unordered initializers keep DI registration order unless explicit lifecycle metadata is used.
+
+Use `AddShellInitializer<TInitializer>()` for first-class lifecycle metadata:
 
 ```csharp
-[ShellFeature("Posts")]
-public class PostsFeature : IShellFeature
+using CShells.Features;
+using CShells.Lifecycle;
+using Microsoft.Extensions.DependencyInjection;
+
+[ShellFeature("StorageProvider")]
+public sealed class StorageProviderFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<IPostRepository, InMemoryPostRepository>();
-        services.AddSingleton<IShellActivatedHandler, SeedDataHandler>();
+        services.AddShellInitializer<ApplyStorageMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
     }
 }
-```
 
-### When It Fires
-
-- **Application startup** — every shell that can be reconciled into an applied runtime is activated in order
-- **Dynamic shell addition** — `await shellManager.AddShellAsync(settings)` activates the new shell only after its candidate runtime commits successfully
-- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` re-activates a shell only when a new applied runtime is committed
-- Handlers run in **registration order**
-- If a handler throws, the exception is logged and **propagated** (the shell activation fails)
-
-If a shell's latest desired generation is deferred or failed, no activation handler runs for that attempt. The last-known-good applied runtime, if any, continues serving.
-
-## IShellDeactivatingHandler
-
-Invoked before a shell is removed or during application shutdown. The shell's `IServiceProvider` is still alive, so all shell-scoped services are accessible during cleanup.
-
-```csharp
-using CShells.Hosting;
-
-public class FlushAnalyticsHandler(IAnalyticsService analytics, ILogger<FlushAnalyticsHandler> logger)
-    : IShellDeactivatingHandler
-{
-    public Task OnDeactivatingAsync(CancellationToken cancellationToken = default)
-    {
-        var counts = analytics.GetViewCounts();
-        logger.LogInformation("Flushing {Count} analytics entries before shutdown", counts.Count);
-        // Persist to external storage, etc.
-        return Task.CompletedTask;
-    }
-}
-```
-
-### Registration
-
-```csharp
-[ShellFeature("Analytics")]
-public class AnalyticsFeature : IShellFeature
+[ShellFeature("Runtime")]
+public sealed class RuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<IAnalyticsService, InMemoryAnalyticsService>();
-        services.AddSingleton<IShellDeactivatingHandler, FlushAnalyticsHandler>();
+        services.AddShellInitializer<StartRuntime>(
+            LifecyclePhase.Start,
+            order: 100);
     }
 }
 ```
 
-### When It Fires
+Execution order is deterministic:
 
-- **Application shutdown** — all shells are deactivated
-- **Dynamic shell removal** — `await shellManager.RemoveShellAsync(shellId)`
-- **Shell reload** — `await shellManager.ReloadShellAsync(id)` or `await shellManager.ReloadAllShellsAsync()` deactivates the old applied runtime only when a successor runtime is ready to commit
-- Handlers run in **reverse registration order** (LIFO)
-- Exceptions are **logged but swallowed** — all handlers get a chance to run
+1. `LifecyclePhase.Prepare`
+2. `LifecyclePhase.Default`
+3. `LifecyclePhase.Start`
 
-If a reload records a newer desired generation but that generation is deferred or failed, the currently applied runtime is **not** deactivated.
+Within a phase, lower numeric `order` runs first. Equal phase/order ties use DI registration order as a deterministic tie-break and are reported as non-fatal diagnostics.
 
-## Lifecycle vs. Background Services
+## Compatibility
 
-| Approach | Scope | Best For |
-|----------|-------|----------|
-| `IShellActivatedHandler` | Shell-scoped, runs once at activation | One-time setup: seed data, warm caches, validate config |
-| `IShellDeactivatingHandler` | Shell-scoped, runs once at deactivation | Cleanup: flush buffers, close connections |
-| `BackgroundService` + `IShellContextScopeFactory` | Host-scoped, runs continuously | Periodic work across all shells: heartbeats, polling, sync |
-
-For one-time startup work per tenant, prefer `IShellActivatedHandler` — it's simpler and doesn't require manually creating shell scopes.
-
-## Complete Example
-
-A feature that warms a cache on activation and flushes it on deactivation:
+Existing registrations continue to work:
 
 ```csharp
-[ShellFeature("ProductCatalog")]
-public class ProductCatalogFeature : IShellFeature
+public sealed class ExistingFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<IProductCache, InMemoryProductCache>();
-        services.AddSingleton<IShellActivatedHandler, WarmCacheHandler>();
-        services.AddSingleton<IShellDeactivatingHandler, FlushCacheHandler>();
-    }
-}
-
-public class WarmCacheHandler(IProductCache cache, ILogger<WarmCacheHandler> logger)
-    : IShellActivatedHandler
-{
-    public async Task OnActivatedAsync(CancellationToken ct = default)
-    {
-        logger.LogInformation("Warming product cache...");
-        await cache.LoadAsync(ct);
-    }
-}
-
-public class FlushCacheHandler(IProductCache cache, ILogger<FlushCacheHandler> logger)
-    : IShellDeactivatingHandler
-{
-    public async Task OnDeactivatingAsync(CancellationToken ct = default)
-    {
-        logger.LogInformation("Flushing product cache...");
-        await cache.FlushAsync(ct);
+        services.AddTransient<IShellInitializer, FirstInitializer>();
+        services.AddTransient<IShellInitializer, SecondInitializer>();
     }
 }
 ```
 
+Both initializers run in `LifecyclePhase.Default`, and `FirstInitializer` still runs before `SecondInitializer`.
+
+`AddShellInitializer<TInitializer>()` registers `TInitializer` as transient and also registers `IShellInitializer` through the shell service provider. Initializers may depend on shell-scoped services, but feature constructors should still only consume root-level services plus supported shell context values.
+
+## Attribute Metadata
+
+When a legacy `IShellInitializer` registration should carry lifecycle metadata without changing the registration call, apply `LifecycleOrderAttribute` to the initializer type:
+
+```csharp
+[LifecycleOrder(LifecyclePhase.Prepare, 50)]
+public sealed class ApplySchemaInitializer(IMigrationRunner migrations) : IShellInitializer
+{
+    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+        migrations.ApplyAsync(cancellationToken);
+}
+```
+
+Explicit metadata from `AddShellInitializer<TInitializer>(...)` overrides attribute metadata for the same initializer type.
+
+## Provider/Base Feature Pairs
+
+Provider features should keep depending on base features for service configuration, then use lifecycle phases to run provider preparation before base runtime startup.
+
+```csharp
+[ShellFeature("Quartz")]
+public sealed class QuartzFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<StartQuartzScheduler>(
+            LifecyclePhase.Start,
+            order: 100);
+    }
+}
+
+[ShellFeature("QuartzPostgreSql", DependsOn = [typeof(QuartzFeature)])]
+public sealed class QuartzPostgreSqlFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<RunQuartzPostgreSqlMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
+    }
+}
+```
+
+Quartz configures first because `QuartzPostgreSqlFeature` depends on `QuartzFeature`. PostgreSQL migrations run first because they are in `Prepare`; the scheduler starts later in `Start`.
+
+## Drain
+
+Drain behavior is intentionally unchanged by initializer ordering. `IDrainHandler` implementations are resolved from the shell provider and invoked in parallel during `Draining`.
+
+Ordered or phased drain execution is deferred to a future design. Existing deadline, force-drain, grace-period, and result-reporting behavior remains the compatibility baseline.
+
+## Diagnostics
+
+CShells fails activation before initializer side effects when explicit lifecycle metadata references an initializer type that is not resolved from DI or does not implement `IShellInitializer`. Exception messages include the shell descriptor and affected initializer type names.
+
+Equal phase/order ties are allowed for compatibility and deterministic execution, but they are surfaced as diagnostics so authors can choose clearer order values when desired.

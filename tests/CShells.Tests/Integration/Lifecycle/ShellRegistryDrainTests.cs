@@ -52,6 +52,34 @@ public class ShellRegistryDrainTests
         Assert.All(result.HandlerResults, r => Assert.Null(r.Error));
     }
 
+    [Fact(DisplayName = "Initializer ordering does not change parallel drain handler invocation")]
+    public async Task Drain_WithOrderedInitializer_StillInvokesHandlersInParallel()
+    {
+        ParallelDrainFeature.Reset();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddCShells(cshells =>
+        {
+            cshells.WithAssemblyContaining<ShellRegistryDrainTests>();
+            cshells.AddShell("parallel", s => s.WithFeature<ParallelDrainFeature>());
+            cshells.Services.Replace(ServiceDescriptor.Singleton<IDrainPolicy>(_ => new FixedTimeoutDrainPolicy(TimeSpan.FromMilliseconds(750))));
+            cshells.Services.Replace(ServiceDescriptor.Singleton(new DrainGracePeriod(TimeSpan.FromMilliseconds(50))));
+        });
+
+        await using var host = services.BuildServiceProvider();
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("parallel");
+
+        var op = await registry.DrainAsync(shell);
+        var result = await op.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(DrainStatus.Completed, result.Status);
+        Assert.True(ParallelDrainFeature.Initialized);
+        Assert.Equal(2, ParallelDrainFeature.Entered);
+        Assert.All(result.HandlerResults, r => Assert.True(r.Completed));
+    }
+
     [Fact(DisplayName = "Throwing handler is captured in DrainHandlerResult.Error without aborting peers")]
     public async Task Drain_ThrowingHandler_DoesNotAbortPeers()
     {
@@ -139,6 +167,31 @@ public class ShellRegistryDrainTests
         Assert.Equal(ShellLifecycleState.Disposed, shell.State);
     }
 
+    [Fact(DisplayName = "Drain timeout remains unchanged when a feature uses ordered initializers")]
+    public async Task Drain_WithOrderedInitializer_FixedTimeoutStillTimesOut()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddCShells(cshells =>
+        {
+            cshells.WithAssemblyContaining<ShellRegistryDrainTests>();
+            cshells.AddShell("stuck", s => s.WithFeature<OrderedInitializerStuckDrainFeature>());
+            cshells.Services.Replace(ServiceDescriptor.Singleton<IDrainPolicy>(_ => new FixedTimeoutDrainPolicy(TimeSpan.FromMilliseconds(150))));
+            cshells.Services.Replace(ServiceDescriptor.Singleton(new DrainGracePeriod(TimeSpan.FromMilliseconds(200))));
+        });
+
+        await using var sp = services.BuildServiceProvider();
+        var registry = sp.GetRequiredService<IShellRegistry>();
+        var shell = await registry.ActivateAsync("stuck");
+
+        var op = await registry.DrainAsync(shell);
+        var result = await op.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(DrainStatus.TimedOut, result.Status);
+        Assert.False(result.HandlerResults[0].Completed);
+        Assert.Equal(ShellLifecycleState.Disposed, shell.State);
+    }
+
     // =================================================================
     // Test doubles
     // =================================================================
@@ -161,6 +214,47 @@ public class ShellRegistryDrainTests
         {
             RecordingDrainFeature.Hits.Add(Environment.CurrentManagedThreadId);
             return Task.CompletedTask;
+        }
+    }
+
+    public sealed class ParallelDrainFeature : IShellFeature
+    {
+        public static bool Initialized;
+        public static int Entered;
+        public static TaskCompletionSource BothEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public static void Reset()
+        {
+            Initialized = false;
+            Entered = 0;
+            BothEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddShellInitializer<NoopDrainInitializer>(LifecyclePhase.Prepare, 0);
+            services.AddTransient<IDrainHandler, CoordinatedDrainHandler>();
+            services.AddTransient<IDrainHandler, CoordinatedDrainHandler>();
+        }
+    }
+
+    private sealed class NoopDrainInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default)
+        {
+            ParallelDrainFeature.Initialized = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CoordinatedDrainHandler : IDrainHandler
+    {
+        public async Task DrainAsync(IDrainExtensionHandle _, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref ParallelDrainFeature.Entered) == 2)
+                ParallelDrainFeature.BothEntered.SetResult();
+
+            await ParallelDrainFeature.BothEntered.Task.WaitAsync(ct).ConfigureAwait(false);
         }
     }
 
@@ -213,5 +307,19 @@ public class ShellRegistryDrainTests
                 throw;
             }
         }
+    }
+
+    public sealed class OrderedInitializerStuckDrainFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddShellInitializer<StuckDrainPrepareInitializer>(LifecyclePhase.Prepare, 0);
+            services.AddTransient<IDrainHandler, StuckDrainHandler>();
+        }
+    }
+
+    private sealed class StuckDrainPrepareInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }
