@@ -171,6 +171,36 @@ When no explicit assembly providers are configured, shared assembly selectors na
 
 Prefer narrow patterns for framework contracts and common infrastructure. Avoid broad patterns that include shell-specific implementation assemblies, because sharing those assemblies can weaken shell isolation.
 
+## Provider/Base Feature Lifecycle Ordering
+
+Provider features often depend on a base feature for service configuration, but need provider-specific preparation to run before the base runtime starts. Keep `DependsOn` pointed at the base feature, then use initializer phases for lifecycle work.
+
+```csharp
+[ShellFeature("Quartz")]
+public sealed class QuartzFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<StartQuartzScheduler>(
+            LifecyclePhase.Start,
+            order: 100);
+    }
+}
+
+[ShellFeature("QuartzPostgreSql", DependsOn = [typeof(QuartzFeature)])]
+public sealed class QuartzPostgreSqlFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<RunQuartzPostgreSqlMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
+    }
+}
+```
+
+In this pattern, `QuartzFeature.ConfigureServices` still runs before `QuartzPostgreSqlFeature.ConfigureServices`, so base services are available for provider configuration. During activation, PostgreSQL migrations run in `Prepare` before the Quartz scheduler starts in `Start`.
+
 ## Best Practices
 
 - Use dedicated path prefixes (`/tenants/*`, `/apps/*`) for shells

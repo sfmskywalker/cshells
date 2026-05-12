@@ -8,7 +8,9 @@ namespace CShells.Lifecycle;
 /// <remarks>
 /// Register implementations as transient services via <c>IShellFeature.ConfigureServices</c>.
 /// All handlers on a draining shell are resolved from the shell's <see cref="IServiceProvider"/>
-/// and invoked in parallel.
+/// and invoked in parallel. Lifecycle phase and order metadata currently applies to
+/// <see cref="IShellInitializer"/> only; ordered drain phases are intentionally deferred so
+/// existing drain handlers keep their parallel behavior.
 /// </remarks>
 public interface IDrainHandler
 {

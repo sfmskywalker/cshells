@@ -1,61 +1,95 @@
 # Shell Lifecycle
 
-CShells lifecycle handlers run against **applied** shell runtimes, not merely against configured intent.
+CShells builds one isolated service provider per shell generation. Lifecycle APIs let features run startup work after the provider is built and cooperative shutdown work while an old generation drains.
 
-## Desired vs. Applied
+## Initializer Ordering
 
-Deferred activation introduces two layers of truth per shell:
+Feature dependencies and initializer order are intentionally separate:
 
-- **Desired state** — the latest recorded `ShellSettings`
-- **Applied runtime** — the last committed shell runtime that is safe to serve
+- `[ShellFeature(DependsOn = ...)]` configures dependencies first.
+- `IShellInitializer` lifecycle metadata controls startup execution after the shell provider is built.
+- Existing direct `IShellInitializer` registrations remain valid and run in `LifecyclePhase.Default`.
+- Existing unordered registrations keep DI registration order.
 
-A shell can be configured without currently being applied.
-
-## Lifecycle Handler Rules
-
-| Handler | Runs when |
-|---|---|
-| `IShellActivatedHandler` | A candidate runtime is committed and becomes applied |
-| `IShellDeactivatingHandler` | An applied runtime is about to be replaced or removed |
-
-That means:
-
-- recording a new desired generation does **not** trigger activation by itself
-- deferred / failed desired generations do **not** deactivate the last-known-good applied runtime
-- reload deactivation happens only when a successor runtime is ready to commit
-
-## Startup Behavior
-
-During application startup, CShells:
-1. records desired state for configured shells
-2. refreshes the runtime feature catalog
-3. reconciles shells into applied runtimes where possible
-4. publishes runtime status for all configured shells
-
-Only shells with applied runtimes become routable.
-
-## Runtime Notifications
-
-Framework notifications follow applied-runtime transitions:
-
-- `ShellActivated` — emitted when a candidate runtime commits
-- `ShellDeactivating` — emitted when an applied runtime is being replaced or removed
-- `ShellsReloaded` / `ShellReloaded` — emitted after reconciliation with runtime status snapshots
-
-## Inspecting State
-
-Use `IShellRuntimeStateAccessor` to inspect every configured shell, including shells that are deferred or failed:
+Use `AddShellInitializer<TInitializer>()` when startup side effects need a deterministic phase:
 
 ```csharp
-public class ShellStatusPage(IShellRuntimeStateAccessor runtimeState)
+[ShellFeature("StorageProvider")]
+public sealed class StorageProviderFeature : IShellFeature
 {
-    public IReadOnlyCollection<ShellRuntimeStatus> GetShells() => runtimeState.GetAllShells();
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<ApplyStorageMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
+    }
+}
+
+[ShellFeature("Runtime")]
+public sealed class RuntimeFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<StartRuntime>(
+            LifecyclePhase.Start,
+            order: 100);
+    }
 }
 ```
 
-This lets operators distinguish:
+Execution order is `Prepare`, then `Default`, then `Start`. Within a phase, lower numeric order runs first; equal phase/order ties use DI registration order as the deterministic tie-break.
 
-- shells that are configured and applied
-- shells that are configured but deferred
-- shells that are serving a last-known-good runtime while a newer desired generation is blocked
+## Compatibility
 
+Legacy registrations continue to work:
+
+```csharp
+services.AddTransient<IShellInitializer, FirstInitializer>();
+services.AddTransient<IShellInitializer, SecondInitializer>();
+```
+
+Both run in `LifecyclePhase.Default`, with `FirstInitializer` before `SecondInitializer`.
+
+`AddShellInitializer<TInitializer>()` registers `TInitializer` as transient and resolves it from the shell service provider at activation time, so initializers may depend on shell-scoped services.
+
+## Provider/Base Feature Pairs
+
+Provider features should keep depending on the base feature for service configuration, then use lifecycle phases to run provider preparation before base startup.
+
+```csharp
+[ShellFeature("Quartz")]
+public sealed class QuartzFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<StartQuartzScheduler>(
+            LifecyclePhase.Start,
+            order: 100);
+    }
+}
+
+[ShellFeature("QuartzPostgreSql", DependsOn = [typeof(QuartzFeature)])]
+public sealed class QuartzPostgreSqlFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddShellInitializer<RunQuartzPostgreSqlMigrations>(
+            LifecyclePhase.Prepare,
+            order: 100);
+    }
+}
+```
+
+Quartz services configure first because the provider depends on the base feature. PostgreSQL migrations initialize first because they are in `Prepare`; the scheduler starts later in `Start`.
+
+## Drain
+
+`IDrainHandler` behavior is unchanged. Handlers are resolved from the shell provider and invoked in parallel during `Draining`.
+
+Ordered or phased drain execution is deferred to a future design. Existing deadline, force-drain, grace-period, and result-reporting behavior remains the compatibility baseline.
+
+## Diagnostics
+
+Invalid explicit lifecycle metadata fails activation before initializer side effects. Exception messages include the shell descriptor and affected initializer type names.
+
+Equal phase/order ties are allowed for compatibility and deterministic execution, but CShells emits non-fatal diagnostics so authors can choose clearer order values when desired.

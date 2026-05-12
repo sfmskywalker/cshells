@@ -432,9 +432,11 @@ app.Run();
 - **Multiple configuration sources** - Configure shells via appsettings.json, external JSON files, or code
 - **Flexible shell resolution** - Built-in path and host resolvers, plus extensibility for custom strategies
 - **Feature dependencies** - Features can depend on other features with automatic topological ordering
+- **Lifecycle ordering** - Initializers can use `AddShellInitializer<T>()`, semantic phases, and numeric order independently from feature dependency order
 - **Constructor injection of ShellSettings** - Features can access their shell's configuration via constructor
 - **Runtime shell management** - Add, update, or remove shells at runtime without restarting the application
 
+See [Shell Lifecycle](docs/shell-lifecycle.md) for initializer ordering, provider/base feature patterns, drain behavior, and compatibility guidance for existing `IShellInitializer` registrations.
 
 ## Configuration
 
