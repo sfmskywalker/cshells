@@ -220,6 +220,12 @@ internal static class ConfigurationHelper
                 continue;
             }
 
+            if (feature.ResetsSettings && feature.Settings.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{feature.Name}' cannot combine reset semantics with explicit settings.");
+            }
+
             AddEnabledFeature(settings, feature.Name, feature.ResetsSettings);
             PopulateFeatureSettings([feature], settings.ConfigurationData);
         }
@@ -501,6 +507,12 @@ internal static class ConfigurationHelper
 
                 throw new InvalidOperationException(
                     $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found scalar value '{featureSection.Value}'.");
+            }
+
+            if (children.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found a null or empty value.");
             }
 
             // Reject array-like children (e.g., "Posts": [1, 2])
