@@ -528,8 +528,8 @@ internal sealed class ShellRegistry : IShellRegistry
         slot.Active = shell;
         slot.All = slot.All.Add(shell);
 
-        _logger.LogInformation("Activated shell {Descriptor} with {FeatureCount} feature(s); {MissingCount} missing",
-            descriptor, buildResult.EnabledFeatures.Count, buildResult.MissingFeatures.Count);
+        _logger.LogInformation("Activated shell {Descriptor} with {FeatureCount} feature(s)",
+            descriptor, buildResult.EnabledFeatures.Count);
 
         return shell;
     }

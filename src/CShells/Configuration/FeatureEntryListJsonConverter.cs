@@ -40,15 +40,32 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
         foreach (var entry in value)
         {
             writer.WritePropertyName(entry.Name);
-            writer.WriteStartObject();
 
-            foreach (var (key, settingValue) in entry.Settings)
+            if (!entry.IsEnabled)
             {
-                writer.WritePropertyName(key);
-                JsonSerializer.Serialize(writer, settingValue, options);
+                writer.WriteBooleanValue(false);
             }
+            else if (entry.ResetsSettings && entry.Settings.Count > 0)
+            {
+                throw new JsonException(
+                    $"Cannot serialize feature '{entry.Name}' with both reset semantics and explicit settings.");
+            }
+            else if (entry.ResetsSettings && entry.Settings.Count == 0)
+            {
+                writer.WriteBooleanValue(true);
+            }
+            else
+            {
+                writer.WriteStartObject();
 
-            writer.WriteEndObject();
+                foreach (var (key, settingValue) in entry.Settings)
+                {
+                    writer.WritePropertyName(key);
+                    JsonSerializer.Serialize(writer, settingValue, options);
+                }
+
+                writer.WriteEndObject();
+            }
         }
 
         writer.WriteEndObject();
@@ -86,10 +103,30 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
                     "Feature name in object-map syntax must not be empty or whitespace.");
             }
 
+            if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                entries.Add(property.Value.GetBoolean()
+                    ? FeatureEntry.EnableDefaults(featureName)
+                    : FeatureEntry.Disabled(featureName));
+                continue;
+            }
+
+            if (property.Value.ValueKind == JsonValueKind.String)
+            {
+                var value = property.Value.GetString();
+                if (bool.TryParse(value, out var enabled))
+                {
+                    entries.Add(enabled
+                        ? FeatureEntry.EnableDefaults(featureName)
+                        : FeatureEntry.Disabled(featureName));
+                    continue;
+                }
+            }
+
             if (property.Value.ValueKind != JsonValueKind.Object)
             {
                 throw new JsonException(
-                    $"Feature '{featureName}' in object-map syntax must have an object value, but found {property.Value.ValueKind}.");
+                    $"Feature '{featureName}' in object-map syntax must be true, false, string 'true'/'false', or an object, but found {property.Value.ValueKind}.");
             }
 
             var entry = new FeatureEntry { Name = featureName };
@@ -118,4 +155,3 @@ public class FeatureEntryListJsonConverter : JsonConverter<List<FeatureEntry>>
             _ => JsonSerializer.Deserialize<JsonElement>(element.GetRawText())
         };
 }
-

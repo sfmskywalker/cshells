@@ -1,5 +1,10 @@
 using CShells.Features;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Tests.TestHelpers;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CShells.Tests.Integration.FeatureDependency;
 
@@ -36,5 +41,51 @@ public class UnknownFeatureDependencyTests
         var ex = Assert.Throws<FeatureNotFoundException>(() => _resolver.ResolveDependencies(missingFeature, features));
         Assert.Contains(missingFeature, ex.Message);
         Assert.Contains("not found", ex.Message);
+    }
+
+    [Fact(DisplayName = "Activation ignores unknown disabled feature declarations")]
+    public async Task ActivateAsync_UnknownDisabledFeature_DoesNotPreventActivation()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<UnknownFeatureDependencyTests>()
+            .AddShell("payments", shell => shell
+                .WithFeature<KnownFeature>()
+                .WithFeature(FeatureEntry.Disabled("MissingFeature"))));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Equal(["Known"], settings.EnabledFeatures);
+        Assert.Equal(["MissingFeature"], settings.DisabledFeatures);
+    }
+
+    [Fact(DisplayName = "Activation rejects unknown positive feature declarations")]
+    public async Task ActivateAsync_UnknownEnabledFeature_ThrowsFeatureNotFoundException()
+    {
+        await using var host = BuildHost(cshells => cshells
+            .WithAssemblyContaining<UnknownFeatureDependencyTests>()
+            .AddShell("payments", shell => shell.WithFeature("MissingFeature")));
+        var registry = host.GetRequiredService<IShellRegistry>();
+
+        var ex = await Assert.ThrowsAsync<FeatureNotFoundException>(() => registry.ActivateAsync("payments"));
+        Assert.Equal("MissingFeature", ex.FeatureName);
+    }
+
+    private static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(configure);
+        return services.BuildServiceProvider();
+    }
+
+}
+
+[ShellFeature("Known")]
+public sealed class KnownFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
     }
 }

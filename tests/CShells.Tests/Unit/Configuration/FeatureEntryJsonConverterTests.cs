@@ -254,6 +254,19 @@ public class FeatureEntryJsonConverterTests
         Assert.Equal(false, entry.Settings["Debug"]);
     }
 
+    [Fact(DisplayName = "Deserialize treats Enabled as direct feature setting")]
+    public void Deserialize_EnabledProperty_IsDirectFeatureSetting()
+    {
+        var json = """{ "Name": "Feature", "Enabled": true }""";
+
+        var entry = JsonSerializer.Deserialize<FeatureEntry>(json, Options);
+
+        Assert.NotNull(entry);
+        Assert.True(entry.IsEnabled);
+        Assert.False(entry.ResetsSettings);
+        Assert.Equal(true, entry.Settings["Enabled"]);
+    }
+
     [Fact(DisplayName = "Deserialize handles string settings")]
     public void Deserialize_StringSettings_Works()
     {

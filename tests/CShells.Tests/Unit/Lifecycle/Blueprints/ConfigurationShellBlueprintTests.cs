@@ -32,6 +32,87 @@ public class ConfigurationShellBlueprintTests
         Assert.Equal("Enterprise", settings.ConfigurationData["Plan"]);
     }
 
+    [Fact(DisplayName = "ComposeAsync enables compact true map features")]
+    public async Task ComposeAsync_CompactTrueMapFeature_EnablesFeatureWithDefaults()
+    {
+        var dict = new Dictionary<string, string?>
+        {
+            ["Features:Core"] = "true",
+            ["Features:Posts"] = "TRUE",
+            ["Features:Http:BasePath"] = "/workflows",
+        };
+        var root = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal(["Core", "Http", "Posts"], settings.EnabledFeatures.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(["Core", "Posts"], settings.FeatureSettingResets.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal("/workflows", settings.ConfigurationData["Http:BasePath"]);
+    }
+
+    [Fact(DisplayName = "ComposeAsync disables map feature and ignores inherited child settings")]
+    public async Task ComposeAsync_DisabledMapFeature_RemovesFeatureAndSettings()
+    {
+        var dict = new Dictionary<string, string?>
+        {
+            ["Features:Identity"] = "false",
+            ["Features:Identity:SigningKey"] = "secret",
+            ["Configuration:Identity:SigningKey"] = "configuration-secret",
+            ["Features:Http:BasePath"] = "/workflows",
+        };
+        var root = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal(["Http"], settings.EnabledFeatures);
+        Assert.Equal(["Identity"], settings.DisabledFeatures);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+        Assert.Equal("/workflows", settings.ConfigurationData["Http:BasePath"]);
+    }
+
+    [Fact(DisplayName = "ComposeAsync later true re-enables disabled feature")]
+    public async Task ComposeAsync_LaterTrue_ReEnablesDisabledFeature()
+    {
+        var root = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:Identity"] = "false",
+            })
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:Identity"] = "true",
+            })
+            .Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Empty(settings.DisabledFeatures);
+        Assert.Equal(["Identity"], settings.FeatureSettingResets);
+    }
+
+    [Fact(DisplayName = "ComposeAsync object feature enables feature with settings")]
+    public async Task ComposeAsync_ObjectFeature_EnablesFeatureWithSettings()
+    {
+        var root = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:Identity:SigningKey"] = "configured",
+            })
+            .Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Empty(settings.DisabledFeatures);
+        Assert.Empty(settings.FeatureSettingResets);
+        Assert.Equal("configured", settings.ConfigurationData["Identity:SigningKey"]);
+    }
+
     [Fact(DisplayName = "ComposeAsync reflects runtime changes to the underlying IConfiguration")]
     public async Task ComposeAsync_ReflectsRuntimeConfigChanges()
     {

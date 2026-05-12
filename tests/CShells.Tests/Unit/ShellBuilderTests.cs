@@ -48,6 +48,19 @@ public class ShellBuilderTests
         Assert.Equal(["Feature1", "Feature2"], settings.EnabledFeatures);
     }
 
+    [Fact(DisplayName = "WithFeature rejects reset feature entries with settings")]
+    public void WithFeature_ResetEntryWithSettings_Throws()
+    {
+        var feature = FeatureEntry.EnableDefaults("Feature1");
+        feature.Settings["Setting"] = "Value";
+        var builder = new ShellBuilder("TestShell");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => builder.WithFeature(feature));
+
+        Assert.Contains("reset semantics", ex.Message);
+        Assert.Contains("Feature1", ex.Message);
+    }
+
     [Fact(DisplayName = "WithConfiguration adds configuration entry")]
     public void WithConfiguration_AddsConfigurationEntry()
     {
@@ -124,6 +137,183 @@ public class ShellBuilderTests
 
         // Assert - Features should be merged and deduplicated
         Assert.Equal(["Feature1", "Feature2", "Feature3"], settings.EnabledFeatures);
+    }
+
+    [Fact(DisplayName = "FromConfiguration disables existing code-first feature")]
+    public void FromConfiguration_DisablesExistingCodeFirstFeature()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": false,
+                    "Http": true
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var builder = new ShellBuilder("TestShell")
+            .WithFeature("Identity", settings => settings.WithSetting("SigningKey", "default"))
+            .WithFeature("Posts");
+
+        builder.FromConfiguration(config.GetSection("Shell"));
+        var settings = builder.Build();
+
+        Assert.Equal(["Posts", "Http"], settings.EnabledFeatures);
+        Assert.Equal(["Identity"], settings.DisabledFeatures);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
+    [Fact(DisplayName = "FromConfiguration true reset drops lower-priority feature settings")]
+    public void FromConfiguration_TrueReset_DropsLowerPriorityFeatureSettings()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": true
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var builder = new ShellBuilder("TestShell")
+            .WithFeature("Identity", settings => settings.WithSetting("SigningKey", "default"));
+
+        builder.FromConfiguration(config.GetSection("Shell"));
+        var settings = builder.Build();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Equal(["Identity"], settings.FeatureSettingResets);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
+    [Fact(DisplayName = "FromConfiguration disable removes same-section shell configuration feature settings")]
+    public void FromConfiguration_Disable_RemovesSameSectionShellConfigurationFeatureSettings()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": false
+                },
+                "Configuration": {
+                    "Identity": {
+                        "SigningKey": "configured"
+                    }
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(config.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Identity"], settings.DisabledFeatures);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
+    [Fact(DisplayName = "FromConfiguration true reset removes same-section shell configuration feature settings")]
+    public void FromConfiguration_TrueReset_RemovesSameSectionShellConfigurationFeatureSettings()
+    {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": true
+                },
+                "Configuration": {
+                    "Identity": {
+                        "SigningKey": "configured"
+                    }
+                }
+            }
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(config.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Equal(["Identity"], settings.FeatureSettingResets);
+        Assert.False(settings.ConfigurationData.ContainsKey("Identity:SigningKey"));
+    }
+
+    [Fact(DisplayName = "FromConfiguration object re-enables disabled feature with settings")]
+    public void FromConfiguration_Object_ReEnablesDisabledFeatureWithSettings()
+    {
+        var disabledJson = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": false
+                }
+            }
+        }
+        """;
+        var enabledJson = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": { "SigningKey": "configured" }
+                }
+            }
+        }
+        """;
+
+        using var disabledStream = new MemoryStream(Encoding.UTF8.GetBytes(disabledJson));
+        using var enabledStream = new MemoryStream(Encoding.UTF8.GetBytes(enabledJson));
+        var disabledConfig = new ConfigurationBuilder().AddJsonStream(disabledStream).Build();
+        var enabledConfig = new ConfigurationBuilder().AddJsonStream(enabledStream).Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(disabledConfig.GetSection("Shell"))
+            .FromConfiguration(enabledConfig.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Empty(settings.DisabledFeatures);
+        Assert.Equal("configured", settings.ConfigurationData["Identity:SigningKey"]);
+    }
+
+    [Fact(DisplayName = "FromConfiguration rejects null object-map feature values")]
+    public void FromConfiguration_NullObjectMapFeatureValue_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Shell:Features:Identity"] = null,
+            })
+            .Build();
+        var builder = new ShellBuilder("TestShell");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => builder.FromConfiguration(config.GetSection("Shell")));
+
+        Assert.Contains("Identity", ex.Message);
+        Assert.Contains("null or empty value", ex.Message);
     }
 
     [Fact(DisplayName = "FromConfiguration with IConfigurationSection merges configuration with precedence")]
