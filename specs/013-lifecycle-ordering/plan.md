@@ -1,6 +1,6 @@
 # Implementation Plan: Lifecycle Ordering
 
-**Branch**: `013-lifecycle-ordering` | **Date**: 2026-05-11 | **Spec**: [spec.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/013-lifecycle-ordering/spec.md)
+**Branch**: `013-lifecycle-ordering` | **Date**: 2026-05-11 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/013-lifecycle-ordering/spec.md`
 
 ## Summary
@@ -84,15 +84,15 @@ docs/
 
 ## Phase 0: Research
 
-Research completed in [research.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/013-lifecycle-ordering/research.md). No `NEEDS CLARIFICATION` items remain.
+Research completed in [research.md](./research.md). No `NEEDS CLARIFICATION` items remain.
 
 ## Phase 1: Design & Contracts
 
 Design artifacts:
 
-- [data-model.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/013-lifecycle-ordering/data-model.md)
-- [contracts/lifecycle-ordering.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/013-lifecycle-ordering/contracts/lifecycle-ordering.md)
-- [quickstart.md](/Users/sipke/Projects/ValenceWorks/cshells/main/specs/013-lifecycle-ordering/quickstart.md)
+- [data-model.md](./data-model.md)
+- [contracts/lifecycle-ordering.md](./contracts/lifecycle-ordering.md)
+- [quickstart.md](./quickstart.md)
 
 ## Constitution Check
 

@@ -15,7 +15,7 @@ public static class ServiceCollectionLifecycleExtensions
     /// <returns>The service collection for chaining.</returns>
     /// <remarks>
     /// This is the first-class equivalent of registering a transient
-    /// <see cref="IShellInitializer"/> directly, with explicit lifecycle metadata attached.
+    /// <see cref="IShellInitializer"/> directly, with default-phase lifecycle metadata attached.
     /// The initializer runs in <see cref="LifecyclePhase.Default"/> after any
     /// <see cref="LifecyclePhase.Prepare"/> initializers and before any
     /// <see cref="LifecyclePhase.Start"/> initializers.
@@ -24,8 +24,22 @@ public static class ServiceCollectionLifecycleExtensions
     /// </code>
     /// </remarks>
     public static IServiceCollection AddShellInitializer<TInitializer>(this IServiceCollection services)
-        where TInitializer : class, IShellInitializer =>
-        services.AddShellInitializer<TInitializer>(LifecyclePhase.Default, order: 0);
+        where TInitializer : class, IShellInitializer
+    {
+        Guard.Against.Null(services);
+
+        services.AddTransient<TInitializer>();
+        services.AddTransient<IShellInitializer>(sp => sp.GetRequiredService<TInitializer>());
+        services.AddSingleton(new ShellInitializerRegistration(
+            typeof(TInitializer),
+            LifecyclePhase.Default,
+            Order: 0,
+            RegistrationIndex: -1,
+            IsExplicit: false,
+            Source: $"AddShellInitializer<{typeof(TInitializer).FullName}> (default)"));
+
+        return services;
+    }
 
     /// <summary>
     /// Registers a transient shell initializer in <see cref="LifecyclePhase.Default"/>.

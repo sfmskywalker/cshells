@@ -7,7 +7,7 @@ namespace CShells.Lifecycle;
 /// <param name="Phase">Semantic lifecycle phase.</param>
 /// <param name="Order">Numeric order within <paramref name="Phase"/>.</param>
 /// <param name="RegistrationIndex">Optional registration index used for diagnostics.</param>
-/// <param name="IsExplicit">Whether this metadata came from a first-class lifecycle API.</param>
+/// <param name="IsExplicit">Whether this metadata came from an explicitly ordered lifecycle API.</param>
 /// <param name="Source">Human-readable metadata source for diagnostics.</param>
 /// <remarks>
 /// <see cref="ServiceCollectionLifecycleExtensions.AddShellInitializer{TInitializer}(Microsoft.Extensions.DependencyInjection.IServiceCollection, LifecyclePhase, int)"/>

@@ -1,13 +1,9 @@
 using System.Reflection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CShells.Lifecycle;
 
-internal sealed class ShellInitializerOrderingPlanner(ILogger<ShellInitializerOrderingPlanner>? logger = null)
+internal sealed class ShellInitializerOrderingPlanner
 {
-    private readonly ILogger<ShellInitializerOrderingPlanner> _logger = logger ?? NullLogger<ShellInitializerOrderingPlanner>.Instance;
-
     public InitializerOrderingPlan Plan(
         ShellDescriptor shell,
         IReadOnlyList<IShellInitializer> initializers,
@@ -58,14 +54,11 @@ internal sealed class ShellInitializerOrderingPlanner(ILogger<ShellInitializerOr
 
         var duplicateGroups = entries
             .GroupBy(e => (e.Phase, e.Order))
-            .Where(g => g.Count() > 1)
+            .Where(g => g.Count() > 1 && g.Any(e => e.IsExplicit))
             .Select(g => new InitializerOrderingDiagnostic(
                 $"Multiple initializers share phase '{g.Key.Phase}' and order {g.Key.Order}; DI registration index will be used as the deterministic tie-break.",
                 [.. g.Select(e => e.InitializerType)]))
             .ToList();
-
-        foreach (var diagnostic in duplicateGroups)
-            _logger.LogDebug("{Message} Types: {Types}", diagnostic.Message, string.Join(", ", diagnostic.InitializerTypes.Select(t => t.FullName)));
 
         var ordered = entries
             .OrderBy(e => e.Phase)

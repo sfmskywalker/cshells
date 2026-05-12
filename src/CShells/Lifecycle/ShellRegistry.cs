@@ -542,7 +542,7 @@ internal sealed class ShellRegistry : IShellRegistry
         if (initializers.Count == 0 && registrations.Count == 0)
             return;
 
-        var planner = new ShellInitializerOrderingPlanner(scope.ServiceProvider.GetService<ILogger<ShellInitializerOrderingPlanner>>());
+        var planner = new ShellInitializerOrderingPlanner();
         var plan = planner.Plan(descriptor, initializers, registrations);
 
         foreach (var diagnostic in plan.Diagnostics)

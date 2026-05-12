@@ -46,6 +46,7 @@ public class ShellInitializerOrderingPlannerTests
 
         Assert.Equal([typeof(FirstInitializer), typeof(SecondInitializer)], plan.Entries.Select(e => e.InitializerType));
         Assert.All(plan.Entries, e => Assert.Equal(LifecyclePhase.Default, e.Phase));
+        Assert.Empty(plan.Diagnostics);
     }
 
     [Fact(DisplayName = "Planner applies attribute metadata for legacy registrations")]
@@ -98,6 +99,44 @@ public class ShellInitializerOrderingPlannerTests
         Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
         Assert.Equal(42, registration.Order);
         Assert.True(registration.IsExplicit);
+    }
+
+    [Fact(DisplayName = "AddShellInitializer without order registers default metadata without explicit ordering")]
+    public void AddShellInitializer_NoArgs_RegistersDefaultMetadataWithoutExplicitOrdering()
+    {
+        var services = new ServiceCollection();
+
+        services.AddShellInitializer<FirstInitializer>();
+
+        using var provider = services.BuildServiceProvider();
+        var registration = Assert.Single(provider.GetServices<ShellInitializerRegistration>());
+
+        Assert.Equal(typeof(FirstInitializer), registration.InitializerType);
+        Assert.Equal(LifecyclePhase.Default, registration.Phase);
+        Assert.Equal(0, registration.Order);
+        Assert.False(registration.IsExplicit);
+    }
+
+    [Fact(DisplayName = "Planner only emits equal-order diagnostics for explicitly ordered ties")]
+    public void Plan_EqualOrderDiagnostics_RequireExplicitOrdering()
+    {
+        var explicitPlan = planner.Plan(
+            Shell,
+            [new FirstInitializer(), new SecondInitializer()],
+            [
+                Registration<FirstInitializer>(LifecyclePhase.Prepare, 0),
+                Registration<SecondInitializer>(LifecyclePhase.Prepare, 0)
+            ]);
+        var defaultPlan = planner.Plan(
+            Shell,
+            [new FirstInitializer(), new SecondInitializer()],
+            [
+                new ShellInitializerRegistration(typeof(FirstInitializer), LifecyclePhase.Default, 0, -1, IsExplicit: false, Source: "default"),
+                new ShellInitializerRegistration(typeof(SecondInitializer), LifecyclePhase.Default, 0, -1, IsExplicit: false, Source: "default")
+            ]);
+
+        Assert.Single(explicitPlan.Diagnostics);
+        Assert.Empty(defaultPlan.Diagnostics);
     }
 
     [Fact(DisplayName = "Planner fails when explicit metadata does not match resolved initializers")]
