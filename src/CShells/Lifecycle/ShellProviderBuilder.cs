@@ -49,22 +49,21 @@ internal sealed class ShellProviderBuilder(
         await _featureCatalog.EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         var catalog = _featureCatalog.CurrentSnapshot;
 
-        // Filter enabled features to those present in the catalog; keep the missing list for diagnostics.
-        var availableEnabled = settings.EnabledFeatures
-            .Where(id => catalog.FeatureMap.ContainsKey(id))
-            .ToList();
-
+        // Explicit disabled entries are already excluded from EnabledFeatures. Unknown positive entries
+        // are configuration errors because they attempt to activate unavailable features.
         var missing = settings.EnabledFeatures
             .Where(id => !catalog.FeatureMap.ContainsKey(id))
             .ToList();
 
-        var orderedFeatures = availableEnabled.Count > 0
-            ? _dependencyResolver.GetOrderedFeatures(availableEnabled, catalog.FeatureMap)
+        if (missing.Count > 0)
+            throw new FeatureNotFoundException(missing[0]);
+
+        var orderedFeatures = settings.EnabledFeatures.Count > 0
+            ? _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, catalog.FeatureMap)
             : [];
 
-        // Dependencies are effective shell features too. Preserve configured-but-undiscovered
-        // feature names for diagnostics and management APIs instead of dropping them.
-        settings.EnabledFeatures = [..orderedFeatures, ..missing];
+        // Dependencies are effective shell features too.
+        settings.EnabledFeatures = [..orderedFeatures];
 
         var services = new ServiceCollection();
         CopyRootServices(services);
@@ -76,7 +75,7 @@ internal sealed class ShellProviderBuilder(
 
         var provider = services.BuildServiceProvider();
 
-        return new BuildResult(provider, holder, orderedFeatures.AsReadOnly(), missing.AsReadOnly());
+        return new BuildResult(provider, holder, orderedFeatures.AsReadOnly());
     }
 
     private void CopyRootServices(IServiceCollection shellServices)
@@ -201,6 +200,5 @@ internal sealed class ShellProviderBuilder(
     public sealed record BuildResult(
         ServiceProvider Provider,
         ShellHolder Holder,
-        IReadOnlyList<string> EnabledFeatures,
-        IReadOnlyList<string> MissingFeatures);
+        IReadOnlyList<string> EnabledFeatures);
 }

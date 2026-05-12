@@ -57,7 +57,9 @@ internal sealed class ConfiguredShellBlueprintProvider(
         {
             var merged = new ShellSettings(shellSpecific.Id)
             {
-                EnabledFeatures = MergeFeatures(defaults.EnabledFeatures, shellSpecific.EnabledFeatures),
+                EnabledFeatures = defaults.EnabledFeatures,
+                DisabledFeatures = defaults.DisabledFeatures,
+                FeatureSettingResets = defaults.FeatureSettingResets,
                 ConfigurationData = new Dictionary<string, object>(
                     defaults.ConfigurationData,
                     StringComparer.OrdinalIgnoreCase)
@@ -65,6 +67,8 @@ internal sealed class ConfiguredShellBlueprintProvider(
 
             foreach (var (key, value) in shellSpecific.ConfigurationData)
                 merged.ConfigurationData[key] = value;
+
+            ApplyFeatureDeclarations(merged, shellSpecific);
 
             foreach (var (featureName, configure) in defaults.FeatureConfigurators)
                 merged.FeatureConfigurators[featureName] = configure;
@@ -80,6 +84,18 @@ internal sealed class ConfiguredShellBlueprintProvider(
             return merged;
         }
 
+        private static void ApplyFeatureDeclarations(ShellSettings target, ShellSettings shellSpecific)
+        {
+            foreach (var featureName in shellSpecific.DisabledFeatures)
+                ConfigurationHelper.DisableFeature(target, featureName);
+
+            foreach (var featureName in shellSpecific.EnabledFeatures)
+                ConfigurationHelper.AddEnabledFeature(
+                    target,
+                    featureName,
+                    shellSpecific.FeatureSettingResets.Contains(featureName, StringComparer.OrdinalIgnoreCase));
+        }
+
         private static Action<T> ChainConfigurators<T>(Action<T> first, Action<T> second) =>
             target =>
             {
@@ -87,22 +103,5 @@ internal sealed class ConfiguredShellBlueprintProvider(
                 second(target);
             };
 
-        private static IReadOnlyList<string> MergeFeatures(
-            IReadOnlyList<string> defaults,
-            IReadOnlyList<string> shellSpecific)
-        {
-            var merged = new List<string>(defaults.Count + shellSpecific.Count);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var feature in defaults)
-                if (seen.Add(feature))
-                    merged.Add(feature);
-
-            foreach (var feature in shellSpecific)
-                if (seen.Add(feature))
-                    merged.Add(feature);
-
-            return [.. merged];
-        }
     }
 }

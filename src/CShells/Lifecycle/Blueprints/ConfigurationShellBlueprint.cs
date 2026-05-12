@@ -40,13 +40,12 @@ public sealed class ConfigurationShellBlueprint : IShellBlueprint
     {
         var settings = new ShellSettings(new ShellId(Name));
 
-        var featuresSection = _section.GetSection("Features");
-        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, Name);
-        settings.EnabledFeatures = ConfigurationHelper.ExtractFeatureNames(features);
-        ConfigurationHelper.PopulateFeatureSettings(features, settings.ConfigurationData);
-
         var configurationSection = _section.GetSection("Configuration");
         ConfigurationHelper.LoadConfigurationFromSection(configurationSection, settings.ConfigurationData);
+
+        var featuresSection = _section.GetSection("Features");
+        var features = ConfigurationHelper.ParseFeaturesFromConfiguration(featuresSection, Name);
+        ConfigurationHelper.ApplyFeatureEntries(features, settings);
 
         return Task.FromResult(settings);
     }

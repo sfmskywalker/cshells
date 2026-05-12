@@ -202,8 +202,8 @@ public class WeatherFeature : IShellFeature
     "Shells": {
       "Default": {
         "Features": {
-          "Core": {},
-          "Weather": {}
+          "Core": true,
+          "Weather": true
         },
         "Configuration": {
           "WebRouting": {
@@ -213,7 +213,7 @@ public class WeatherFeature : IShellFeature
       },
       "Admin": {
         "Features": {
-          "Core": {},
+          "Core": true,
           "Admin": { "MaxUsers": 100, "EnableAuditLog": true }
         },
         "Configuration": {
@@ -245,7 +245,10 @@ Create JSON files in a `Shells` folder (e.g., `Default.json`, `Admin.json`):
 ```json
 {
   "Name": "Default",
-  "Features": ["Core", "Weather"],
+  "Features": {
+    "Core": true,
+    "Weather": true
+  },
   "Configuration": {
     "WebRouting": {
       "Path": ""
@@ -353,7 +356,7 @@ Shared assembly selectors let a host include framework families without listing 
     "Shells": {
       "Default": {
         "Features": {
-          "Core": {}
+          "Core": true
         }
       }
     }

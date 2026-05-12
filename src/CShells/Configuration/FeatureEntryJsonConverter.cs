@@ -4,19 +4,18 @@ using System.Text.Json.Serialization;
 namespace CShells.Configuration;
 
 /// <summary>
-/// JSON converter for <see cref="FeatureEntry"/> that supports both string and object formats.
+/// JSON converter for <see cref="FeatureEntry"/> that supports legacy array item formats.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This converter enables a polymorphic Features array in configuration where each element
-/// can be either:
+/// This converter supports legacy feature arrays where each element can be either:
 /// </para>
 /// <list type="bullet">
 ///   <item><description>A simple string: <c>"FeatureName"</c></description></item>
-///   <item><description>An object with Name and settings: <c>{ "Name": "FeatureName", "Setting1": "Value1" }</c></description></item>
+///   <item><description>An object with <c>Name</c> and direct settings: <c>{ "Name": "FeatureName", "Setting1": "Value1" }</c></description></item>
 /// </list>
 /// <para>
-/// In the object format, all properties except "Name" are treated as feature settings.
+/// In the object format, all properties except <c>Name</c> are treated as feature settings.
 /// </para>
 /// </remarks>
 /// <example>

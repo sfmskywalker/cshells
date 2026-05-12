@@ -8,6 +8,8 @@ namespace CShells.Configuration;
 /// </summary>
 internal static class ConfigurationHelper
 {
+    private const string SupportedFeatureValueForms = "true, false, string 'true'/'false', or an object";
+
     /// <summary>
     /// Converts a value to JsonElement for consistent serialization.
     /// </summary>
@@ -194,17 +196,99 @@ internal static class ConfigurationHelper
     public static string[] ExtractFeatureNames(IEnumerable<FeatureEntry> features)
     {
         return features
+            .Where(feature => feature.IsEnabled)
             .Select((feature, index) =>
             {
-                if (string.IsNullOrWhiteSpace(feature.Name))
-                {
-                    throw new InvalidOperationException(
-                        $"Configured feature entry at index {index} must define a non-empty feature name.");
-                }
-
+                EnsureFeatureName(feature.Name, $"Configured feature entry at index {index}");
                 return feature.Name.Trim();
             })
             .ToArray();
+    }
+
+    /// <summary>
+    /// Applies normalized feature entries to shell settings.
+    /// </summary>
+    public static void ApplyFeatureEntries(IEnumerable<FeatureEntry> features, ShellSettings settings)
+    {
+        foreach (var feature in features)
+        {
+            EnsureFeatureName(feature.Name, "Configured feature entry");
+
+            if (!feature.IsEnabled)
+            {
+                DisableFeature(settings, feature.Name);
+                continue;
+            }
+
+            if (feature.ResetsSettings && feature.Settings.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{feature.Name}' cannot combine reset semantics with explicit settings.");
+            }
+
+            AddEnabledFeature(settings, feature.Name, feature.ResetsSettings);
+            PopulateFeatureSettings([feature], settings.ConfigurationData);
+        }
+    }
+
+    /// <summary>
+    /// Adds an enabled feature declaration to shell settings.
+    /// </summary>
+    public static void AddEnabledFeature(ShellSettings settings, string featureName, bool resetSettings = false)
+    {
+        Guard.Against.Null(settings);
+        EnsureFeatureName(featureName, "Configured feature entry");
+
+        var normalizedName = featureName.Trim();
+        var features = settings.EnabledFeatures.ToList();
+        if (!features.Contains(normalizedName, StringComparer.OrdinalIgnoreCase))
+            features.Add(normalizedName);
+        settings.EnabledFeatures = [..features];
+
+        settings.DisabledFeatures = RemoveName(settings.DisabledFeatures, normalizedName);
+
+        if (resetSettings)
+        {
+            RemoveFeatureSettings(settings.ConfigurationData, normalizedName);
+            settings.FeatureSettingResets = AddName(settings.FeatureSettingResets, normalizedName);
+        }
+        else
+        {
+            settings.FeatureSettingResets = RemoveName(settings.FeatureSettingResets, normalizedName);
+        }
+    }
+
+    /// <summary>
+    /// Adds an explicit disabled feature declaration to shell settings.
+    /// </summary>
+    public static void DisableFeature(ShellSettings settings, string featureName)
+    {
+        Guard.Against.Null(settings);
+        EnsureFeatureName(featureName, "Configured feature entry");
+
+        var normalizedName = featureName.Trim();
+        settings.EnabledFeatures = RemoveName(settings.EnabledFeatures, normalizedName);
+        settings.DisabledFeatures = AddName(settings.DisabledFeatures, normalizedName);
+        settings.FeatureSettingResets = RemoveName(settings.FeatureSettingResets, normalizedName);
+        RemoveFeatureSettings(settings.ConfigurationData, normalizedName);
+    }
+
+    /// <summary>
+    /// Removes feature-prefixed configuration keys from a shell configuration dictionary.
+    /// </summary>
+    public static void RemoveFeatureSettings(IDictionary<string, object> configurationData, string featureName)
+    {
+        Guard.Against.Null(configurationData);
+        EnsureFeatureName(featureName, "Configured feature entry");
+
+        var prefix = $"{featureName.Trim()}:";
+        var keys = configurationData.Keys
+            .Where(key => key.Equals(featureName, StringComparison.OrdinalIgnoreCase) ||
+                          key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        foreach (var key in keys)
+            configurationData.Remove(key);
     }
 
     /// <summary>
@@ -267,6 +351,9 @@ internal static class ConfigurationHelper
     {
         foreach (var feature in features)
         {
+            if (!feature.IsEnabled)
+                continue;
+
             if (feature.Settings.Count == 0)
                 continue;
 
@@ -401,24 +488,41 @@ internal static class ConfigurationHelper
             var featureName = featureSection.Key;
 
             if (string.IsNullOrWhiteSpace(featureName))
-                continue;
-
-            // Reject scalar values (e.g., "Posts": "invalid")
-            if (featureSection.Value is not null && !featureSection.GetChildren().Any())
             {
                 throw new InvalidOperationException(
-                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found a scalar value '{featureSection.Value}'.");
+                    $"Feature name{shellContext} in object-map syntax must not be empty or whitespace.");
+            }
+
+            var children = featureSection.GetChildren().ToList();
+
+            if (featureSection.Value is not null)
+            {
+                if (TryParseFeatureBoolean(featureSection.Value, out var enabled))
+                {
+                    entries.Add(enabled
+                        ? FeatureEntry.EnableDefaults(featureName.Trim())
+                        : FeatureEntry.Disabled(featureName.Trim()));
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found scalar value '{featureSection.Value}'.");
+            }
+
+            if (children.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found a null or empty value.");
             }
 
             // Reject array-like children (e.g., "Posts": [1, 2])
-            var children = featureSection.GetChildren().ToList();
             if (children.Count > 0 && children.All(c => int.TryParse(c.Key, out _)))
             {
                 throw new InvalidOperationException(
-                    $"Feature '{featureName}'{shellContext} in object-map syntax must have an object value, but found an array.");
+                    $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found an array.");
             }
 
-            var entry = new FeatureEntry { Name = featureName };
+            var entry = new FeatureEntry { Name = featureName.Trim() };
 
             // In object-map form, all children (including "Name") are settings
             foreach (var settingSection in children)
@@ -439,6 +543,44 @@ internal static class ConfigurationHelper
 
         return entries;
     }
+
+    private static bool TryParseFeatureBoolean(string value, out bool enabled)
+    {
+        if (value.Equals(bool.TrueString, StringComparison.OrdinalIgnoreCase))
+        {
+            enabled = true;
+            return true;
+        }
+
+        if (value.Equals(bool.FalseString, StringComparison.OrdinalIgnoreCase))
+        {
+            enabled = false;
+            return true;
+        }
+
+        enabled = false;
+        return false;
+    }
+
+    private static void EnsureFeatureName(string name, string context)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new InvalidOperationException(
+                $"{context} must define a non-empty feature name.");
+        }
+    }
+
+    private static IReadOnlyList<string> AddName(IReadOnlyList<string> source, string name)
+    {
+        var names = source.ToList();
+        if (!names.Contains(name, StringComparer.OrdinalIgnoreCase))
+            names.Add(name);
+        return [..names];
+    }
+
+    private static IReadOnlyList<string> RemoveName(IReadOnlyList<string> source, string name) =>
+        [..source.Where(candidate => !candidate.Equals(name, StringComparison.OrdinalIgnoreCase))];
 
     private static void PopulateEntrySettings(FeatureEntry entry, IEnumerable<IConfigurationSection> settingSections)
     {

@@ -164,6 +164,49 @@ public class ShellConfigurationTests
         Assert.Equal("true", feature1["Enabled"]);
     }
 
+    [Fact(DisplayName = "Feature object settings merge with later values taking precedence")]
+    public void FeatureObjectSettings_MergeWithLaterValuesTakingPrecedence()
+    {
+        var first = """
+        {
+            "Shell": {
+                "Features": {
+                    "Http": {
+                        "BasePath": "/workflows",
+                        "Timeout": "30"
+                    }
+                }
+            }
+        }
+        """;
+        var second = """
+        {
+            "Shell": {
+                "Features": {
+                    "Http": {
+                        "Timeout": "60"
+                    }
+                }
+            }
+        }
+        """;
+
+        using var firstStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(first));
+        using var secondStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(second));
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(firstStream)
+            .AddJsonStream(secondStream)
+            .Build();
+
+        var settings = new ShellBuilder("TestShell")
+            .FromConfiguration(config.GetSection("Shell"))
+            .Build();
+
+        Assert.Equal(["Http"], settings.EnabledFeatures);
+        Assert.Equal("/workflows", settings.ConfigurationData["Http:BasePath"]);
+        Assert.Equal("60", settings.ConfigurationData["Http:Timeout"]);
+    }
+
     [Fact(DisplayName = "ShellConfiguration with empty ConfigurationData returns root values")]
     public void ShellConfiguration_WithEmptyConfigurationData_ReturnsRootValues()
     {
