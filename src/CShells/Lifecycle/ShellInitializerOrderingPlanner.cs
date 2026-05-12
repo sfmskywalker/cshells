@@ -7,12 +7,12 @@ internal sealed class ShellInitializerOrderingPlanner
     public InitializerOrderingPlan Plan(
         ShellDescriptor shell,
         IReadOnlyList<IShellInitializer> initializers,
-        IReadOnlyList<ShellInitializerRegistration> explicitRegistrations)
+        IReadOnlyList<ShellInitializerRegistration> initializerRegistrations)
     {
         Guard.Against.Null(initializers);
-        Guard.Against.Null(explicitRegistrations);
+        Guard.Against.Null(initializerRegistrations);
 
-        foreach (var registration in explicitRegistrations)
+        foreach (var registration in initializerRegistrations)
         {
             if (!typeof(IShellInitializer).IsAssignableFrom(registration.InitializerType))
             {
@@ -20,11 +20,11 @@ internal sealed class ShellInitializerOrderingPlanner
                     shell,
                     $"ordering metadata source '{registration.Source}' references type '{registration.InitializerType.FullName}' which does not implement {nameof(IShellInitializer)}.");
             }
+
+            ValidatePhase(shell, registration.Phase, registration.Source);
         }
 
-        var registrationsByType = explicitRegistrations
-            .GroupBy(r => r.InitializerType)
-            .ToDictionary(g => g.Key, g => new Queue<ShellInitializerRegistration>(g));
+        var pendingRegistrations = initializerRegistrations.ToList();
 
         var entries = new List<InitializerOrderingEntry>(initializers.Count);
 
@@ -32,7 +32,7 @@ internal sealed class ShellInitializerOrderingPlanner
         {
             var initializer = initializers[i];
             var type = initializer.GetType();
-            var metadata = ResolveMetadata(shell, type, registrationsByType);
+            var metadata = ResolveMetadata(shell, registrationIndex: i, type, pendingRegistrations);
             entries.Add(new InitializerOrderingEntry(
                 initializer,
                 type,
@@ -43,8 +43,8 @@ internal sealed class ShellInitializerOrderingPlanner
                 metadata.Source));
         }
 
-        var unmatched = registrationsByType
-            .SelectMany(kvp => kvp.Value.Select(r => r.InitializerType.FullName ?? r.InitializerType.Name))
+        var unmatched = pendingRegistrations
+            .Select(r => r.InitializerType.FullName ?? r.InitializerType.Name)
             .ToList();
 
         if (unmatched.Count > 0)
@@ -71,23 +71,19 @@ internal sealed class ShellInitializerOrderingPlanner
 
     private static ShellInitializerRegistration ResolveMetadata(
         ShellDescriptor shell,
+        int registrationIndex,
         Type initializerType,
-        Dictionary<Type, Queue<ShellInitializerRegistration>> explicitRegistrations)
+        List<ShellInitializerRegistration> pendingRegistrations)
     {
-        if (explicitRegistrations.TryGetValue(initializerType, out var queue) && queue.Count > 0)
-            return queue.Dequeue();
+        var registration = TakeFirst(pendingRegistrations, r => r.RegistrationIndex == registrationIndex)
+            ?? TakeFirst(pendingRegistrations, r => r.InitializerType == initializerType);
+
+        if (registration is not null)
+            return ResolveRegistrationMetadata(shell, registration);
 
         var attribute = initializerType.GetCustomAttribute<LifecycleOrderAttribute>();
         if (attribute is not null)
-        {
-            return new ShellInitializerRegistration(
-                initializerType,
-                attribute.Phase,
-                attribute.Order,
-                RegistrationIndex: -1,
-                IsExplicit: false,
-                Source: $"{nameof(LifecycleOrderAttribute)} on {initializerType.FullName}");
-        }
+            return ResolveAttributeMetadata(shell, initializerType, attribute);
 
         if (!typeof(IShellInitializer).IsAssignableFrom(initializerType))
             throw new ShellInitializerOrderException(shell, $"type '{initializerType.FullName}' does not implement {nameof(IShellInitializer)}.");
@@ -99,6 +95,54 @@ internal sealed class ShellInitializerOrderingPlanner
             RegistrationIndex: -1,
             IsExplicit: false,
             Source: "Legacy DI registration");
+    }
+
+    private static ShellInitializerRegistration ResolveRegistrationMetadata(ShellDescriptor shell, ShellInitializerRegistration registration)
+    {
+        if (!registration.IsExplicit)
+        {
+            var attribute = registration.InitializerType.GetCustomAttribute<LifecycleOrderAttribute>();
+            if (attribute is not null)
+                return ResolveAttributeMetadata(shell, registration.InitializerType, attribute);
+        }
+
+        ValidatePhase(shell, registration.Phase, registration.Source);
+        return registration;
+    }
+
+    private static ShellInitializerRegistration ResolveAttributeMetadata(
+        ShellDescriptor shell,
+        Type initializerType,
+        LifecycleOrderAttribute attribute)
+    {
+        var source = $"{nameof(LifecycleOrderAttribute)} on {initializerType.FullName}";
+        ValidatePhase(shell, attribute.Phase, source);
+        return new ShellInitializerRegistration(
+            initializerType,
+            attribute.Phase,
+            attribute.Order,
+            RegistrationIndex: -1,
+            IsExplicit: false,
+            Source: source);
+    }
+
+    private static ShellInitializerRegistration? TakeFirst(
+        List<ShellInitializerRegistration> registrations,
+        Func<ShellInitializerRegistration, bool> predicate)
+    {
+        var index = registrations.FindIndex(r => predicate(r));
+        if (index < 0)
+            return null;
+
+        var registration = registrations[index];
+        registrations.RemoveAt(index);
+        return registration;
+    }
+
+    private static void ValidatePhase(ShellDescriptor shell, LifecyclePhase phase, string source)
+    {
+        if (!Enum.IsDefined(typeof(LifecyclePhase), phase))
+            throw new ShellInitializerOrderException(shell, $"ordering metadata source '{source}' uses undefined lifecycle phase value '{(int)phase}'.");
     }
 
     internal sealed record InitializerOrderingPlan(

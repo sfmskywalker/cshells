@@ -55,6 +55,7 @@ src/
 │   │   ├── LifecyclePhase.cs
 │   │   ├── LifecycleOrderAttribute.cs
 │   │   ├── ShellInitializerRegistration.cs
+│   │   ├── ShellInitializerOrderException.cs
 │   │   ├── ServiceCollectionLifecycleExtensions.cs
 │   │   ├── IDrainHandler.cs
 │   │   └── IShellInitializer.cs
@@ -62,7 +63,6 @@ src/
 ├── CShells/
 │   ├── Lifecycle/
 │   │   ├── ShellInitializerOrderingPlanner.cs
-│   │   ├── ShellInitializerOrderException.cs
 │   │   └── ShellRegistry.cs
 │   └── README.md
 

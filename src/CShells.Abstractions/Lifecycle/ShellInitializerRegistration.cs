@@ -6,7 +6,10 @@ namespace CShells.Lifecycle;
 /// <param name="InitializerType">Concrete initializer implementation type.</param>
 /// <param name="Phase">Semantic lifecycle phase.</param>
 /// <param name="Order">Numeric order within <paramref name="Phase"/>.</param>
-/// <param name="RegistrationIndex">Optional registration index used for diagnostics.</param>
+/// <param name="RegistrationIndex">
+/// Zero-based ordinal of the associated <see cref="IShellInitializer"/> service descriptor, or
+/// <c>-1</c> when the metadata should be matched by initializer type.
+/// </param>
 /// <param name="IsExplicit">Whether this metadata came from an explicitly ordered lifecycle API.</param>
 /// <param name="Source">Human-readable metadata source for diagnostics.</param>
 /// <remarks>

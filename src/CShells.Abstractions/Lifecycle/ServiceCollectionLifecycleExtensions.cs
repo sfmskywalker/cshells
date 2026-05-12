@@ -25,21 +25,12 @@ public static class ServiceCollectionLifecycleExtensions
     /// </remarks>
     public static IServiceCollection AddShellInitializer<TInitializer>(this IServiceCollection services)
         where TInitializer : class, IShellInitializer
-    {
-        Guard.Against.Null(services);
-
-        services.AddTransient<TInitializer>();
-        services.AddTransient<IShellInitializer>(sp => sp.GetRequiredService<TInitializer>());
-        services.AddSingleton(new ShellInitializerRegistration(
-            typeof(TInitializer),
+        => AddShellInitializerCore<TInitializer>(
+            services,
             LifecyclePhase.Default,
-            Order: 0,
-            RegistrationIndex: -1,
-            IsExplicit: false,
-            Source: $"AddShellInitializer<{typeof(TInitializer).FullName}> (default)"));
-
-        return services;
-    }
+            order: 0,
+            isExplicit: false,
+            source: $"AddShellInitializer<{typeof(TInitializer).FullName}> (default)");
 
     /// <summary>
     /// Registers a transient shell initializer in <see cref="LifecyclePhase.Default"/>.
@@ -88,18 +79,33 @@ public static class ServiceCollectionLifecycleExtensions
         LifecyclePhase phase,
         int order)
         where TInitializer : class, IShellInitializer
+        => AddShellInitializerCore<TInitializer>(
+            services,
+            phase,
+            order,
+            isExplicit: true,
+            source: $"AddShellInitializer<{typeof(TInitializer).FullName}>");
+
+    private static IServiceCollection AddShellInitializerCore<TInitializer>(
+        IServiceCollection services,
+        LifecyclePhase phase,
+        int order,
+        bool isExplicit,
+        string source)
+        where TInitializer : class, IShellInitializer
     {
         Guard.Against.Null(services);
 
+        var registrationIndex = services.Count(d => d.ServiceType == typeof(IShellInitializer));
         services.AddTransient<TInitializer>();
         services.AddTransient<IShellInitializer>(sp => sp.GetRequiredService<TInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
             typeof(TInitializer),
             phase,
             order,
-            RegistrationIndex: -1,
-            IsExplicit: true,
-            Source: $"AddShellInitializer<{typeof(TInitializer).FullName}>"));
+            registrationIndex,
+            isExplicit,
+            source));
 
         return services;
     }

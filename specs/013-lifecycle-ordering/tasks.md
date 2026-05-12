@@ -29,7 +29,7 @@
 - [X] T007 [P] Define `LifecycleOrderAttribute` with phase/order metadata and XML docs in src/CShells.Abstractions/Lifecycle/LifecycleOrderAttribute.cs
 - [X] T008 [P] Define `ShellInitializerRegistration` metadata record with initializer type, phase, order, registration index, explicit flag, source, and transient lifetime assumptions in src/CShells.Abstractions/Lifecycle/ShellInitializerRegistration.cs
 - [X] T009 Implement `AddShellInitializer<TInitializer>()`, `AddShellInitializer<TInitializer>(int order)`, and `AddShellInitializer<TInitializer>(LifecyclePhase phase, int order)` overload signatures with guards in src/CShells.Abstractions/Lifecycle/ServiceCollectionLifecycleExtensions.cs
-- [X] T010 Create `ShellInitializerOrderException` with actionable message support in src/CShells/Lifecycle/ShellInitializerOrderException.cs
+- [X] T010 Create `ShellInitializerOrderException` with actionable message support in src/CShells.Abstractions/Lifecycle/ShellInitializerOrderException.cs
 - [X] T011 Create `ShellInitializerOrderingPlanner` skeleton that accepts initializer registrations and returns ordered entries in src/CShells/Lifecycle/ShellInitializerOrderingPlanner.cs
 - [X] T012 Update lifecycle interface remarks to describe transient ordered registrations, `Default` compatibility, and first-class ordering in src/CShells.Abstractions/Lifecycle/IShellInitializer.cs
 - [X] T013 Run a compile-focused check for new lifecycle API references using tests/CShells.Tests/Unit/Lifecycle/ShellInitializerOrderingPlannerTests.cs
@@ -123,7 +123,7 @@
 ### Implementation for User Story 4
 
 - [X] T039 [US4] Implement validation for invalid initializer metadata and non-assignable initializer types in src/CShells/Lifecycle/ShellInitializerOrderingPlanner.cs
-- [X] T040 [US4] Include shell descriptor and initializer type names in ordering exception messages in src/CShells/Lifecycle/ShellInitializerOrderException.cs
+- [X] T040 [US4] Include shell descriptor and initializer type names in ordering exception messages in src/CShells.Abstractions/Lifecycle/ShellInitializerOrderException.cs
 - [X] T041 [US4] Log or expose non-fatal equal phase/order ambiguity diagnostics while preserving deterministic execution in src/CShells/Lifecycle/ShellRegistry.cs
 
 **Checkpoint**: User Story 4 is independently functional and unsafe ordering failures are actionable.

@@ -32,8 +32,8 @@ Represents a transient initializer registration plus metadata used to plan execu
 - `InitializerType`: The concrete initializer implementation type.
 - `Order`: Numeric execution order within a phase.
 - `Phase`: Semantic lifecycle phase.
-- `RegistrationIndex`: Stable tie-break preserving service registration order.
-- `IsExplicit`: Whether ordering metadata came from a first-class lifecycle registration API.
+- `RegistrationIndex`: Optional stable ordinal for the associated `IShellInitializer` service descriptor, used to associate metadata even when the resolved initializer is decorated or proxied.
+- `IsExplicit`: Whether ordering metadata came from an explicitly ordered lifecycle registration API.
 - `AttributeMetadata`: Ordering metadata discovered on the initializer type, if present.
 - `Source`: Diagnostic description of the registration site or metadata source.
 - `Lifetime`: Always transient for `AddShellInitializer<TInitializer>()` registrations.
@@ -41,12 +41,12 @@ Represents a transient initializer registration plus metadata used to plan execu
 **Relationships**:
 
 - Resolves an `IShellInitializer` instance from the shell provider at execution time.
-- May override ordering metadata declared on the initializer type.
+- Explicit metadata may override ordering metadata declared on the initializer type.
 - Belongs to one shell activation plan.
 
 **Validation Rules**:
 
-- Explicit registration metadata overrides attribute metadata.
+- Explicit registration metadata overrides attribute metadata; non-explicit default metadata does not.
 - If neither explicit metadata nor attribute metadata is present, the registration is unordered and uses the `Default` phase.
 - Multiple registrations of the same initializer type are treated as distinct lifecycle entries when they came from distinct service registrations.
 - Planning errors must be detected before any initializer runs.

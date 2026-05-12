@@ -98,6 +98,7 @@ public class ShellInitializerOrderingPlannerTests
         Assert.Equal(typeof(FirstInitializer), registration.InitializerType);
         Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
         Assert.Equal(42, registration.Order);
+        Assert.Equal(0, registration.RegistrationIndex);
         Assert.True(registration.IsExplicit);
     }
 
@@ -114,7 +115,25 @@ public class ShellInitializerOrderingPlannerTests
         Assert.Equal(typeof(FirstInitializer), registration.InitializerType);
         Assert.Equal(LifecyclePhase.Default, registration.Phase);
         Assert.Equal(0, registration.Order);
+        Assert.Equal(0, registration.RegistrationIndex);
         Assert.False(registration.IsExplicit);
+    }
+
+    [Fact(DisplayName = "AddShellInitializer without order does not override attribute metadata")]
+    public void AddShellInitializer_NoArgs_DoesNotOverrideAttributeMetadata()
+    {
+        var services = new ServiceCollection();
+        services.AddShellInitializer<AttributedPrepareInitializer>();
+
+        using var provider = services.BuildServiceProvider();
+        var initializers = provider.GetServices<IShellInitializer>().ToList();
+        var registrations = provider.GetServices<ShellInitializerRegistration>().ToList();
+
+        var plan = planner.Plan(Shell, initializers, registrations);
+
+        var entry = Assert.Single(plan.Entries);
+        Assert.Equal(LifecyclePhase.Prepare, entry.Phase);
+        Assert.False(entry.IsExplicit);
     }
 
     [Fact(DisplayName = "Planner only emits equal-order diagnostics for explicitly ordered ties")]
@@ -137,6 +156,43 @@ public class ShellInitializerOrderingPlannerTests
 
         Assert.Single(explicitPlan.Diagnostics);
         Assert.Empty(defaultPlan.Diagnostics);
+    }
+
+    [Fact(DisplayName = "Planner matches explicit metadata by DI registration index before runtime type")]
+    public void Plan_MetadataRegistrationIndex_MatchesDecoratedInitializer()
+    {
+        var plan = planner.Plan(
+            Shell,
+            [new WrapperInitializer()],
+            [Registration<FirstInitializer>(LifecyclePhase.Prepare, 5, registrationIndex: 0)]);
+
+        var entry = Assert.Single(plan.Entries);
+        Assert.Equal(typeof(WrapperInitializer), entry.InitializerType);
+        Assert.Equal(LifecyclePhase.Prepare, entry.Phase);
+        Assert.Equal(5, entry.Order);
+    }
+
+    [Fact(DisplayName = "Planner fails for undefined explicit lifecycle phase")]
+    public void Plan_UndefinedExplicitLifecyclePhase_Throws()
+    {
+        var ex = Assert.Throws<ShellInitializerOrderException>(() =>
+            planner.Plan(
+                Shell,
+                [new FirstInitializer()],
+                [Registration<FirstInitializer>((LifecyclePhase)(-1), 0, registrationIndex: 0)]));
+
+        Assert.Contains("-1", ex.Message);
+        Assert.Contains(nameof(FirstInitializer), ex.Message);
+    }
+
+    [Fact(DisplayName = "Planner fails for undefined attribute lifecycle phase")]
+    public void Plan_UndefinedAttributeLifecyclePhase_Throws()
+    {
+        var ex = Assert.Throws<ShellInitializerOrderException>(() =>
+            planner.Plan(Shell, [new InvalidPhaseAttributeInitializer()], []));
+
+        Assert.Contains("-1", ex.Message);
+        Assert.Contains(nameof(LifecycleOrderAttribute), ex.Message);
     }
 
     [Fact(DisplayName = "Planner fails when explicit metadata does not match resolved initializers")]
@@ -174,9 +230,12 @@ public class ShellInitializerOrderingPlannerTests
         Assert.Contains(Shell.Name, ex.Message);
     }
 
-    private static ShellInitializerRegistration Registration<TInitializer>(LifecyclePhase phase, int order)
+    private static ShellInitializerRegistration Registration<TInitializer>(
+        LifecyclePhase phase,
+        int order,
+        int registrationIndex = -1)
         where TInitializer : IShellInitializer =>
-        new(typeof(TInitializer), phase, order, RegistrationIndex: -1, IsExplicit: true, Source: typeof(TInitializer).Name);
+        new(typeof(TInitializer), phase, order, registrationIndex, IsExplicit: true, Source: typeof(TInitializer).Name);
 
     private sealed class FirstInitializer : IShellInitializer
     {
@@ -184,6 +243,11 @@ public class ShellInitializerOrderingPlannerTests
     }
 
     private sealed class SecondInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class WrapperInitializer : IShellInitializer
     {
         public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
@@ -210,6 +274,12 @@ public class ShellInitializerOrderingPlannerTests
 
     [LifecycleOrder(LifecyclePhase.Prepare, 0)]
     private sealed class AttributedPrepareInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    [LifecycleOrder((LifecyclePhase)(-1), 0)]
+    private sealed class InvalidPhaseAttributeInitializer : IShellInitializer
     {
         public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
