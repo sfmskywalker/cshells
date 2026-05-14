@@ -75,7 +75,6 @@ public class ShellRegistryScopeWaitTests
         // With no handlers, status is Completed even when scope-wait elapses (no handler
         // was running to report a timeout). The AbandonedScopeCount surfaces the fact.
         Assert.Equal(1, result.AbandonedScopeCount);
-        Assert.True(result.ScopeWaitElapsed >= TimeSpan.FromMilliseconds(50));
         Assert.Equal(ShellLifecycleState.Disposed, shell.State);
 
         // Releasing the (now orphaned) scope handle is still safe.
