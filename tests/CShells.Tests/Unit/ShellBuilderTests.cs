@@ -299,21 +299,30 @@ public class ShellBuilderTests
         Assert.Equal("configured", settings.ConfigurationData["Identity:SigningKey"]);
     }
 
-    [Fact(DisplayName = "FromConfiguration rejects null object-map feature values")]
-    public void FromConfiguration_NullObjectMapFeatureValue_Throws()
+    [Fact(DisplayName = "FromConfiguration enables empty object-map feature values")]
+    public void FromConfiguration_EmptyObjectMapFeatureValue_EnablesFeatureWithoutSettings()
     {
+        var json = """
+        {
+            "Shell": {
+                "Features": {
+                    "Identity": {}
+                }
+            }
+        }
+        """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Shell:Features:Identity"] = null,
-            })
+            .AddJsonStream(stream)
             .Build();
         var builder = new ShellBuilder("TestShell");
 
-        var ex = Assert.Throws<InvalidOperationException>(() => builder.FromConfiguration(config.GetSection("Shell")));
+        builder.FromConfiguration(config.GetSection("Shell"));
+        var settings = builder.Build();
 
-        Assert.Contains("Identity", ex.Message);
-        Assert.Contains("null or empty value", ex.Message);
+        Assert.Equal(["Identity"], settings.EnabledFeatures);
+        Assert.Empty(settings.FeatureSettingResets);
+        Assert.Empty(settings.ConfigurationData);
     }
 
     [Fact(DisplayName = "FromConfiguration with IConfigurationSection merges configuration with precedence")]

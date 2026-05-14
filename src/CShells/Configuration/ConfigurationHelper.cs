@@ -511,8 +511,8 @@ internal static class ConfigurationHelper
 
             if (children.Count == 0)
             {
-                throw new InvalidOperationException(
-                    $"Feature '{featureName}'{shellContext} in object-map syntax must be {SupportedFeatureValueForms}, but found a null or empty value.");
+                entries.Add(FeatureEntry.FromName(featureName.Trim()));
+                continue;
             }
 
             // Reject array-like children (e.g., "Posts": [1, 2])

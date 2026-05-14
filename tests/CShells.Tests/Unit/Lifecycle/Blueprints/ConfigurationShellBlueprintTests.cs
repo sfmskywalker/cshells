@@ -1,3 +1,4 @@
+using System.Text;
 using CShells.Lifecycle.Blueprints;
 using CShells.Configuration;
 using Microsoft.Extensions.Configuration;
@@ -49,6 +50,27 @@ public class ConfigurationShellBlueprintTests
         Assert.Equal(["Core", "Http", "Posts"], settings.EnabledFeatures.Order(StringComparer.OrdinalIgnoreCase));
         Assert.Equal(["Core", "Posts"], settings.FeatureSettingResets.Order(StringComparer.OrdinalIgnoreCase));
         Assert.Equal("/workflows", settings.ConfigurationData["Http:BasePath"]);
+    }
+
+    [Fact(DisplayName = "ComposeAsync enables empty object map features")]
+    public async Task ComposeAsync_EmptyObjectMapFeature_EnablesFeatureWithoutSettings()
+    {
+        var json = """
+        {
+            "Features": {
+                "DefaultAuthentication": {}
+            }
+        }
+        """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var root = new ConfigurationBuilder().AddJsonStream(stream).Build();
+        var bp = new ConfigurationShellBlueprint("Default", root);
+
+        var settings = await bp.ComposeAsync();
+
+        Assert.Equal(["DefaultAuthentication"], settings.EnabledFeatures);
+        Assert.Empty(settings.FeatureSettingResets);
+        Assert.Empty(settings.ConfigurationData);
     }
 
     [Fact(DisplayName = "ComposeAsync disables map feature and ignores inherited child settings")]
