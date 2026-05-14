@@ -34,18 +34,38 @@ public static class FeatureDiscovery
                 .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(IShellFeature).IsAssignableFrom(type));
 
             foreach (var type in featureTypes)
-            {
-                var attribute = type.GetCustomAttribute<ShellFeatureAttribute>();
-                var featureName = GetFeatureName(type, attribute);
-
-                EnsureUniqueFeatureName(featureName, type, features);
-
-                var descriptor = CreateFeatureDescriptor(type, attribute, featureName);
-                features[featureName] = descriptor;
-            }
+                AddFeatureDescriptor(type, features);
         }
 
         return features.Values;
+    }
+
+    private static void AddFeatureDescriptor(Type type, Dictionary<string, ShellFeatureDescriptor> features)
+    {
+        var pending = new Stack<Type>();
+        pending.Push(type);
+
+        while (pending.TryPop(out var currentType))
+        {
+            var attribute = currentType.GetCustomAttribute<ShellFeatureAttribute>();
+            var featureName = GetFeatureName(currentType, attribute);
+            var explicitDependencies = GetExplicitDependencies(featureName, attribute);
+
+            if (features.TryGetValue(featureName, out var existingDescriptor))
+            {
+                if (existingDescriptor.StartupType == currentType)
+                    continue;
+
+                throw new InvalidOperationException(
+                    $"Duplicate feature name '{featureName}' found. Type '{currentType.FullName}' conflicts with an existing feature.");
+            }
+
+            var descriptor = CreateFeatureDescriptor(currentType, attribute, featureName, explicitDependencies.Names);
+            features[featureName] = descriptor;
+
+            for (var i = explicitDependencies.Types.Count - 1; i >= 0; i--)
+                pending.Push(explicitDependencies.Types[i]);
+        }
     }
 
     /// <summary>
@@ -90,25 +110,14 @@ public static class FeatureDiscovery
     }
 
     /// <summary>
-    /// Ensures that a feature name is unique within the collection.
-    /// </summary>
-    private static void EnsureUniqueFeatureName(string featureName, Type type, Dictionary<string, ShellFeatureDescriptor> features)
-    {
-        if (features.ContainsKey(featureName))
-        {
-            throw new InvalidOperationException(
-                $"Duplicate feature name '{featureName}' found. Type '{type.FullName}' conflicts with an existing feature.");
-        }
-    }
-
-    /// <summary>
     /// Creates a feature descriptor from a type and its ShellFeatureAttribute.
     /// </summary>
-    private static ShellFeatureDescriptor CreateFeatureDescriptor(Type type, ShellFeatureAttribute? attribute, string featureName)
+    private static ShellFeatureDescriptor CreateFeatureDescriptor(
+        Type type,
+        ShellFeatureAttribute? attribute,
+        string featureName,
+        IReadOnlyList<string> explicitDependencies)
     {
-        // Get explicit dependencies from attribute
-        var explicitDependencies = GetExplicitDependencies(featureName, attribute);
-
         // Get inferred dependencies from IInfersDependenciesFrom<> interface
         var inferredDependencies = GetInferredDependencies(type);
 
@@ -218,18 +227,19 @@ public static class FeatureDiscovery
         }
     }
 
-    private static IEnumerable<string> GetExplicitDependencies(string featureName, ShellFeatureAttribute? attribute)
+    private static ExplicitDependencySet GetExplicitDependencies(string featureName, ShellFeatureAttribute? attribute)
     {
         if (attribute?.DependsOn is not { Length: > 0 } dependencies)
-            return [];
+            return new([], []);
 
-        var results = new List<string>(dependencies.Length);
+        var names = new List<string>(dependencies.Length);
+        var types = new List<Type>(dependencies.Length);
         foreach (var dependency in dependencies)
         {
             switch (dependency)
             {
                 case string name when !string.IsNullOrWhiteSpace(name):
-                    results.Add(name);
+                    names.Add(name);
                     break;
                 case string:
                     throw new InvalidOperationException($"Feature '{featureName}' has an empty dependency name.");
@@ -239,9 +249,15 @@ public static class FeatureDiscovery
                         throw new InvalidOperationException(
                             $"Feature '{featureName}' has dependency type '{dependencyType.FullName}' that does not implement {nameof(IShellFeature)}.");
                     }
+                    if (!dependencyType.IsClass || dependencyType.IsAbstract)
+                    {
+                        throw new InvalidOperationException(
+                            $"Feature '{featureName}' has dependency type '{dependencyType.FullName}' that is not a concrete feature type.");
+                    }
 
                     var resolvedName = GetFeatureName(dependencyType, dependencyType.GetCustomAttribute<ShellFeatureAttribute>());
-                    results.Add(resolvedName);
+                    names.Add(resolvedName);
+                    types.Add(dependencyType);
                     break;
                 case null:
                     throw new InvalidOperationException($"Feature '{featureName}' has a null dependency entry.");
@@ -251,6 +267,8 @@ public static class FeatureDiscovery
             }
         }
 
-        return results;
+        return new(names, types);
     }
+
+    private sealed record ExplicitDependencySet(IReadOnlyList<string> Names, IReadOnlyList<Type> Types);
 }
