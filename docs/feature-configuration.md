@@ -61,7 +61,7 @@ Do not repeat the feature name inside an object-map entry. If a `Name` property 
 
 - **No duplicates**: Each feature name must appear exactly once per shell.
 - **No mixing**: A shell's `Features` value must be entirely array syntax or entirely object-map syntax. Mixing both styles is rejected with an error that identifies the affected shell.
-- **Values must be boolean or object**: In object-map syntax, every feature value must be `true`, `false`, string `"true"` / `"false"`, or a JSON object. Values such as `"yes"`, `0`, `null`, and arrays are rejected.
+- **Values must be boolean or object**: In object-map syntax, every feature value must be `true`, `false`, string `"true"` / `"false"`, or a JSON object. Empty objects enable the feature with no settings. Values such as `"yes"`, `0`, and arrays are rejected. Direct JSON model deserialization also rejects `null`; configuration-provider loading treats provider null/empty sections as empty object declarations because `IConfiguration` does not preserve that distinction.
 - **Unknown features**: Unknown feature names set to `false` are ignored as no-op disablements; unknown feature names set to `true` or to an object are rejected before activation.
 - **No silent skips**: Blank array entries and array objects with missing or blank `Name` values are rejected before the shell is activated.
 
