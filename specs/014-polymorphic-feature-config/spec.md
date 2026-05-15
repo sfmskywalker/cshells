@@ -12,7 +12,7 @@
 - Q: Should code-first feature registrations be overridable by configuration? → A: Code-first feature registrations are overridable defaults; higher-priority configuration can disable or re-enable them.
 - Q: How should higher-priority `true` interact with lower-priority feature settings? → A: `false` disables despite inherited children; `true` enables with defaults and ignores inherited children; object entries enable with normally merged object settings.
 - Q: Which scalar boolean representations should feature entries accept? → A: Accept native booleans and case-insensitive string `true` / `false`; reject all other scalar values.
-- Q: How should disablement behave for unknown feature names? → A: Unknown feature set to `false` is allowed as a no-op and may be surfaced in diagnostics; unknown feature set to `true` or object remains invalid.
+- Q: How should disablement behave for unknown feature names? → A: Unknown feature set to `false` is allowed as a no-op and may be surfaced in diagnostics; later deferred-activation behavior also treats unknown feature entries set to `true` or object as non-blocking missing features with warnings.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -91,7 +91,7 @@ As a developer configuring feature options, I want configured feature objects to
 - Feature names with blank or whitespace-only keys are invalid and must fail before shell activation.
 - Invalid scalar values such as `"yes"`, `0`, or arbitrary strings other than case-insensitive `true` / `false` must fail with an actionable error rather than being guessed.
 - Unknown feature names set to `false` are valid no-op disablements and should remain visible for diagnostics where available.
-- Unknown feature names set to `true` or to an object are invalid because they represent attempted activation of an unavailable feature.
+- Unknown feature names set to `true` or to an object are missing-feature declarations: activation must continue with available features and log/report the missing names, per `005-deferred-shell-activation`.
 - Duplicate feature declarations across configuration sources must resolve according to source priority, not by producing duplicate feature activations.
 - Disabled features must not run service configuration, endpoint mapping, dependency activation, or post-configuration hooks.
 - Disabling a feature that other enabled features depend on must produce the same dependency validation behavior as if the feature were absent.
@@ -119,8 +119,8 @@ As a developer configuring feature options, I want configured feature objects to
 - **FR-016**: The system MUST validate feature entry values and reject unsupported scalar values with a clear message that identifies the feature path and expected value forms.
 - **FR-017**: The system MUST reject `null` feature entry values with a clear message that instructs users to use `true`, `false`, or an object.
 - **FR-018**: The system MUST allow an unknown feature entry set to `false` as a no-op disablement.
-- **FR-019**: The system MUST reject an unknown feature entry set to `true` or to an object because it attempts to enable an unavailable feature.
-- **FR-020**: The system SHOULD make unknown feature no-op disablements visible in diagnostics where diagnostic output is available.
+- **FR-019**: The system MUST NOT reject an unknown feature entry set to `true` or to an object during shell activation; it MUST treat it as a missing configured feature, activate with available features, and emit operator-visible diagnostics as specified by `005-deferred-shell-activation`.
+- **FR-020**: The system SHOULD make unknown feature no-op disablements and missing positive feature declarations visible in diagnostics where diagnostic output is available.
 - **FR-021**: The system MUST reject blank or whitespace-only feature names before shell activation.
 - **FR-022**: The system MUST preserve existing feature option binding paths for object-based feature entries.
 - **FR-023**: The system MUST document the three supported feature entry forms: `true`, `false`, and object.
@@ -166,4 +166,4 @@ As a developer configuring feature options, I want configured feature objects to
 - **SC-008**: Documentation and samples include at least one compact `true` example, one `false` disablement example, one object settings example, and one Docker-mounted override example.
 - **SC-009**: A layered configuration test confirms a higher-priority `true` declaration does not inherit lower-priority feature option values.
 - **SC-010**: Environment-style string values `"true"` and `"false"` are accepted case-insensitively, while values such as `"yes"` and `"0"` are rejected in verified tests.
-- **SC-011**: Unknown feature entries set to `false` do not prevent shell activation, while unknown feature entries set to `true` or object fail with actionable messages in verified tests.
+- **SC-011**: Unknown feature entries set to `false` do not prevent shell activation, and unknown feature entries set to `true` or object activate with available features while producing actionable diagnostics in verified tests.

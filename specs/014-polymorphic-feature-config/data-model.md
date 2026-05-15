@@ -90,11 +90,11 @@ Final set consumed by dependency resolution and activation.
 Fields:
 
 - `Enabled`: catalog-known feature names ordered by dependency resolver.
-- `MissingPositive`: unknown features requested by `true` or object values.
+- `MissingPositive`: unknown features requested by `true` or object values; these are recorded for diagnostics and skipped during activation when absent from the runtime feature catalog.
 - `IgnoredDisabled`: unknown features requested by `false`.
 
 Validation:
 
-- `MissingPositive` fails with actionable messages.
+- `MissingPositive` does not fail activation; it produces actionable warning/status diagnostics and the shell activates with available features.
 - `IgnoredDisabled` does not fail shell activation.
 - Disabled catalog-known features do not run configuration binding, service registration, endpoint mapping, or post-configuration hooks.

@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using CShells.Tests.TestHelpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace CShells.Tests.Integration.FeatureDependency;
 
@@ -60,26 +61,49 @@ public class UnknownFeatureDependencyTests
         Assert.Equal(["MissingFeature"], settings.DisabledFeatures);
     }
 
-    [Fact(DisplayName = "Activation rejects unknown positive feature declarations")]
-    public async Task ActivateAsync_UnknownEnabledFeature_ThrowsFeatureNotFoundException()
+    [Fact(DisplayName = "Activation ignores unknown positive feature declarations")]
+    public async Task ActivateAsync_UnknownEnabledFeature_DoesNotPreventActivation()
     {
-        await using var host = BuildHost(cshells => cshells
-            .WithAssemblyContaining<UnknownFeatureDependencyTests>()
-            .AddShell("payments", shell => shell.WithFeature("MissingFeature")));
+        var logs = new List<(LogLevel Level, string Message)>();
+        await using var host = BuildHost(
+            cshells => cshells
+                .WithAssemblyContaining<UnknownFeatureDependencyTests>()
+                .AddShell("payments", shell => shell.WithFeature("MissingFeature")),
+            services => services.AddSingleton<ILogger<ShellProviderBuilder>>(new CapturingLogger<ShellProviderBuilder>(logs)));
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        var ex = await Assert.ThrowsAsync<FeatureNotFoundException>(() => registry.ActivateAsync("payments"));
-        Assert.Equal("MissingFeature", ex.FeatureName);
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Empty(settings.EnabledFeatures);
+        Assert.Contains(logs, entry =>
+            entry.Level == LogLevel.Warning &&
+            entry.Message.Contains("MissingFeature", StringComparison.Ordinal) &&
+            entry.Message.Contains("available features only", StringComparison.Ordinal));
     }
 
-    private static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
+    private static ServiceProvider BuildHost(Action<CShellsBuilder> configure, Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        configureServices?.Invoke(services);
         services.AddCShells(configure);
         return services.BuildServiceProvider();
     }
 
+    private sealed class CapturingLogger<T>(List<(LogLevel Level, string Message)> sink) : ILogger<T>
+    {
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            sink.Add((logLevel, formatter(state, exception)));
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
+    }
 }
 
 [ShellFeature("Known")]

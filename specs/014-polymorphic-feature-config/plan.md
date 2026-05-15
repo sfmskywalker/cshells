@@ -26,7 +26,7 @@ Keep per-shell `Features` as a named map while allowing each feature value to be
 - **I. Abstraction-First Architecture**: PASS. Runtime feature declarations affect public `ShellSettings` semantics, so any required model state belongs in `CShells.Abstractions` before implementation uses it.
 - **II. Feature Modularity**: PASS. The feature remains declarative shell configuration; no feature constructor/service coupling changes.
 - **III. Modern C# Style**: PASS. Planned edits use existing C# 14 conventions, collection expressions, explicit access modifiers, nullable annotations, and XML docs for public members.
-- **IV. Explicit Error Handling**: PASS. Invalid values, nulls, blank feature names, and unknown positive feature entries will fail with actionable messages that name the feature path.
+- **IV. Explicit Error Handling**: PASS. Invalid values, nulls, and blank feature names fail with actionable messages that name the feature path; unknown positive feature entries are handled by the later deferred-activation behavior as non-blocking missing features with diagnostics.
 - **V. Test Coverage**: PASS. Unit and integration tests are planned for all new value forms, merge precedence, option reset behavior, environment-style strings, and unknown-feature behavior.
 - **VI. Simplicity & Minimalism**: PASS. The design extends the existing feature entry model and parsing helpers rather than adding a separate configuration subsystem.
 - **VII. Lifecycle & Concurrency Contracts**: PASS. The feature affects composition before activation and does not add shared mutable lifecycle state or async coordination.

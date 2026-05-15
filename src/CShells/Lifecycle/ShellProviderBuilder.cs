@@ -50,16 +50,27 @@ internal sealed class ShellProviderBuilder(
         var catalog = _featureCatalog.CurrentSnapshot;
 
         // Explicit disabled entries are already excluded from EnabledFeatures. Unknown positive entries
-        // are configuration errors because they attempt to activate unavailable features.
-        var missing = settings.EnabledFeatures
+        // are tolerated so hosts can share configuration across deployments that do not reference
+        // every optional feature package.
+        var missingFeatures = settings.EnabledFeatures
             .Where(id => !catalog.FeatureMap.ContainsKey(id))
             .ToList();
 
-        if (missing.Count > 0)
-            throw new FeatureNotFoundException(missing[0]);
+        if (missingFeatures.Count > 0)
+        {
+            _logger.LogWarning(
+                "Shell '{ShellName}' requested {MissingFeatureCount} feature(s) that are not available in the runtime feature catalog: {MissingFeatures}. The shell will activate with available features only.",
+                settings.Id.Name,
+                missingFeatures.Count,
+                missingFeatures);
+        }
 
-        var orderedFeatures = settings.EnabledFeatures.Count > 0
-            ? _dependencyResolver.GetOrderedFeatures(settings.EnabledFeatures, catalog.FeatureMap)
+        var availableFeatures = settings.EnabledFeatures
+            .Where(id => catalog.FeatureMap.ContainsKey(id))
+            .ToList();
+
+        var orderedFeatures = availableFeatures.Count > 0
+            ? _dependencyResolver.GetOrderedFeatures(availableFeatures, catalog.FeatureMap)
             : [];
 
         // Dependencies are effective shell features too.
