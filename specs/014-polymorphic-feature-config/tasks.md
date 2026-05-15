@@ -67,7 +67,7 @@
 - [x] T016 [P] [US2] Add parser tests for native `false`, string `"false"`, unsupported scalars, and `null` in `tests/CShells.Tests/Unit/Configuration/ShellConfigJsonConverterTests.cs`
 - [x] T017 [P] [US2] Add blueprint tests for disabling configured features and preserving unrelated features in `tests/CShells.Tests/Unit/Lifecycle/Blueprints/ConfigurationShellBlueprintTests.cs`
 - [x] T018 [P] [US2] Add code-first default disablement tests in `tests/CShells.Tests/Unit/ShellBuilderTests.cs`
-- [x] T019 [P] [US2] Add unknown disabled feature no-op and unknown positive feature failure tests in `tests/CShells.Tests/Integration/FeatureDependency/UnknownFeatureDependencyTests.cs`
+- [x] T019 [P] [US2] Add unknown disabled feature no-op and unknown positive missing-feature diagnostics tests in `tests/CShells.Tests/Integration/FeatureDependency/UnknownFeatureDependencyTests.cs`
 
 ### Implementation for User Story 2
 
@@ -76,7 +76,7 @@
 - [x] T022 [US2] Apply disabled feature declarations when `ShellBuilder.FromConfiguration(IConfigurationSection)` merges into existing settings in `src/CShells/Configuration/ShellBuilder.cs`
 - [x] T023 [US2] Apply disabled feature declarations when `ShellBuilder.FromConfiguration(ShellConfig)` merges into existing settings in `src/CShells/Configuration/ShellBuilder.cs`
 - [x] T024 [US2] Update code-first default merging to let shell-specific disabled declarations remove defaults in `src/CShells/Lifecycle/Providers/ConfiguredShellBlueprintProvider.cs`
-- [x] T025 [US2] Validate unknown positive feature declarations while ignoring unknown disabled declarations before activation in `src/CShells/Lifecycle/ShellProviderBuilder.cs`
+- [x] T025 [US2] Warn for unknown positive feature declarations while ignoring unknown disabled declarations before activation in `src/CShells/Lifecycle/ShellProviderBuilder.cs`
 - [x] T026 [US2] Run US2 focused tests with `dotnet test tests/CShells.Tests/ --filter "ShellBuilderTests|ConfigurationShellBlueprintTests|UnknownFeatureDependencyTests"` from repository root
 
 **Checkpoint**: User Stories 1 and 2 both work independently; deployment overrides can disable defaults.
@@ -184,7 +184,7 @@ Task: "T010 Add configuration blueprint tests for compact true and string true f
 ```text
 Task: "T016 Add parser tests for native false, string false, unsupported scalars, and null in tests/CShells.Tests/Unit/Configuration/ShellConfigJsonConverterTests.cs"
 Task: "T018 Add code-first default disablement tests in tests/CShells.Tests/Unit/ShellBuilderTests.cs"
-Task: "T019 Add unknown disabled feature no-op and unknown positive feature failure tests in tests/CShells.Tests/Integration/FeatureDependency/UnknownFeatureDependencyTests.cs"
+Task: "T019 Add unknown disabled feature no-op and unknown positive missing-feature diagnostics tests in tests/CShells.Tests/Integration/FeatureDependency/UnknownFeatureDependencyTests.cs"
 ```
 
 ## Parallel Example: User Story 3

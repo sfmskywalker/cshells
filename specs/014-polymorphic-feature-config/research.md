@@ -46,14 +46,14 @@
 - Native booleans only: rejected because environment-variable enable/disable would be impractical.
 - Accept `yes`, `no`, `1`, and `0`: rejected because it broadens the grammar without user value and makes invalid config easier to miss.
 
-## Decision: Unknown disabled features are no-op declarations; unknown positive entries fail
+## Decision: Unknown disabled features are no-op declarations; unknown positive entries are missing features
 
-**Rationale**: Shared deployment configuration should be able to disable optional features across application variants. Positive declarations still need validation because they attempt to activate unavailable behavior and often indicate typos or missing assemblies.
+**Rationale**: Shared deployment configuration should be able to disable optional features across application variants. Positive declarations still need operator visibility because they attempt to activate unavailable behavior and often indicate typos or missing assemblies, but `005-deferred-shell-activation` supersedes the original fail-fast behavior: missing configured features are warnings/status, not activation blockers.
 
 **Alternatives considered**:
 
 - Fail every unknown feature: rejected because it harms portable deployment config.
-- Ignore every unknown feature: rejected because it hides attempted activations and misspellings.
+- Ignore every unknown feature silently: rejected because it hides attempted activations and misspellings.
 
 ## Decision: Validate before activation and preserve existing dependency failure semantics
 

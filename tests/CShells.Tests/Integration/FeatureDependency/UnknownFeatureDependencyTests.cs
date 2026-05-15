@@ -60,16 +60,18 @@ public class UnknownFeatureDependencyTests
         Assert.Equal(["MissingFeature"], settings.DisabledFeatures);
     }
 
-    [Fact(DisplayName = "Activation rejects unknown positive feature declarations")]
-    public async Task ActivateAsync_UnknownEnabledFeature_ThrowsFeatureNotFoundException()
+    [Fact(DisplayName = "Activation ignores unknown positive feature declarations")]
+    public async Task ActivateAsync_UnknownEnabledFeature_DoesNotPreventActivation()
     {
         await using var host = BuildHost(cshells => cshells
             .WithAssemblyContaining<UnknownFeatureDependencyTests>()
             .AddShell("payments", shell => shell.WithFeature("MissingFeature")));
         var registry = host.GetRequiredService<IShellRegistry>();
 
-        var ex = await Assert.ThrowsAsync<FeatureNotFoundException>(() => registry.ActivateAsync("payments"));
-        Assert.Equal("MissingFeature", ex.FeatureName);
+        var shell = await registry.ActivateAsync("payments");
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+
+        Assert.Empty(settings.EnabledFeatures);
     }
 
     private static ServiceProvider BuildHost(Action<CShellsBuilder> configure)
