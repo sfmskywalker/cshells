@@ -62,7 +62,7 @@ internal sealed class ShellProviderBuilder(
                 "Shell '{ShellName}' requested {MissingFeatureCount} feature(s) that are not available in the runtime feature catalog: {MissingFeatures}. The shell will activate with available features only.",
                 settings.Id.Name,
                 missingFeatures.Count,
-                string.Join(", ", missingFeatures));
+                missingFeatures);
         }
 
         var availableFeatures = settings.EnabledFeatures
