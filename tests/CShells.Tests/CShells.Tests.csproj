@@ -3,6 +3,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\CShells\CShells.csproj"/>
         <ProjectReference Include="..\..\src\CShells.AspNetCore\CShells.AspNetCore.csproj"/>
+        <ProjectReference Include="..\..\src\CShells.FastEndpoints\CShells.FastEndpoints.csproj"/>
         <ProjectReference Include="..\..\src\CShells.Management.Api\CShells.Management.Api.csproj"/>
     </ItemGroup>
 

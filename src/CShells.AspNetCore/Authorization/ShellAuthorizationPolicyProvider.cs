@@ -25,6 +25,7 @@ namespace CShells.AspNetCore.Authorization;
 /// - Implements IAuthorizationPolicyProvider to intercept policy lookups
 /// - Uses IHttpContextAccessor to get the current request's HttpContext
 /// - Resolves IAuthorizationPolicyProvider from HttpContext.RequestServices (which is shell-scoped by ShellMiddleware)
+/// - Reads shell AuthorizationOptions directly when a shell provider is not available
 /// - Falls back to the default policy provider for app-level policies
 /// </para>
 /// </remarks>
@@ -41,7 +42,12 @@ public class ShellAuthorizationPolicyProvider(
     {
         // Try to get from shell provider first
         var shellProvider = GetShellPolicyProvider();
-        return shellProvider != null ? shellProvider.GetDefaultPolicyAsync() : _fallbackProvider.GetDefaultPolicyAsync();
+        if (shellProvider != null)
+            return shellProvider.GetDefaultPolicyAsync();
+
+        var policy = GetShellAuthorizationOptions()?.DefaultPolicy;
+
+        return policy != null ? Task.FromResult(policy) : _fallbackProvider.GetDefaultPolicyAsync();
     }
 
     /// <inheritdoc />
@@ -49,7 +55,12 @@ public class ShellAuthorizationPolicyProvider(
     {
         // Try to get from shell provider first
         var shellProvider = GetShellPolicyProvider();
-        return shellProvider != null ? shellProvider.GetFallbackPolicyAsync() : _fallbackProvider.GetFallbackPolicyAsync();
+        if (shellProvider != null)
+            return shellProvider.GetFallbackPolicyAsync();
+
+        var policy = GetShellAuthorizationOptions()?.FallbackPolicy;
+
+        return policy != null ? Task.FromResult<AuthorizationPolicy?>(policy) : _fallbackProvider.GetFallbackPolicyAsync();
     }
 
     /// <inheritdoc />
@@ -67,6 +78,13 @@ public class ShellAuthorizationPolicyProvider(
             }
         }
 
+        var shellOptionsPolicy = GetShellAuthorizationOptions()?.GetPolicy(policyName);
+        if (shellOptionsPolicy != null)
+        {
+            _logger.LogTrace("Found policy '{PolicyName}' in shell authorization options", policyName);
+            return shellOptionsPolicy;
+        }
+
         // Fall back to root provider
         var rootPolicy = await _fallbackProvider.GetPolicyAsync(policyName);
         if (rootPolicy != null)
@@ -77,6 +95,12 @@ public class ShellAuthorizationPolicyProvider(
 
         _logger.LogDebug("Policy '{PolicyName}' not found in shell or root authorization providers", policyName);
         return null;
+    }
+
+    private AuthorizationOptions? GetShellAuthorizationOptions()
+    {
+        var httpContext = httpContextAccessor.HttpContext;
+        return httpContext?.RequestServices.GetService<IOptions<AuthorizationOptions>>()?.Value;
     }
 
     /// <summary>
