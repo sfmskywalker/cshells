@@ -293,8 +293,10 @@ public static class CShellsBuilderExtensions
         {
             Guard.Against.Null(builder);
 
-            // Register the shell-aware authorization policy provider
-            builder.Services.TryAddSingleton<IAuthorizationPolicyProvider, ShellAuthorizationPolicyProvider>();
+            // Register the shell-aware authorization policy provider.
+            // Replace is intentional: AddAuthorization() may already have registered the default provider
+            // before this extension runs, depending on how AddShells callbacks are ordered.
+            builder.Services.Replace(ServiceDescriptor.Singleton<IAuthorizationPolicyProvider, ShellAuthorizationPolicyProvider>());
 
             return builder;
         }
@@ -335,4 +337,3 @@ public static class CShellsBuilderExtensions
         }
     }
 }
-
