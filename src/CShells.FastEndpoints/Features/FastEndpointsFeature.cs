@@ -43,6 +43,8 @@ public class FastEndpointsFeature(
             options.EndpointRoutePrefix = EndpointRoutePrefix;
         });
 
+        services.AddAuthorization();
+
         // Register FastEndpoints with the discovered assemblies
         services.AddFastEndpoints(options =>
         {
