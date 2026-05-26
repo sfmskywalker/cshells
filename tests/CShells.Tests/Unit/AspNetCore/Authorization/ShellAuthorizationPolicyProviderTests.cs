@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace CShells.Tests.AspNetCore.Authorization;
+namespace CShells.Tests.Unit.AspNetCore.Authorization;
 
 public class ShellAuthorizationPolicyProviderTests
 {

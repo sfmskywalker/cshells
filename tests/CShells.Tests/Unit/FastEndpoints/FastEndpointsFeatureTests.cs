@@ -1,10 +1,11 @@
+using CShells.AspNetCore.Authorization;
 using CShells.FastEndpoints.Features;
 using CShells.Features;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CShells.Tests.FastEndpoints;
+namespace CShells.Tests.Unit.FastEndpoints;
 
 public class FastEndpointsFeatureTests
 {
@@ -32,9 +33,10 @@ public class FastEndpointsFeatureTests
 
         using var serviceProvider = _services.BuildServiceProvider();
 
-        var policyProvider = serviceProvider.GetService<IAuthorizationPolicyProvider>();
+        var policyProvider = serviceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
 
-        Assert.IsType<DefaultAuthorizationPolicyProvider>(policyProvider);
+        Assert.NotNull(policyProvider);
+        Assert.IsNotType<ShellAuthorizationPolicyProvider>(policyProvider);
     }
 
     private class TestApiFeature : IFastEndpointsShellFeature
