@@ -1,4 +1,6 @@
 using CShells.AspNetCore.Authorization;
+using CShells.AspNetCore.Configuration;
+using CShells.DependencyInjection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,5 +43,18 @@ public class ShellAuthorizationPolicyProviderTests
         var policy = await _provider.GetPolicyAsync(ShellPolicyName);
 
         Assert.Same(_shellPolicy, policy);
+    }
+
+    [Fact]
+    public void WithAuthorization_ReplacesExistingDefaultAuthorizationPolicyProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddAuthorization();
+        var builder = new CShellsBuilder(services);
+
+        builder.WithAuthorization();
+
+        var descriptor = Assert.Single(services, x => x.ServiceType == typeof(IAuthorizationPolicyProvider));
+        Assert.Equal(typeof(ShellAuthorizationPolicyProvider), descriptor.ImplementationType);
     }
 }
